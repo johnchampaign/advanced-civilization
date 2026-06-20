@@ -182,6 +182,7 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
   /** Areas that received planned-but-not-official moves (dashed marker). */
   moved?: Set<string>;
 }) {
+  const [hovered, setHovered] = useState<string | null>(null);
   const zoomAnchor = zoomTo ? anchors[zoomTo] : null;
   const zoomStyle = zoomAnchor
     ? {
@@ -208,7 +209,7 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
           const cityColor = a.city ? (isPirate ? '#111' : (civById.get(a.city)?.color ?? '#444')) : null;
           const ships = Object.entries(a.ships ?? {}).filter(([, n]) => n > 0);
           return (
-            <g key={aid} data-area={aid} onClick={() => onSelect(isSel ? null : aid)} style={{ cursor: 'pointer' }}>
+            <g key={aid} data-area={aid} onClick={() => onSelect(isSel ? null : aid)} onMouseEnter={() => setHovered(aid)} onMouseLeave={() => setHovered((h) => (h === aid ? null : h))} style={{ cursor: 'pointer' }}>
               {/* Invisible hit target so areas with no markers still capture clicks. */}
               <circle cx={an.x} cy={an.y} r={an.r + 6} fill="transparent" />
               {(isHi || isSel || isOrigin) && <circle cx={an.x} cy={an.y} r={an.r + 10} fill="none" stroke={isOrigin ? '#ffd23f' : isSel ? '#fff' : '#5cf'} strokeWidth={isOrigin ? 5 : 4} pointerEvents="none" />}
@@ -231,6 +232,44 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
           );
         })}
       </svg>
+      {hovered && anchors[hovered] && <AreaTooltip areaId={hovered} state={state} zoomed={!!zoomTo} />}
+    </div>
+  );
+}
+
+/** Hover detail card for an area — shows population limit and occupants, since
+ *  token markers can cover the printed carrying-capacity number on the map. */
+function AreaTooltip({ areaId, state, zoomed }: { areaId: string; state: GameState; zoomed: boolean }) {
+  const an = anchors[areaId]!;
+  const meta = areaById.get(areaId);
+  const a = state.areas[areaId];
+  const owners = Object.entries(a?.tokens ?? {}).filter(([, n]) => n > 0);
+  const ships = Object.entries(a?.ships ?? {}).filter(([, n]) => n > 0);
+  const cityOwner = a?.city;
+  const right = an.x > MAIN_VIEWBOX.w * 0.7; // flip to the left near the east edge
+  const flags = [meta?.isCitySite && 'city site', meta?.isFloodplain && 'floodplain', meta?.isVolcanoSite && 'volcano', meta?.isOpenSea && 'open sea'].filter(Boolean).join(' · ');
+  const nameOf = (o: string) => (o === BARB ? 'Barbarians' : o === PIRATE ? 'Pirates' : civById.get(o)?.name ?? o);
+  return (
+    <div style={{
+      position: 'absolute', left: `${(an.x / MAIN_VIEWBOX.w) * 100}%`, top: `${(an.y / MAIN_VIEWBOX.h) * 100}%`,
+      transform: `translate(${right ? 'calc(-100% - 14px)' : '14px'}, -50%) scale(${zoomed ? 0.56 : 1})`,
+      transformOrigin: right ? 'right center' : 'left center',
+      zIndex: 20, pointerEvents: 'none', background: 'rgba(26,20,16,0.96)', color: '#fff',
+      border: '2px solid #ffd23f', borderRadius: 6, padding: '6px 9px', fontSize: 13, lineHeight: 1.35,
+      maxWidth: 230, boxShadow: '0 2px 10px rgba(0,0,0,0.6)',
+    }}>
+      <div style={{ fontWeight: 800 }}>{meta?.name ?? areaId}</div>
+      <div style={{ fontSize: 11, opacity: 0.85 }}>{meta?.isWater ? 'Sea' : `Population limit: ${meta?.sustains ?? '?'}`}{flags && ` · ${flags}`}</div>
+      {cityOwner && <div style={{ marginTop: 2 }}>🏛 {nameOf(cityOwner)} city</div>}
+      {owners.length > 0 && (
+        <div style={{ marginTop: 2, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {owners.map(([o, n]) => (
+            <span key={o}><span style={{ display: 'inline-block', width: 9, height: 9, background: o === BARB ? '#1a1a1a' : (civById.get(o)?.color ?? '#888'), borderRadius: 2, marginRight: 3, verticalAlign: 'middle' }} />{nameOf(o)} {o === BARB ? '⚔' : n}</span>
+          ))}
+        </div>
+      )}
+      {ships.length > 0 && <div style={{ marginTop: 2 }}>⛵ {ships.map(([o, n]) => `${nameOf(o)} ${n}`).join(', ')}</div>}
+      {owners.length === 0 && !cityOwner && !meta?.isWater && <div style={{ fontSize: 11, opacity: 0.7 }}>empty</div>}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useGame } from 'digital-boardgame-framework/client';
 import type { GameClientApi } from 'digital-boardgame-framework/client';
 import type { LogEntry } from 'digital-boardgame-framework';
@@ -6,9 +6,11 @@ import { adapter } from '../engine/index.js';
 import type { Action, GameState, PlayerId } from '../engine/index.js';
 import { civilizations, civById } from '../data/index.js';
 import { createCivClient, createNetworkGame, realtimeSubscribe, tokenFromInvite } from '../client/api.js';
-import { ActionList, Board, InfoView, StatusPanel, legalAreas, prettyPhase, type View } from './App.js';
+import { ActionList, Board, InfoView, MovementControls, StatusPanel, legalAreas, prettyPhase, useMovementPlanner, type View } from './App.js';
 
 const API = ''; // same-origin; Vite proxies /api -> the GameServer host
+// Placeholder so the movement-planner hook can run before the game view loads.
+const EMPTY_STATE = { areas: {}, players: {}, phase: '', turn: 0 } as unknown as GameState;
 
 // ---- Lobby ----------------------------------------------------------------
 
@@ -70,17 +72,30 @@ export function OnlineGame({ gameId, token }: { gameId: string; token: string })
   const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState<View>('map');
 
+  // Hooks must run unconditionally (before the loading/error early-returns below).
+  const submitAction = useCallback((a: Action) => { void game.submit(a); setSelected(null); }, [game]);
+  const moveActor = game.view && game.yourTurn && game.view.phase === 'movement' ? ((game.you ?? null) as PlayerId | null) : null;
+  const planner = useMovementPlanner(game.view ?? EMPTY_STATE, moveActor, game.legalActions, submitAction);
+
   if (game.error) return <Centered>Connection error: {game.error.message}</Centered>;
   if (!game.view) return <Centered>Connecting to game {gameId}…</Centered>;
   const s = game.view;
   const you = (game.you ?? s.seating[0]!) as PlayerId;
   const onClock = adapter.currentActor(s); // safe on a redacted view (no hidden info used)
+  const inMovement = !!game.yourTurn && s.phase === 'movement';
 
   return (
     <>
       <div style={{ flex: 1, position: 'relative', overflow: 'auto', background: '#0d3a4a' }}>
         {view === 'map'
-          ? <Board state={s} selected={selected} onSelect={setSelected} highlight={legalAreas(game.legalActions, s.phase)} />
+          ? <Board
+              state={s}
+              selected={inMovement ? planner.origin : selected}
+              onSelect={inMovement ? planner.onBoardClick : setSelected}
+              highlight={inMovement ? planner.highlight : legalAreas(game.legalActions, s.phase)}
+              origin={inMovement ? planner.origin : null}
+              zoomTo={inMovement ? planner.origin : null}
+            />
           : <InfoView view={view} state={s} focus={you} />}
       </div>
       <div className="civ-bar" style={{ display: 'flex', gap: 6, padding: 6, minHeight: 170 }}>
@@ -96,7 +111,9 @@ export function OnlineGame({ gameId, token }: { gameId: string; token: string })
           ) : game.yourTurn ? (
             <>
               <div className="civ-msg" style={{ padding: '6px 10px', textAlign: 'center' }}>Your turn — {prettyPhase(s.phase)}</div>
-              <ActionList legal={game.legalActions} selectedArea={selected} phase={s.phase} onApply={(a) => { void game.submit(a); setSelected(null); }} state={s} actor={you} />
+              {inMovement
+                ? <MovementControls planner={planner} />
+                : <ActionList legal={game.legalActions} selectedArea={selected} phase={s.phase} onApply={submitAction} state={s} actor={you} />}
             </>
           ) : (
             <div className="civ-lbl" style={{ textAlign: 'center', padding: 8 }}>

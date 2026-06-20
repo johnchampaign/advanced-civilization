@@ -40,6 +40,9 @@ export default function App() {
     setSelectedArea(null);
   }, [actor]);
 
+  const planner = useMovementPlanner(state, actor, legal, apply);
+  const inMovement = !!actor && seats[actor] === 'human' && state.phase === 'movement';
+
   const newGame = () => { const seed = Date.now() & 0xffff; rng.current = new Rng(seed); setState(createGame({ players: DEFAULT_PLAYERS, seed, maxTurns: 60 })); setView('map'); };
 
   // The nation shown in the status/info panels: the current actor, else seat 0.
@@ -49,7 +52,14 @@ export default function App() {
     <>
       <div style={{ flex: 1, position: 'relative', overflow: 'auto', background: '#0d3a4a' }}>
         {view === 'map'
-          ? <Board state={state} selected={selectedArea} onSelect={setSelectedArea} highlight={legalAreas(legal, state.phase)} />
+          ? <Board
+              state={state}
+              selected={inMovement ? planner.origin : selectedArea}
+              onSelect={inMovement ? planner.onBoardClick : setSelectedArea}
+              highlight={inMovement ? planner.highlight : legalAreas(legal, state.phase)}
+              origin={inMovement ? planner.origin : null}
+              zoomTo={inMovement ? planner.origin : null}
+            />
           : <InfoView view={view} state={state} focus={focus} />}
       </div>
 
@@ -77,7 +87,9 @@ export default function App() {
                 {actor ? <><b style={{ color: civById.get(actor)?.color }}>{civById.get(actor)?.name}</b> — {messageFor(state.phase)}</> : 'Resolving…'}
               </div>
               {actor && seats[actor] === 'human'
-                ? <ActionList legal={legal} selectedArea={selectedArea} phase={state.phase} onApply={apply} state={state} actor={actor} />
+                ? (inMovement
+                    ? <MovementControls planner={planner} />
+                    : <ActionList legal={legal} selectedArea={selectedArea} phase={state.phase} onApply={apply} state={state} actor={actor} />)
                 : <div className="civ-lbl" style={{ textAlign: 'center', padding: 8 }}>AI is taking its turn…</div>}
             </>
           )}
@@ -124,25 +136,42 @@ export function legalAreas(legal: Action[], _phase: string): Set<string> {
 
 // ---- Board ---------------------------------------------------------------
 
-export function Board({ state, selected, onSelect, highlight }: {
+export function Board({ state, selected, onSelect, highlight, zoomTo, origin }: {
   state: GameState; selected: string | null; onSelect: (a: string | null) => void; highlight: Set<string>;
+  /** When set, the board zooms in toward this area's anchor (e.g. a chosen move origin). */
+  zoomTo?: string | null;
+  /** The move origin, drawn with a distinct marker so destinations read clearly. */
+  origin?: string | null;
 }) {
+  const zoomAnchor = zoomTo ? anchors[zoomTo] : null;
+  const zoomStyle = zoomAnchor
+    ? {
+        transform: 'scale(1.8)',
+        transformOrigin: `${(zoomAnchor.x / MAIN_VIEWBOX.w) * 100}% ${(zoomAnchor.y / MAIN_VIEWBOX.h) * 100}%`,
+        transition: 'transform 0.25s ease',
+      }
+    : { transform: 'scale(1)', transition: 'transform 0.25s ease' };
   return (
-    <div style={{ position: 'relative', width: MAIN_VIEWBOX.w, maxWidth: '100%', margin: '0 auto' }}>
+    <div style={{ position: 'relative', width: MAIN_VIEWBOX.w, maxWidth: '100%', margin: '0 auto', ...zoomStyle }}>
       <img src="/assets/map-main.svg" alt="map" style={{ width: '100%', display: 'block' }} />
       <svg viewBox={`0 0 ${MAIN_VIEWBOX.w} ${MAIN_VIEWBOX.h}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-        {Object.entries(state.areas).map(([aid, a]) => {
-          const an = anchors[aid];
-          if (!an) return null;
+        {/* Render every anchored area (not just occupied ones) so empty
+            destination areas are clickable during movement. */}
+        {Object.keys(anchors).map((aid) => {
+          const an = anchors[aid]!;
+          const a = state.areas[aid] ?? { tokens: {} as Record<string, number> };
           const owners = Object.entries(a.tokens).filter(([, n]) => n > 0);
           const isHi = highlight.has(aid);
           const isSel = selected === aid;
+          const isOrigin = origin === aid;
           const isPirate = a.city === PIRATE;
           const cityColor = a.city ? (isPirate ? '#111' : (civById.get(a.city)?.color ?? '#444')) : null;
           const ships = Object.entries(a.ships ?? {}).filter(([, n]) => n > 0);
           return (
-            <g key={aid} onClick={() => onSelect(isSel ? null : aid)} style={{ cursor: 'pointer' }}>
-              {(isHi || isSel) && <circle cx={an.x} cy={an.y} r={an.r + 10} fill="none" stroke={isSel ? '#fff' : '#5cf'} strokeWidth={4} />}
+            <g key={aid} data-area={aid} onClick={() => onSelect(isSel ? null : aid)} style={{ cursor: 'pointer' }}>
+              {/* Invisible hit target so areas with no markers still capture clicks. */}
+              <circle cx={an.x} cy={an.y} r={an.r + 6} fill="transparent" />
+              {(isHi || isSel || isOrigin) && <circle cx={an.x} cy={an.y} r={an.r + 10} fill="none" stroke={isOrigin ? '#ffd23f' : isSel ? '#fff' : '#5cf'} strokeWidth={isOrigin ? 5 : 4} pointerEvents="none" />}
               {a.city && <rect x={an.x - an.r} y={an.y - an.r} width={an.r * 2} height={an.r * 2} fill={cityColor!} stroke="#000" strokeWidth={2} />}
               {isPirate && <text x={an.x} y={an.y + an.r * 0.45} textAnchor="middle" fontSize={an.r * 1.3} fill="#fff">☠</text>}
               {owners.map(([owner, n], i) => {
@@ -302,6 +331,144 @@ function GoodsView({ state, focus }: { state: GameState; focus: PlayerId }) {
   );
 }
 
+// ---- Movement planner (click origin → set count → click destination) -----
+
+interface QueuedMove { from: string; to: string; count: number; byShip?: boolean; via?: string }
+
+export interface MovementPlanner {
+  active: boolean;
+  origin: string | null;
+  count: number;
+  queued: QueuedMove[];
+  /** Areas to ring on the board: legal destinations when an origin is picked,
+   *  else all areas the actor can move tokens out of. */
+  highlight: Set<string>;
+  /** Tokens still available to move out of `area` (start count minus queued). */
+  available: (area: string) => number;
+  onBoardClick: (area: string | null) => void;
+  setCount: (n: number) => void;
+  removeQueued: (i: number) => void;
+  /** Submit the queued moves as one `move` action (player then done for phase). */
+  commit: () => void;
+  /** Pass without moving. */
+  pass: () => void;
+}
+
+/** Drives the click-to-move flow, shared by hotseat and online clients. Pass the
+ *  per-seat `legal` actions; the engine accepts any subset count, so we build the
+ *  move from the chosen origin/destination/count rather than the enumerated
+ *  full-stack options. */
+export function useMovementPlanner(
+  state: GameState, actor: PlayerId | null, legal: Action[], onApply: (a: Action) => void,
+): MovementPlanner {
+  const active = !!actor && state.phase === 'movement';
+  const [origin, setOrigin] = useState<string | null>(null);
+  const [count, setCountRaw] = useState(1);
+  const [queued, setQueued] = useState<QueuedMove[]>([]);
+
+  // Reset whenever the turn, phase, or seat changes (e.g. after a commit/pass).
+  useEffect(() => { setOrigin(null); setQueued([]); setCountRaw(1); }, [actor, state.phase, state.turn]);
+
+  // Legal move options grouped by origin: to-area -> { max, byShip, via }.
+  const moveOpts = useMemo(() => {
+    const byFrom = new Map<string, Map<string, { max: number; byShip?: boolean; via?: string }>>();
+    for (const a of legal) {
+      if (a.type !== 'move') continue;
+      const m = a.moves[0]!;
+      if (!byFrom.has(m.from)) byFrom.set(m.from, new Map());
+      const dest = byFrom.get(m.from)!;
+      // Prefer the land option if an area is reachable both ways.
+      if (!dest.has(m.to) || (!m.byShip && dest.get(m.to)!.byShip)) {
+        dest.set(m.to, { max: m.count, ...(m.byShip ? { byShip: true } : {}), ...(m.via ? { via: m.via } : {}) });
+      }
+    }
+    return byFrom;
+  }, [legal]);
+
+  const queuedFrom = useCallback((area: string) => queued.filter((q) => q.from === area).reduce((s, q) => s + q.count, 0), [queued]);
+  const available = useCallback((area: string) => (state.areas?.[area]?.tokens[actor ?? ''] ?? 0) - queuedFrom(area), [state, actor, queuedFrom]);
+
+  const origins = useMemo(() => {
+    const set = new Set<string>();
+    for (const from of moveOpts.keys()) if (available(from) > 0) set.add(from);
+    return set;
+  }, [moveOpts, available]);
+
+  const dests = origin ? moveOpts.get(origin) : undefined;
+  const highlight = useMemo(() => new Set(origin && dests ? [...dests.keys()] : [...origins]), [origin, dests, origins]);
+
+  const setCount = useCallback((n: number) => {
+    const cap = origin ? available(origin) : 1;
+    setCountRaw(Math.max(1, Math.min(n, Math.max(1, cap))));
+  }, [origin, available]);
+
+  const onBoardClick = useCallback((area: string | null) => {
+    if (!active || !area) return;
+    if (!origin) {
+      if (origins.has(area)) { setOrigin(area); setCountRaw(available(area)); }
+      return;
+    }
+    if (area === origin) { setOrigin(null); return; }
+    const opt = dests?.get(area);
+    if (opt) {
+      const max = Math.min(available(origin), opt.byShip ? 5 : Infinity);
+      const n = Math.max(1, Math.min(count, max));
+      setQueued((q) => [...q, { from: origin, to: area, count: n, ...(opt.byShip ? { byShip: true } : {}), ...(opt.via ? { via: opt.via } : {}) }]);
+      setOrigin(null); setCountRaw(1);
+      return;
+    }
+    if (origins.has(area)) { setOrigin(area); setCountRaw(available(area)); } // switch origin
+  }, [active, origin, origins, dests, count, available]);
+
+  const removeQueued = useCallback((i: number) => setQueued((q) => q.filter((_, j) => j !== i)), []);
+  const commit = useCallback(() => { if (queued.length) onApply({ type: 'move', moves: queued }); }, [queued, onApply]);
+  const pass = useCallback(() => onApply({ type: 'pass' }), [onApply]);
+
+  return { active, origin, count, queued, highlight, available, onBoardClick, setCount, removeQueued, commit, pass };
+}
+
+export function MovementControls({ planner }: { planner: MovementPlanner }) {
+  const { origin, count, queued, available, setCount, removeQueued, commit, pass } = planner;
+  const cap = origin ? available(origin) : 0;
+  const name = (a: string) => areaById.get(a)?.name ?? a;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {!origin ? (
+        <span className="civ-lbl">Click an area with your tokens to move <b>from</b>{queued.length ? '' : ', or finish below'}.</span>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span className="civ-lbl">From <b>{name(origin)}</b> — choose how many, then click a highlighted destination:</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <button className="civ-btn" onClick={() => setCount(count - 1)} disabled={count <= 1}>−</button>
+            <input type="range" min={1} max={Math.max(1, cap)} value={count} onChange={(e) => setCount(+e.target.value)} style={{ width: 120 }} />
+            <button className="civ-btn" onClick={() => setCount(count + 1)} disabled={count >= cap}>+</button>
+            <b>{count}</b> <span className="civ-lbl">of {cap}</span>
+            <button className="civ-btn" onClick={() => setCount(cap)}>All</button>
+            <button className="civ-btn" onClick={() => planner.onBoardClick(origin)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {queued.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span className="civ-lbl">Planned moves:</span>
+          {queued.map((q, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>{q.byShip ? '⛵ ' : ''}{name(q.from)} → {name(q.to)} ({q.count})</span>
+              <button className="civ-btn" onClick={() => removeQueued(i)}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 4 }}>
+        <button className="civ-btn" disabled={queued.length === 0} onClick={commit}>Execute {queued.length || ''} move{queued.length === 1 ? '' : 's'}</button>
+        <button className="civ-btn" onClick={pass}>Done moving (no move)</button>
+      </div>
+    </div>
+  );
+}
+
 // ---- Per-phase action controls (reused) ----------------------------------
 
 export function ActionList({ legal, selectedArea, phase, onApply, state, actor }: {
@@ -320,23 +487,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
       </div>
     );
   }
-  if (phase === 'movement') {
-    const moves = legal.filter((a) => a.type === 'move') as Extract<Action, { type: 'move' }>[];
-    const shown = selectedArea ? moves.filter((m) => m.moves[0]!.from === selectedArea) : moves;
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <span className="civ-lbl">{selectedArea ? `Moves from ${areaById.get(selectedArea)?.name}:` : 'Click an area to filter, or pick a move:'}</span>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {shown.slice(0, 40).map((m, i) => (
-            <button className="civ-btn" key={i} onClick={() => onApply(m)}>
-              {m.moves[0]!.byShip ? '⛵ ' : ''}{areaById.get(m.moves[0]!.from)?.name} → {areaById.get(m.moves[0]!.to)?.name} ({m.moves[0]!.count})
-            </button>
-          ))}
-        </div>
-        {pass && <button className="civ-btn" onClick={() => onApply(pass)}>Done moving (pass)</button>}
-      </div>
-    );
-  }
+  // Movement is handled by <MovementControls> (click origin → count → destination).
   if (phase === 'cityConstruction') {
     const builds = legal.filter((a) => a.type === 'buildCity') as Extract<Action, { type: 'buildCity' }>[];
     return (

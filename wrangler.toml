@@ -1,0 +1,9 @@
+# Cloudflare Pages config for the online deploy (advanced-civilization).
+name = "advanced-civilization"
+compatibility_date = "2024-09-01"
+# Required for Pages to honor this file (else wrangler ignores it entirely).
+# Vite builds the SPA here; functions/ is compiled by Pages automatically.
+pages_build_output_dir = "dist-ui"
+# @supabase/supabase-js pulls transitive deps that reference node: built-ins.
+# nodejs_compat lets the Workers runtime resolve them at runtime.
+compatibility_flags = ["nodejs_compat"]

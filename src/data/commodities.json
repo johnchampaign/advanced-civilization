@@ -1,0 +1,25 @@
+{
+  "_doc": "18 commodity trade cards (114 total). `count` is authoritative — counted directly from the VASSAL buildFile CardSlots (sums to 114, matching rules §8.1). `stack` (1-9) is the trade-card pile, taken from the card SVG filenames (card1..card9). `value` is the single-card value used in set scoring; a set of n identical cards is worth n*n*value, capped at the printed maximum (= count). VERIFIED against the printed cards (rules p.5): Iron card shows 2,8,18,32,50,72,98,128 (=2*n^2, value 2); Wine shows 5,20,45,80,125,180 (=5*n^2, value 5); Ivory shows 9,36,81,144 (=9*n^2, value 9) — i.e. value equals the stack number for every commodity, and the set formula is n*n*value.",
+  "setValueFormula": "n*n*value, n capped at count",
+  "commodities": [
+    { "id": "ochre",   "name": "Ochre",   "stack": 1, "value": 1, "count": 7 },
+    { "id": "hides",   "name": "Hides",   "stack": 1, "value": 1, "count": 7 },
+    { "id": "iron",    "name": "Iron",    "stack": 2, "value": 2, "count": 8 },
+    { "id": "papyrus", "name": "Papyrus", "stack": 2, "value": 2, "count": 7 },
+    { "id": "salt",    "name": "Salt",    "stack": 3, "value": 3, "count": 9 },
+    { "id": "timber",  "name": "Timber",  "stack": 3, "value": 3, "count": 8 },
+    { "id": "grain",   "name": "Grain",   "stack": 4, "value": 4, "count": 8 },
+    { "id": "oil",     "name": "Oil",     "stack": 4, "value": 4, "count": 7 },
+    { "id": "cloth",   "name": "Cloth",   "stack": 5, "value": 5, "count": 7 },
+    { "id": "wine",    "name": "Wine",    "stack": 5, "value": 5, "count": 6 },
+    { "id": "bronze",  "name": "Bronze",  "stack": 6, "value": 6, "count": 6 },
+    { "id": "silver",  "name": "Silver",  "stack": 6, "value": 6, "count": 5 },
+    { "id": "resin",   "name": "Resin",   "stack": 7, "value": 7, "count": 5 },
+    { "id": "spices",  "name": "Spices",  "stack": 7, "value": 7, "count": 6 },
+    { "id": "dye",     "name": "Dye",     "stack": 8, "value": 8, "count": 4 },
+    { "id": "gems",    "name": "Gems",    "stack": 8, "value": 8, "count": 5 },
+    { "id": "gold",    "name": "Gold",    "stack": 9, "value": 9, "count": 5 },
+    { "id": "ivory",   "name": "Ivory",   "stack": 9, "value": 9, "count": 4 }
+  ],
+  "mineableCommodities": ["iron", "bronze", "silver", "gems", "gold"]
+}

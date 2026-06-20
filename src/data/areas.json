@@ -1,0 +1,10854 @@
+[
+ {
+  "id": "adriatic-sea",
+  "name": "Adriatic Sea",
+  "board": "main",
+  "sustains": 0,
+  "isWater": true,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    397,
+    631
+   ],
+   [
+    408,
+    660
+   ],
+   [
+    495,
+    684
+   ],
+   [
+    494,
+    633
+   ],
+   [
+    333,
+    561
+   ],
+   [
+    223,
+    484
+   ],
+   [
+    185,
+    497
+   ],
+   [
+    255,
+    574
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "aegean-sea",
+  "name": "Aegean Sea",
+  "board": "main",
+  "sustains": 0,
+  "isWater": true,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    834,
+    747
+   ],
+   [
+    852,
+    749
+   ],
+   [
+    926,
+    827
+   ],
+   [
+    1002,
+    908
+   ],
+   [
+    1038,
+    900
+   ],
+   [
+    978,
+    796
+   ],
+   [
+    956,
+    786
+   ],
+   [
+    924,
+    787
+   ],
+   [
+    863,
+    679
+   ],
+   [
+    831,
+    681
+   ],
+   [
+    813,
+    726
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "aleppo",
+  "name": "Aleppo",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1502,
+    656
+   ],
+   [
+    1612,
+    734
+   ],
+   [
+    1684,
+    737
+   ],
+   [
+    1688,
+    640
+   ],
+   [
+    1627,
+    662
+   ],
+   [
+    1598,
+    650
+   ],
+   [
+    1589,
+    619
+   ],
+   [
+    1573,
+    607
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "alexandria",
+  "name": "Alexandria",
+  "board": "main",
+  "sustains": 4,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1238,
+    1141
+   ],
+   [
+    1316,
+    1077
+   ],
+   [
+    1358,
+    1070
+   ],
+   [
+    1392,
+    1180
+   ],
+   [
+    1318,
+    1223
+   ],
+   [
+    1297,
+    1214
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true",
+   "CitySite": "white"
+  }
+ },
+ {
+  "id": "ankara",
+  "name": "Ankara",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1256,
+    484
+   ],
+   [
+    1282,
+    462
+   ],
+   [
+    1306,
+    438
+   ],
+   [
+    1293,
+    393
+   ],
+   [
+    1318,
+    388
+   ],
+   [
+    1341,
+    375
+   ],
+   [
+    1444,
+    435
+   ],
+   [
+    1437,
+    459
+   ],
+   [
+    1410,
+    484
+   ],
+   [
+    1402,
+    531
+   ],
+   [
+    1379,
+    537
+   ],
+   [
+    1353,
+    566
+   ],
+   [
+    1312,
+    563
+   ],
+   [
+    1281,
+    548
+   ],
+   [
+    1265,
+    531
+   ],
+   [
+    1266,
+    513
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "antiochia",
+  "name": "Antiochia",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1474,
+    805
+   ],
+   [
+    1611,
+    734
+   ],
+   [
+    1503,
+    656
+   ],
+   [
+    1464,
+    680
+   ],
+   [
+    1449,
+    721
+   ],
+   [
+    1469,
+    734
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "appolonia",
+  "name": "Appolonia",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    494,
+    635
+   ],
+   [
+    494,
+    683
+   ],
+   [
+    531,
+    735
+   ],
+   [
+    615,
+    661
+   ],
+   [
+    595,
+    568
+   ],
+   [
+    553,
+    561
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "arabia",
+  "name": "Arabia",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Semites",
+  "path": [
+   [
+    1799,
+    1071
+   ],
+   [
+    1963,
+    896
+   ],
+   [
+    2096,
+    875
+   ],
+   [
+    2325,
+    965
+   ],
+   [
+    2323,
+    1515
+   ],
+   [
+    2072,
+    1313
+   ],
+   [
+    1816,
+    1152
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "argos",
+  "name": "Argos",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    744,
+    854
+   ],
+   [
+    768,
+    844
+   ],
+   [
+    780,
+    834
+   ],
+   [
+    795,
+    851
+   ],
+   [
+    820,
+    852
+   ],
+   [
+    864,
+    879
+   ],
+   [
+    842,
+    968
+   ],
+   [
+    792,
+    953
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "armenia",
+  "name": "Armenia",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1774,
+    102
+   ],
+   [
+    1674,
+    186
+   ],
+   [
+    1678,
+    317
+   ],
+   [
+    1757,
+    341
+   ],
+   [
+    1879,
+    324
+   ],
+   [
+    1932,
+    152
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "assyria",
+  "name": "Assyria",
+  "board": "main",
+  "sustains": 4,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1590,
+    520
+   ],
+   [
+    1581,
+    501
+   ],
+   [
+    1589,
+    472
+   ],
+   [
+    1627,
+    463
+   ],
+   [
+    1648,
+    467
+   ],
+   [
+    1660,
+    488
+   ],
+   [
+    1692,
+    489
+   ],
+   [
+    1714,
+    474
+   ],
+   [
+    1747,
+    456
+   ],
+   [
+    1762,
+    470
+   ],
+   [
+    1736,
+    648
+   ],
+   [
+    1700,
+    634
+   ],
+   [
+    1627,
+    662
+   ],
+   [
+    1598,
+    650
+   ],
+   [
+    1589,
+    619
+   ],
+   [
+    1570,
+    610
+   ],
+   [
+    1557,
+    590
+   ],
+   [
+    1565,
+    577
+   ],
+   [
+    1571,
+    539
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "athens",
+  "name": "Athens",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    799,
+    783
+   ],
+   [
+    798,
+    813
+   ],
+   [
+    780,
+    834
+   ],
+   [
+    795,
+    851
+   ],
+   [
+    820,
+    852
+   ],
+   [
+    864,
+    879
+   ],
+   [
+    891,
+    852
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "babylon",
+  "name": "Babylon",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    2090,
+    740
+   ],
+   [
+    2079,
+    733
+   ],
+   [
+    2070,
+    715
+   ],
+   [
+    2037,
+    694
+   ],
+   [
+    2028,
+    680
+   ],
+   [
+    2019,
+    666
+   ],
+   [
+    2030,
+    641
+   ],
+   [
+    2070,
+    643
+   ],
+   [
+    2091,
+    639
+   ],
+   [
+    2111,
+    647
+   ],
+   [
+    2117,
+    740
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true",
+   "CitySite": "white"
+  }
+ },
+ {
+  "id": "babylonia",
+  "name": "Babylonia",
+  "board": "main",
+  "sustains": 4,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1978,
+    518
+   ],
+   [
+    1944,
+    580
+   ],
+   [
+    1956,
+    599
+   ],
+   [
+    1981,
+    609
+   ],
+   [
+    1996,
+    601
+   ],
+   [
+    2015,
+    626
+   ],
+   [
+    2030,
+    643
+   ],
+   [
+    2076,
+    644
+   ],
+   [
+    2133,
+    642
+   ],
+   [
+    2138,
+    619
+   ],
+   [
+    2173,
+    621
+   ],
+   [
+    2184,
+    642
+   ],
+   [
+    2200,
+    660
+   ],
+   [
+    2214,
+    636
+   ],
+   [
+    2187,
+    587
+   ],
+   [
+    2178,
+    464
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true"
+  }
+ },
+ {
+  "id": "bithynia",
+  "name": "Bithynia",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1116,
+    559
+   ],
+   [
+    1120,
+    525
+   ],
+   [
+    1095,
+    508
+   ],
+   [
+    1094,
+    497
+   ],
+   [
+    1079,
+    444
+   ],
+   [
+    1129,
+    389
+   ],
+   [
+    1257,
+    484
+   ],
+   [
+    1268,
+    519
+   ],
+   [
+    1261,
+    518
+   ],
+   [
+    1257,
+    518
+   ],
+   [
+    1212,
+    536
+   ],
+   [
+    1192,
+    523
+   ],
+   [
+    1174,
+    540
+   ],
+   [
+    1180,
+    565
+   ],
+   [
+    1147,
+    598
+   ],
+   [
+    1128,
+    593
+   ],
+   [
+    1095,
+    593
+   ],
+   [
+    1101,
+    565
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "black-sea",
+  "name": "Black Sea",
+  "board": "main",
+  "sustains": 0,
+  "isWater": true,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1002,
+    448
+   ],
+   [
+    1027,
+    452
+   ],
+   [
+    1077,
+    443
+   ],
+   [
+    1129,
+    387
+   ],
+   [
+    1252,
+    311
+   ],
+   [
+    1352,
+    305
+   ],
+   [
+    1512,
+    242
+   ],
+   [
+    1516,
+    209
+   ],
+   [
+    1399,
+    174
+   ],
+   [
+    1260,
+    171
+   ],
+   [
+    1187,
+    250
+   ],
+   [
+    1151,
+    262
+   ],
+   [
+    1041,
+    216
+   ],
+   [
+    1002,
+    256
+   ],
+   [
+    992,
+    358
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "buhen",
+  "name": "Buhen",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Egypt",
+  "path": [
+   [
+    1683,
+    1587
+   ],
+   [
+    1504,
+    1587
+   ],
+   [
+    1567,
+    1427
+   ],
+   [
+    1581,
+    1425
+   ],
+   [
+    1590,
+    1432
+   ],
+   [
+    1605,
+    1426
+   ],
+   [
+    1617,
+    1435
+   ],
+   [
+    1601,
+    1456
+   ],
+   [
+    1603,
+    1474
+   ],
+   [
+    1628,
+    1491
+   ],
+   [
+    1653,
+    1517
+   ],
+   [
+    1661,
+    1534
+   ],
+   [
+    1676,
+    1564
+   ]
+  ],
+  "flags": {
+   "CitySite": "true",
+   "StartRegion": "Egypt"
+  }
+ },
+ {
+  "id": "bycantinum",
+  "name": "Bycantinum",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1029,
+    453
+   ],
+   [
+    1003,
+    448
+   ],
+   [
+    901,
+    484
+   ],
+   [
+    863,
+    621
+   ],
+   [
+    898,
+    643
+   ],
+   [
+    952,
+    585
+   ],
+   [
+    1021,
+    552
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "campania",
+  "name": "Campania",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": true,
+  "startRegion": null,
+  "path": [
+   [
+    388,
+    965
+   ],
+   [
+    446,
+    942
+   ],
+   [
+    495,
+    805
+   ],
+   [
+    320,
+    709
+   ],
+   [
+    280,
+    777
+   ],
+   [
+    342,
+    816
+   ],
+   [
+    367,
+    866
+   ],
+   [
+    380,
+    896
+   ],
+   [
+    381,
+    942
+   ]
+  ],
+  "flags": {
+   "VolcanoSite": "true"
+  }
+ },
+ {
+  "id": "cappadocia",
+  "name": "Cappadocia",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1680,
+    318
+   ],
+   [
+    1674,
+    186
+   ],
+   [
+    1610,
+    148
+   ],
+   [
+    1517,
+    207
+   ],
+   [
+    1511,
+    243
+   ],
+   [
+    1566,
+    267
+   ],
+   [
+    1617,
+    329
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "carales-2",
+  "name": "Carales",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    88,
+    814
+   ],
+   [
+    82,
+    913
+   ],
+   [
+    -2,
+    926
+   ],
+   [
+    -2,
+    819
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "carrhae",
+  "name": "Carrhae",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1928,
+    569
+   ],
+   [
+    1891,
+    545
+   ],
+   [
+    1864,
+    508
+   ],
+   [
+    1846,
+    504
+   ],
+   [
+    1802,
+    475
+   ],
+   [
+    1775,
+    476
+   ],
+   [
+    1763,
+    468
+   ],
+   [
+    1735,
+    647
+   ],
+   [
+    1770,
+    664
+   ],
+   [
+    1791,
+    660
+   ],
+   [
+    1811,
+    668
+   ],
+   [
+    1811,
+    669
+   ],
+   [
+    1840,
+    645
+   ],
+   [
+    1863,
+    636
+   ],
+   [
+    1883,
+    649
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "carthago",
+  "name": "Carthago",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    64,
+    1126
+   ],
+   [
+    44,
+    970
+   ],
+   [
+    171,
+    957
+   ],
+   [
+    209,
+    1021
+   ],
+   [
+    193,
+    1076
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "caspian-sea",
+  "name": "Caspian Sea",
+  "board": "main",
+  "sustains": 0,
+  "isWater": true,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    2158,
+    -4
+   ],
+   [
+    2323,
+    -2
+   ],
+   [
+    2323,
+    113
+   ],
+   [
+    2221,
+    113
+   ],
+   [
+    2131,
+    73
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "caucasus",
+  "name": "Caucasus",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Assyria",
+  "path": [
+   [
+    1774,
+    102
+   ],
+   [
+    1936,
+    151
+   ],
+   [
+    2125,
+    93
+   ],
+   [
+    2156,
+    0
+   ],
+   [
+    1781,
+    -2
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Assyria"
+  }
+ },
+ {
+  "id": "central-mediterranean",
+  "name": "Central Mediterranean",
+  "board": "main",
+  "sustains": 0,
+  "isWater": true,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": true,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    446,
+    943
+   ],
+   [
+    388,
+    965
+   ],
+   [
+    407,
+    1032
+   ],
+   [
+    367,
+    1069
+   ],
+   [
+    210,
+    1021
+   ],
+   [
+    193,
+    1079
+   ],
+   [
+    213,
+    1217
+   ],
+   [
+    472,
+    1263
+   ],
+   [
+    542,
+    1313
+   ],
+   [
+    660,
+    1313
+   ],
+   [
+    714,
+    1154
+   ],
+   [
+    866,
+    1132
+   ],
+   [
+    866,
+    1042
+   ],
+   [
+    657,
+    935
+   ],
+   [
+    644,
+    853
+   ],
+   [
+    610,
+    818
+   ],
+   [
+    580,
+    819
+   ],
+   [
+    538,
+    794
+   ],
+   [
+    495,
+    807
+   ]
+  ],
+  "flags": {
+   "OpenSea": "true"
+  }
+ },
+ {
+  "id": "chaldaea",
+  "name": "Chaldaea",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Sumeria",
+  "path": [
+   [
+    2323,
+    967
+   ],
+   [
+    2322,
+    697
+   ],
+   [
+    2279,
+    695
+   ],
+   [
+    2254,
+    683
+   ],
+   [
+    2241,
+    697
+   ],
+   [
+    2242,
+    709
+   ],
+   [
+    2227,
+    723
+   ],
+   [
+    2226,
+    824
+   ],
+   [
+    2098,
+    838
+   ],
+   [
+    2094,
+    875
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "chalkis",
+  "name": "Chalkis",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    815,
+    798
+   ],
+   [
+    799,
+    786
+   ],
+   [
+    756,
+    774
+   ],
+   [
+    790,
+    728
+   ],
+   [
+    815,
+    725
+   ],
+   [
+    833,
+    746
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "charax",
+  "name": "Charax",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    2089,
+    740
+   ],
+   [
+    2117,
+    742
+   ],
+   [
+    2146,
+    739
+   ],
+   [
+    2166,
+    721
+   ],
+   [
+    2184,
+    721
+   ],
+   [
+    2193,
+    713
+   ],
+   [
+    2208,
+    721
+   ],
+   [
+    2227,
+    721
+   ],
+   [
+    2226,
+    824
+   ],
+   [
+    2098,
+    838
+   ],
+   [
+    2077,
+    781
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true",
+   "CitySite": "white"
+  }
+ },
+ {
+  "id": "cilicia",
+  "name": "Cilicia",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1552,
+    501
+   ],
+   [
+    1565,
+    502
+   ],
+   [
+    1579,
+    496
+   ],
+   [
+    1591,
+    517
+   ],
+   [
+    1570,
+    545
+   ],
+   [
+    1557,
+    599
+   ],
+   [
+    1573,
+    607
+   ],
+   [
+    1464,
+    680
+   ],
+   [
+    1432,
+    650
+   ],
+   [
+    1535,
+    498
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "cisalpina-2",
+  "name": "Cisalpina",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Italia",
+  "path": [
+   [
+    104,
+    409
+   ],
+   [
+    172,
+    369
+   ],
+   [
+    159,
+    348
+   ],
+   [
+    67,
+    354
+   ],
+   [
+    -4,
+    299
+   ],
+   [
+    -2,
+    418
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Italia"
+  }
+ },
+ {
+  "id": "corinth",
+  "name": "Corinth",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    772,
+    847
+   ],
+   [
+    744,
+    852
+   ],
+   [
+    656,
+    938
+   ],
+   [
+    645,
+    854
+   ],
+   [
+    701,
+    835
+   ],
+   [
+    718,
+    819
+   ],
+   [
+    785,
+    827
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "corsica-2",
+  "name": "Corsica",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    42,
+    714
+   ],
+   [
+    7,
+    734
+   ],
+   [
+    -2,
+    738
+   ],
+   [
+    -2,
+    570
+   ],
+   [
+    44,
+    594
+   ],
+   [
+    61,
+    668
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "crimea",
+  "name": "Crimea",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1027,
+    171
+   ],
+   [
+    1042,
+    217
+   ],
+   [
+    1150,
+    261
+   ],
+   [
+    1185,
+    250
+   ],
+   [
+    1259,
+    172
+   ],
+   [
+    1249,
+    66
+   ],
+   [
+    1198,
+    67
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "cyprus",
+  "name": "Cyprus",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1338,
+    908
+   ],
+   [
+    1439,
+    872
+   ],
+   [
+    1373,
+    787
+   ],
+   [
+    1296,
+    818
+   ],
+   [
+    1282,
+    853
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "cyrenaica",
+  "name": "Cyrenaica",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    910,
+    1312
+   ],
+   [
+    1156,
+    1326
+   ],
+   [
+    1167,
+    1139
+   ],
+   [
+    909,
+    1132
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "cyrene",
+  "name": "Cyrene",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    868,
+    1131
+   ],
+   [
+    714,
+    1154
+   ],
+   [
+    660,
+    1312
+   ],
+   [
+    808,
+    1363
+   ],
+   [
+    912,
+    1311
+   ],
+   [
+    909,
+    1133
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "dacia",
+  "name": "Dacia",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    694,
+    131
+   ],
+   [
+    605,
+    135
+   ],
+   [
+    522,
+    146
+   ],
+   [
+    490,
+    241
+   ],
+   [
+    470,
+    260
+   ],
+   [
+    491,
+    275
+   ],
+   [
+    494,
+    318
+   ],
+   [
+    528,
+    383
+   ],
+   [
+    533,
+    396
+   ],
+   [
+    565,
+    404
+   ],
+   [
+    613,
+    404
+   ],
+   [
+    626,
+    379
+   ],
+   [
+    750,
+    184
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "dalmatia",
+  "name": "Dalmatia",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    222,
+    486
+   ],
+   [
+    249,
+    408
+   ],
+   [
+    417,
+    453
+   ],
+   [
+    438,
+    608
+   ],
+   [
+    333,
+    561
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "damascus",
+  "name": "Damascus",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1595,
+    897
+   ],
+   [
+    1738,
+    930
+   ],
+   [
+    1702,
+    797
+   ],
+   [
+    1573,
+    838
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "danube",
+  "name": "Danube",
+  "board": "main",
+  "sustains": 5,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1027,
+    171
+   ],
+   [
+    953,
+    130
+   ],
+   [
+    750,
+    184
+   ],
+   [
+    625,
+    379
+   ],
+   [
+    638,
+    404
+   ],
+   [
+    657,
+    415
+   ],
+   [
+    665,
+    438
+   ],
+   [
+    740,
+    425
+   ],
+   [
+    804,
+    411
+   ],
+   [
+    817,
+    383
+   ],
+   [
+    847,
+    368
+   ],
+   [
+    870,
+    368
+   ],
+   [
+    891,
+    325
+   ],
+   [
+    884,
+    298
+   ],
+   [
+    886,
+    256
+   ],
+   [
+    905,
+    263
+   ],
+   [
+    939,
+    256
+   ],
+   [
+    955,
+    247
+   ],
+   [
+    1001,
+    254
+   ],
+   [
+    1040,
+    216
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true"
+  }
+ },
+ {
+  "id": "delphi",
+  "name": "Delphi",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    653,
+    766
+   ],
+   [
+    616,
+    790
+   ],
+   [
+    609,
+    818
+   ],
+   [
+    645,
+    854
+   ],
+   [
+    701,
+    835
+   ],
+   [
+    718,
+    819
+   ],
+   [
+    784,
+    827
+   ],
+   [
+    800,
+    814
+   ],
+   [
+    801,
+    786
+   ],
+   [
+    708,
+    760
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "eastern-desert",
+  "name": "Eastern Desert",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1555,
+    1353
+   ],
+   [
+    1522,
+    1352
+   ],
+   [
+    1447,
+    1272
+   ],
+   [
+    1449,
+    1195
+   ],
+   [
+    1485,
+    1171
+   ],
+   [
+    1497,
+    1191
+   ],
+   [
+    1535,
+    1230
+   ],
+   [
+    1622,
+    1287
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "eastern-mediterranean",
+  "name": "Eastern Mediterranean",
+  "board": "main",
+  "sustains": 0,
+  "isWater": true,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": true,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1483,
+    1022
+   ],
+   [
+    1496,
+    994
+   ],
+   [
+    1488,
+    891
+   ],
+   [
+    1492,
+    833
+   ],
+   [
+    1478,
+    831
+   ],
+   [
+    1439,
+    871
+   ],
+   [
+    1338,
+    906
+   ],
+   [
+    1284,
+    853
+   ],
+   [
+    1136,
+    874
+   ],
+   [
+    1029,
+    1017
+   ],
+   [
+    866,
+    1042
+   ],
+   [
+    866,
+    1132
+   ],
+   [
+    1238,
+    1141
+   ],
+   [
+    1321,
+    1076
+   ],
+   [
+    1437,
+    1055
+   ]
+  ],
+  "flags": {
+   "OpenSea": "true"
+  }
+ },
+ {
+  "id": "elam",
+  "name": "Elam",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    2178,
+    464
+   ],
+   [
+    2173,
+    367
+   ],
+   [
+    2062,
+    276
+   ],
+   [
+    1910,
+    356
+   ],
+   [
+    1976,
+    520
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "epirus",
+  "name": "Epirus",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    653,
+    767
+   ],
+   [
+    639,
+    673
+   ],
+   [
+    615,
+    662
+   ],
+   [
+    546,
+    722
+   ],
+   [
+    578,
+    744
+   ],
+   [
+    615,
+    790
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "eretria",
+  "name": "Eretria",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    833,
+    748
+   ],
+   [
+    815,
+    796
+   ],
+   [
+    890,
+    853
+   ],
+   [
+    927,
+    828
+   ],
+   [
+    854,
+    750
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "etruria-2",
+  "name": "Etruria",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Italia",
+  "path": [
+   [
+    104,
+    409
+   ],
+   [
+    -2,
+    418
+   ],
+   [
+    -2,
+    570
+   ],
+   [
+    44,
+    594
+   ],
+   [
+    85,
+    550
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true",
+   "StartRegion": "Italia"
+  }
+ },
+ {
+  "id": "fayum",
+  "name": "Fayum",
+  "board": "main",
+  "sustains": 5,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1448,
+    1275
+   ],
+   [
+    1371,
+    1292
+   ],
+   [
+    1321,
+    1387
+   ],
+   [
+    1372,
+    1447
+   ],
+   [
+    1521,
+    1352
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true",
+   "CitySite": "white"
+  }
+ },
+ {
+  "id": "galatia",
+  "name": "Galatia",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1218,
+    673
+   ],
+   [
+    1265,
+    617
+   ],
+   [
+    1432,
+    650
+   ],
+   [
+    1464,
+    683
+   ],
+   [
+    1449,
+    723
+   ],
+   [
+    1371,
+    790
+   ],
+   [
+    1296,
+    818
+   ],
+   [
+    1217,
+    728
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "gaza",
+  "name": "Gaza",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1570,
+    1092
+   ],
+   [
+    1477,
+    1152
+   ],
+   [
+    1435,
+    1056
+   ],
+   [
+    1483,
+    1023
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "germania-2",
+  "name": "Germania",
+  "board": "main",
+  "sustains": 5,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Illyria",
+  "path": [
+   [
+    -5,
+    -9
+   ],
+   [
+    414,
+    -9
+   ],
+   [
+    522,
+    146
+   ],
+   [
+    490,
+    241
+   ],
+   [
+    470,
+    260
+   ],
+   [
+    491,
+    275
+   ],
+   [
+    494,
+    318
+   ],
+   [
+    528,
+    383
+   ],
+   [
+    449,
+    385
+   ],
+   [
+    423,
+    307
+   ],
+   [
+    438,
+    249
+   ],
+   [
+    420,
+    225
+   ],
+   [
+    365,
+    242
+   ],
+   [
+    314,
+    215
+   ],
+   [
+    228,
+    235
+   ],
+   [
+    138,
+    205
+   ],
+   [
+    90,
+    193
+   ],
+   [
+    54,
+    221
+   ],
+   [
+    0,
+    231
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Illyria"
+  }
+ },
+ {
+  "id": "gordium",
+  "name": "Gordium",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1127,
+    638
+   ],
+   [
+    1218,
+    673
+   ],
+   [
+    1312,
+    563
+   ],
+   [
+    1299,
+    556
+   ],
+   [
+    1275,
+    542
+   ],
+   [
+    1268,
+    519
+   ],
+   [
+    1261,
+    518
+   ],
+   [
+    1257,
+    518
+   ],
+   [
+    1212,
+    536
+   ],
+   [
+    1192,
+    523
+   ],
+   [
+    1174,
+    540
+   ],
+   [
+    1180,
+    565
+   ],
+   [
+    1147,
+    598
+   ],
+   [
+    1126,
+    590
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "illyricum",
+  "name": "Illyricum",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    553,
+    562
+   ],
+   [
+    496,
+    635
+   ],
+   [
+    438,
+    609
+   ],
+   [
+    416,
+    453
+   ],
+   [
+    452,
+    386
+   ],
+   [
+    483,
+    390
+   ],
+   [
+    503,
+    382
+   ],
+   [
+    528,
+    383
+   ],
+   [
+    533,
+    396
+   ],
+   [
+    567,
+    403
+   ],
+   [
+    569,
+    437
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "ionia",
+  "name": "Ionia",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1129,
+    638
+   ],
+   [
+    1081,
+    677
+   ],
+   [
+    1054,
+    725
+   ],
+   [
+    1009,
+    753
+   ],
+   [
+    937,
+    729
+   ],
+   [
+    955,
+    786
+   ],
+   [
+    981,
+    795
+   ],
+   [
+    1047,
+    783
+   ],
+   [
+    1150,
+    724
+   ],
+   [
+    1217,
+    727
+   ],
+   [
+    1219,
+    673
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "ithaka",
+  "name": "Ithaka",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    580,
+    819
+   ],
+   [
+    537,
+    795
+   ],
+   [
+    530,
+    733
+   ],
+   [
+    546,
+    722
+   ],
+   [
+    576,
+    740
+   ],
+   [
+    616,
+    791
+   ],
+   [
+    610,
+    817
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "jalo",
+  "name": "Jalo",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Egypt",
+  "path": [
+   [
+    1045,
+    1587
+   ],
+   [
+    792,
+    1588
+   ],
+   [
+    716,
+    1517
+   ],
+   [
+    808,
+    1363
+   ],
+   [
+    912,
+    1311
+   ],
+   [
+    1044,
+    1319
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Egypt"
+  }
+ },
+ {
+  "id": "jericho",
+  "name": "Jericho",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1778,
+    1068
+   ],
+   [
+    1740,
+    931
+   ],
+   [
+    1695,
+    919
+   ],
+   [
+    1683,
+    948
+   ],
+   [
+    1580,
+    966
+   ],
+   [
+    1571,
+    988
+   ],
+   [
+    1592,
+    995
+   ],
+   [
+    1601,
+    1038
+   ],
+   [
+    1616,
+    1047
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "jerusalem",
+  "name": "Jerusalem",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1483,
+    1023
+   ],
+   [
+    1593,
+    1108
+   ],
+   [
+    1618,
+    1046
+   ],
+   [
+    1603,
+    1040
+   ],
+   [
+    1591,
+    996
+   ],
+   [
+    1572,
+    988
+   ],
+   [
+    1496,
+    996
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "kanesh",
+  "name": "Kanesh",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1488,
+    408
+   ],
+   [
+    1468,
+    413
+   ],
+   [
+    1444,
+    435
+   ],
+   [
+    1437,
+    459
+   ],
+   [
+    1410,
+    484
+   ],
+   [
+    1402,
+    531
+   ],
+   [
+    1379,
+    537
+   ],
+   [
+    1353,
+    566
+   ],
+   [
+    1312,
+    563
+   ],
+   [
+    1266,
+    616
+   ],
+   [
+    1432,
+    650
+   ],
+   [
+    1535,
+    498
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "knossos",
+  "name": "Knossos",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Crete",
+  "path": [
+   [
+    1038,
+    900
+   ],
+   [
+    1084,
+    944
+   ],
+   [
+    1030,
+    1016
+   ],
+   [
+    954,
+    1028
+   ],
+   [
+    932,
+    926
+   ]
+  ],
+  "flags": {
+   "CitySite": "true",
+   "StartRegion": "Crete"
+  }
+ },
+ {
+  "id": "kuban",
+  "name": "Kuban",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Asia",
+  "path": [
+   [
+    1418,
+    0
+   ],
+   [
+    1244,
+    0
+   ],
+   [
+    1259,
+    170
+   ],
+   [
+    1400,
+    174
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Asia"
+  }
+ },
+ {
+  "id": "lemnos",
+  "name": "Lemnos",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    812,
+    630
+   ],
+   [
+    864,
+    621
+   ],
+   [
+    899,
+    642
+   ],
+   [
+    864,
+    679
+   ],
+   [
+    830,
+    682
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "lesbos",
+  "name": "Lesbos",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    937,
+    729
+   ],
+   [
+    955,
+    786
+   ],
+   [
+    922,
+    788
+   ],
+   [
+    873,
+    696
+   ],
+   [
+    928,
+    679
+   ],
+   [
+    945,
+    707
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "lesser-armenia",
+  "name": "Lesser Armenia",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1879,
+    325
+   ],
+   [
+    1933,
+    151
+   ],
+   [
+    2125,
+    93
+   ],
+   [
+    2062,
+    277
+   ],
+   [
+    1909,
+    357
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "libya",
+  "name": "Libya",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    515,
+    1435
+   ],
+   [
+    716,
+    1517
+   ],
+   [
+    808,
+    1363
+   ],
+   [
+    661,
+    1313
+   ],
+   [
+    542,
+    1313
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "lycia",
+  "name": "Lycia",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1178,
+    726
+   ],
+   [
+    1218,
+    727
+   ],
+   [
+    1297,
+    817
+   ],
+   [
+    1282,
+    853
+   ],
+   [
+    1136,
+    873
+   ],
+   [
+    1108,
+    824
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "macedonia",
+  "name": "Macedonia",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    700,
+    669
+   ],
+   [
+    736,
+    596
+   ],
+   [
+    733,
+    536
+   ],
+   [
+    594,
+    568
+   ],
+   [
+    614,
+    664
+   ],
+   [
+    636,
+    672
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "mari",
+  "name": "Mari",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1899,
+    656
+   ],
+   [
+    1917,
+    661
+   ],
+   [
+    1940,
+    671
+   ],
+   [
+    1955,
+    843
+   ],
+   [
+    1781,
+    754
+   ],
+   [
+    1771,
+    661
+   ],
+   [
+    1791,
+    660
+   ],
+   [
+    1811,
+    668
+   ],
+   [
+    1811,
+    669
+   ],
+   [
+    1840,
+    645
+   ],
+   [
+    1863,
+    636
+   ],
+   [
+    1883,
+    649
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "media",
+  "name": "Media",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Babylon",
+  "path": [
+   [
+    2323,
+    263
+   ],
+   [
+    2175,
+    368
+   ],
+   [
+    2062,
+    276
+   ],
+   [
+    2131,
+    72
+   ],
+   [
+    2220,
+    114
+   ],
+   [
+    2323,
+    113
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Babylon"
+  }
+ },
+ {
+  "id": "memphis",
+  "name": "Memphis",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1447,
+    1275
+   ],
+   [
+    1372,
+    1293
+   ],
+   [
+    1317,
+    1223
+   ],
+   [
+    1392,
+    1180
+   ],
+   [
+    1448,
+    1197
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true",
+   "CitySite": "white"
+  }
+ },
+ {
+  "id": "mesopotamia",
+  "name": "Mesopotamia",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1928,
+    569
+   ],
+   [
+    1944,
+    580
+   ],
+   [
+    1956,
+    599
+   ],
+   [
+    1981,
+    609
+   ],
+   [
+    1996,
+    601
+   ],
+   [
+    2015,
+    626
+   ],
+   [
+    2030,
+    643
+   ],
+   [
+    2020,
+    668
+   ],
+   [
+    1982,
+    656
+   ],
+   [
+    1940,
+    669
+   ],
+   [
+    1908,
+    662
+   ],
+   [
+    1882,
+    650
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true"
+  }
+ },
+ {
+  "id": "midian",
+  "name": "Midian",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    2324,
+    1514
+   ],
+   [
+    2071,
+    1313
+   ],
+   [
+    1816,
+    1152
+   ],
+   [
+    1647,
+    1248
+   ],
+   [
+    1640,
+    1293
+   ],
+   [
+    1664,
+    1300
+   ],
+   [
+    1722,
+    1289
+   ],
+   [
+    1993,
+    1452
+   ],
+   [
+    2151,
+    1587
+   ],
+   [
+    2324,
+    1588
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "mikop",
+  "name": "Mikop",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Asia",
+  "path": [
+   [
+    1418,
+    0
+   ],
+   [
+    1529,
+    -1
+   ],
+   [
+    1610,
+    148
+   ],
+   [
+    1517,
+    207
+   ],
+   [
+    1398,
+    173
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Asia"
+  }
+ },
+ {
+  "id": "milazzo",
+  "name": "Milazzo",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": true,
+  "startRegion": null,
+  "path": [
+   [
+    329,
+    961
+   ],
+   [
+    291,
+    953
+   ],
+   [
+    282,
+    883
+   ],
+   [
+    367,
+    866
+   ],
+   [
+    380,
+    896
+   ],
+   [
+    381,
+    942
+   ]
+  ],
+  "flags": {
+   "VolcanoSite": "true"
+  }
+ },
+ {
+  "id": "miletus",
+  "name": "Miletus",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1008,
+    847
+   ],
+   [
+    977,
+    795
+   ],
+   [
+    1047,
+    783
+   ],
+   [
+    1150,
+    724
+   ],
+   [
+    1181,
+    724
+   ],
+   [
+    1108,
+    824
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "moesia",
+  "name": "Moesia",
+  "board": "main",
+  "sustains": 4,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    613,
+    405
+   ],
+   [
+    616,
+    381
+   ],
+   [
+    625,
+    379
+   ],
+   [
+    638,
+    404
+   ],
+   [
+    657,
+    415
+   ],
+   [
+    665,
+    438
+   ],
+   [
+    740,
+    425
+   ],
+   [
+    804,
+    411
+   ],
+   [
+    817,
+    383
+   ],
+   [
+    847,
+    368
+   ],
+   [
+    870,
+    368
+   ],
+   [
+    882,
+    346
+   ],
+   [
+    990,
+    357
+   ],
+   [
+    1001,
+    449
+   ],
+   [
+    902,
+    485
+   ],
+   [
+    733,
+    482
+   ],
+   [
+    569,
+    437
+   ],
+   [
+    566,
+    402
+   ],
+   [
+    589,
+    402
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true",
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "nalchik",
+  "name": "Nalchik",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Assyria",
+  "path": [
+   [
+    1774,
+    102
+   ],
+   [
+    1674,
+    186
+   ],
+   [
+    1610,
+    148
+   ],
+   [
+    1529,
+    -3
+   ],
+   [
+    1781,
+    -2
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Assyria"
+  }
+ },
+ {
+  "id": "neapolis",
+  "name": "Neapolis",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": true,
+  "startRegion": null,
+  "path": [
+   [
+    186,
+    729
+   ],
+   [
+    232,
+    649
+   ],
+   [
+    320,
+    709
+   ],
+   [
+    280,
+    777
+   ]
+  ],
+  "flags": {
+   "VolcanoSite": "true",
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "niniveh",
+  "name": "Niniveh",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1943,
+    582
+   ],
+   [
+    1891,
+    545
+   ],
+   [
+    1864,
+    508
+   ],
+   [
+    1846,
+    504
+   ],
+   [
+    1802,
+    475
+   ],
+   [
+    1775,
+    476
+   ],
+   [
+    1747,
+    456
+   ],
+   [
+    1758,
+    341
+   ],
+   [
+    1880,
+    323
+   ],
+   [
+    1910,
+    356
+   ],
+   [
+    1976,
+    520
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "nubia",
+  "name": "Nubia",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Egypt",
+  "path": [
+   [
+    2002,
+    1587
+   ],
+   [
+    1740,
+    1587
+   ],
+   [
+    1751,
+    1510
+   ],
+   [
+    1645,
+    1405
+   ],
+   [
+    1691,
+    1367
+   ],
+   [
+    1890,
+    1474
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Egypt"
+  }
+ },
+ {
+  "id": "numidia-2",
+  "name": "Numidia",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    71,
+    1173
+   ],
+   [
+    43,
+    970
+   ],
+   [
+    -6,
+    975
+   ],
+   [
+    -2,
+    1167
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "paeonia",
+  "name": "Paeonia",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    569,
+    435
+   ],
+   [
+    732,
+    481
+   ],
+   [
+    733,
+    536
+   ],
+   [
+    595,
+    568
+   ],
+   [
+    553,
+    561
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "palermo",
+  "name": "Palermo",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    281,
+    883
+   ],
+   [
+    205,
+    897
+   ],
+   [
+    171,
+    957
+   ],
+   [
+    209,
+    1021
+   ],
+   [
+    307,
+    1050
+   ],
+   [
+    330,
+    962
+   ],
+   [
+    293,
+    952
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "pannonia-2",
+  "name": "Pannonia",
+  "board": "main",
+  "sustains": 4,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Italia",
+  "path": [
+   [
+    0,
+    304
+   ],
+   [
+    69,
+    353
+   ],
+   [
+    161,
+    348
+   ],
+   [
+    185,
+    392
+   ],
+   [
+    186,
+    497
+   ],
+   [
+    221,
+    486
+   ],
+   [
+    249,
+    408
+   ],
+   [
+    417,
+    453
+   ],
+   [
+    451,
+    390
+   ],
+   [
+    423,
+    307
+   ],
+   [
+    438,
+    249
+   ],
+   [
+    420,
+    225
+   ],
+   [
+    365,
+    242
+   ],
+   [
+    314,
+    215
+   ],
+   [
+    228,
+    235
+   ],
+   [
+    138,
+    205
+   ],
+   [
+    90,
+    193
+   ],
+   [
+    54,
+    221
+   ],
+   [
+    0,
+    231
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Italia"
+  }
+ },
+ {
+  "id": "parthia",
+  "name": "Parthia",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Babylon",
+  "path": [
+   [
+    2323,
+    263
+   ],
+   [
+    2175,
+    368
+   ],
+   [
+    2180,
+    493
+   ],
+   [
+    2323,
+    536
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Babylon"
+  }
+ },
+ {
+  "id": "petra",
+  "name": "Petra",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1799,
+    1071
+   ],
+   [
+    1814,
+    1153
+   ],
+   [
+    1646,
+    1249
+   ],
+   [
+    1624,
+    1132
+   ],
+   [
+    1592,
+    1107
+   ],
+   [
+    1616,
+    1047
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "phaestos",
+  "name": "Phaestos",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Crete",
+  "path": [
+   [
+    849,
+    946
+   ],
+   [
+    829,
+    1023
+   ],
+   [
+    865,
+    1042
+   ],
+   [
+    954,
+    1028
+   ],
+   [
+    932,
+    926
+   ]
+  ],
+  "flags": {
+   "CitySite": "true",
+   "StartRegion": "Crete"
+  }
+ },
+ {
+  "id": "phoenicia",
+  "name": "Phoenicia",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1474,
+    805
+   ],
+   [
+    1611,
+    734
+   ],
+   [
+    1683,
+    735
+   ],
+   [
+    1702,
+    798
+   ],
+   [
+    1574,
+    839
+   ],
+   [
+    1478,
+    831
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "phrygia",
+  "name": "Phrygia",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1256,
+    484
+   ],
+   [
+    1282,
+    462
+   ],
+   [
+    1306,
+    438
+   ],
+   [
+    1293,
+    393
+   ],
+   [
+    1318,
+    388
+   ],
+   [
+    1341,
+    375
+   ],
+   [
+    1353,
+    304
+   ],
+   [
+    1253,
+    312
+   ],
+   [
+    1129,
+    388
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "ptolemais",
+  "name": "Ptolemais",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1622,
+    1286
+   ],
+   [
+    1553,
+    1355
+   ],
+   [
+    1567,
+    1427
+   ],
+   [
+    1581,
+    1425
+   ],
+   [
+    1590,
+    1432
+   ],
+   [
+    1605,
+    1426
+   ],
+   [
+    1612,
+    1431
+   ],
+   [
+    1691,
+    1368
+   ],
+   [
+    1666,
+    1300
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "red-sea",
+  "name": "Red Sea",
+  "board": "main",
+  "sustains": 0,
+  "isWater": true,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    2156,
+    1590
+   ],
+   [
+    1993,
+    1450
+   ],
+   [
+    1722,
+    1290
+   ],
+   [
+    1666,
+    1301
+   ],
+   [
+    1692,
+    1368
+   ],
+   [
+    1892,
+    1474
+   ],
+   [
+    2005,
+    1592
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "rhodes",
+  "name": "Rhodes",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1009,
+    847
+   ],
+   [
+    1036,
+    898
+   ],
+   [
+    1084,
+    945
+   ],
+   [
+    1136,
+    873
+   ],
+   [
+    1108,
+    824
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "roma",
+  "name": "Roma",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    186,
+    729
+   ],
+   [
+    232,
+    649
+   ],
+   [
+    84,
+    549
+   ],
+   [
+    42,
+    594
+   ],
+   [
+    61,
+    667
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "rubicon",
+  "name": "Rubicon",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    104,
+    409
+   ],
+   [
+    172,
+    369
+   ],
+   [
+    185,
+    393
+   ],
+   [
+    186,
+    497
+   ],
+   [
+    257,
+    575
+   ],
+   [
+    208,
+    635
+   ],
+   [
+    85,
+    550
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true"
+  }
+ },
+ {
+  "id": "sabrata",
+  "name": "Sabrata",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    96,
+    1368
+   ],
+   [
+    77,
+    1222
+   ],
+   [
+    199,
+    1240
+   ],
+   [
+    347,
+    1439
+   ],
+   [
+    295,
+    1455
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "sahara",
+  "name": "Sahara",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Africa",
+  "path": [
+   [
+    264,
+    1594
+   ],
+   [
+    -2,
+    1589
+   ],
+   [
+    -2,
+    1406
+   ],
+   [
+    98,
+    1367
+   ],
+   [
+    295,
+    1455
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Africa"
+  }
+ },
+ {
+  "id": "salamis",
+  "name": "Salamis",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1478,
+    832
+   ],
+   [
+    1439,
+    872
+   ],
+   [
+    1373,
+    787
+   ],
+   [
+    1449,
+    721
+   ],
+   [
+    1469,
+    734
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "samnium",
+  "name": "Samnium",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    397,
+    631
+   ],
+   [
+    406,
+    661
+   ],
+   [
+    368,
+    735
+   ],
+   [
+    320,
+    709
+   ],
+   [
+    206,
+    634
+   ],
+   [
+    256,
+    575
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "sardes",
+  "name": "Sardes",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1129,
+    638
+   ],
+   [
+    1081,
+    677
+   ],
+   [
+    1054,
+    725
+   ],
+   [
+    1009,
+    753
+   ],
+   [
+    937,
+    729
+   ],
+   [
+    944,
+    705
+   ],
+   [
+    928,
+    680
+   ],
+   [
+    1095,
+    593
+   ],
+   [
+    1127,
+    593
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "sardinia-2",
+  "name": "Sardinia",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    42,
+    714
+   ],
+   [
+    7,
+    734
+   ],
+   [
+    -2,
+    738
+   ],
+   [
+    -7,
+    819
+   ],
+   [
+    87,
+    814
+   ],
+   [
+    90,
+    765
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "scythia",
+  "name": "Scythia",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Thrace",
+  "path": [
+   [
+    1027,
+    171
+   ],
+   [
+    953,
+    130
+   ],
+   [
+    750,
+    184
+   ],
+   [
+    694,
+    129
+   ],
+   [
+    806,
+    -2
+   ],
+   [
+    1244,
+    -1
+   ],
+   [
+    1249,
+    66
+   ],
+   [
+    1198,
+    67
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Thrace"
+  }
+ },
+ {
+  "id": "sidon",
+  "name": "Sidon",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1490,
+    922
+   ],
+   [
+    1593,
+    898
+   ],
+   [
+    1575,
+    840
+   ],
+   [
+    1494,
+    833
+   ],
+   [
+    1487,
+    887
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "sinai",
+  "name": "Sinai",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1621,
+    1287
+   ],
+   [
+    1640,
+    1292
+   ],
+   [
+    1647,
+    1246
+   ],
+   [
+    1624,
+    1132
+   ],
+   [
+    1569,
+    1090
+   ],
+   [
+    1477,
+    1152
+   ],
+   [
+    1499,
+    1195
+   ],
+   [
+    1534,
+    1230
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "sinope",
+  "name": "Sinope",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1488,
+    408
+   ],
+   [
+    1468,
+    413
+   ],
+   [
+    1444,
+    435
+   ],
+   [
+    1340,
+    375
+   ],
+   [
+    1354,
+    304
+   ],
+   [
+    1511,
+    243
+   ],
+   [
+    1566,
+    267
+   ],
+   [
+    1617,
+    329
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "siwa",
+  "name": "Siwa",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Egypt",
+  "path": [
+   [
+    1321,
+    1387
+   ],
+   [
+    1156,
+    1326
+   ],
+   [
+    1044,
+    1320
+   ],
+   [
+    1044,
+    1592
+   ],
+   [
+    1360,
+    1591
+   ],
+   [
+    1370,
+    1448
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Egypt"
+  }
+ },
+ {
+  "id": "sparta",
+  "name": "Sparta",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    744,
+    852
+   ],
+   [
+    657,
+    936
+   ],
+   [
+    832,
+    1024
+   ],
+   [
+    842,
+    968
+   ],
+   [
+    792,
+    953
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "sudeten",
+  "name": "Sudeten",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Illyria",
+  "path": [
+   [
+    547,
+    148
+   ],
+   [
+    570,
+    138
+   ],
+   [
+    608,
+    134
+   ],
+   [
+    694,
+    129
+   ],
+   [
+    806,
+    -2
+   ],
+   [
+    420,
+    -1
+   ],
+   [
+    522,
+    146
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Illyria"
+  }
+ },
+ {
+  "id": "sumeria",
+  "name": "Sumeria",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    2089,
+    739
+   ],
+   [
+    2079,
+    733
+   ],
+   [
+    2070,
+    715
+   ],
+   [
+    2037,
+    694
+   ],
+   [
+    2028,
+    680
+   ],
+   [
+    2019,
+    666
+   ],
+   [
+    1994,
+    657
+   ],
+   [
+    1967,
+    658
+   ],
+   [
+    1938,
+    667
+   ],
+   [
+    1960,
+    899
+   ],
+   [
+    2093,
+    873
+   ],
+   [
+    2097,
+    836
+   ],
+   [
+    2077,
+    784
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true"
+  }
+ },
+ {
+  "id": "susa",
+  "name": "Susa",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Sumeria",
+  "path": [
+   [
+    2324,
+    535
+   ],
+   [
+    2322,
+    697
+   ],
+   [
+    2279,
+    695
+   ],
+   [
+    2254,
+    683
+   ],
+   [
+    2241,
+    667
+   ],
+   [
+    2211,
+    669
+   ],
+   [
+    2200,
+    660
+   ],
+   [
+    2214,
+    636
+   ],
+   [
+    2187,
+    587
+   ],
+   [
+    2181,
+    492
+   ]
+  ],
+  "flags": {
+   "CitySite": "true",
+   "Floodplain": "true",
+   "StartRegion": "Babylon"
+  }
+ },
+ {
+  "id": "syracus",
+  "name": "Syracus",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": true,
+  "startRegion": null,
+  "path": [
+   [
+    308,
+    1051
+   ],
+   [
+    329,
+    961
+   ],
+   [
+    381,
+    943
+   ],
+   [
+    407,
+    1031
+   ],
+   [
+    369,
+    1069
+   ]
+  ],
+  "flags": {
+   "CitySite": "true",
+   "VolcanoSite": "true"
+  }
+ },
+ {
+  "id": "syria",
+  "name": "Syria",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1961,
+    897
+   ],
+   [
+    1801,
+    1071
+   ],
+   [
+    1778,
+    1069
+   ],
+   [
+    1684,
+    740
+   ],
+   [
+    1687,
+    640
+   ],
+   [
+    1702,
+    632
+   ],
+   [
+    1718,
+    643
+   ],
+   [
+    1735,
+    647
+   ],
+   [
+    1772,
+    663
+   ],
+   [
+    1782,
+    754
+   ],
+   [
+    1956,
+    844
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "tanis",
+  "name": "Tanis",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1486,
+    1170
+   ],
+   [
+    1435,
+    1055
+   ],
+   [
+    1358,
+    1070
+   ],
+   [
+    1392,
+    1180
+   ],
+   [
+    1448,
+    1197
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true",
+   "CitySite": "white"
+  }
+ },
+ {
+  "id": "tarentum",
+  "name": "Tarentum",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    530,
+    732
+   ],
+   [
+    538,
+    793
+   ],
+   [
+    495,
+    805
+   ],
+   [
+    368,
+    736
+   ],
+   [
+    406,
+    660
+   ],
+   [
+    493,
+    684
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "thapsus",
+  "name": "Thapsus",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    64,
+    1126
+   ],
+   [
+    77,
+    1222
+   ],
+   [
+    199,
+    1240
+   ],
+   [
+    213,
+    1214
+   ],
+   [
+    193,
+    1076
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "thebes",
+  "name": "Thebes",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Egypt",
+  "path": [
+   [
+    1683,
+    1587
+   ],
+   [
+    1741,
+    1588
+   ],
+   [
+    1753,
+    1511
+   ],
+   [
+    1643,
+    1405
+   ],
+   [
+    1610,
+    1430
+   ],
+   [
+    1617,
+    1435
+   ],
+   [
+    1601,
+    1456
+   ],
+   [
+    1603,
+    1474
+   ],
+   [
+    1628,
+    1491
+   ],
+   [
+    1653,
+    1517
+   ],
+   [
+    1661,
+    1534
+   ],
+   [
+    1676,
+    1564
+   ]
+  ],
+  "flags": {
+   "CitySite": "true",
+   "StartRegion": "Egypt"
+  }
+ },
+ {
+  "id": "thera",
+  "name": "Thera",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": true,
+  "startRegion": null,
+  "path": [
+   [
+    849,
+    946
+   ],
+   [
+    864,
+    879
+   ],
+   [
+    890,
+    853
+   ],
+   [
+    927,
+    828
+   ],
+   [
+    1005,
+    908
+   ]
+  ],
+  "flags": {
+   "CitySite": "true",
+   "VolcanoSite": "true"
+  }
+ },
+ {
+  "id": "thessalonica",
+  "name": "Thessalonica",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    815,
+    630
+   ],
+   [
+    735,
+    592
+   ],
+   [
+    699,
+    667
+   ],
+   [
+    790,
+    728
+   ],
+   [
+    815,
+    723
+   ],
+   [
+    832,
+    679
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "thessaly",
+  "name": "Thessaly",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    653,
+    767
+   ],
+   [
+    639,
+    673
+   ],
+   [
+    699,
+    667
+   ],
+   [
+    791,
+    729
+   ],
+   [
+    757,
+    774
+   ],
+   [
+    708,
+    760
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "thrace",
+  "name": "Thrace",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    736,
+    596
+   ],
+   [
+    732,
+    481
+   ],
+   [
+    901,
+    484
+   ],
+   [
+    862,
+    620
+   ],
+   [
+    814,
+    630
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "thyras",
+  "name": "Thyras",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    882,
+    345
+   ],
+   [
+    891,
+    325
+   ],
+   [
+    884,
+    298
+   ],
+   [
+    886,
+    256
+   ],
+   [
+    905,
+    263
+   ],
+   [
+    939,
+    256
+   ],
+   [
+    955,
+    247
+   ],
+   [
+    1001,
+    254
+   ],
+   [
+    991,
+    358
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true",
+   "CitySite": "white"
+  }
+ },
+ {
+  "id": "tripoli",
+  "name": "Tripoli",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    213,
+    1216
+   ],
+   [
+    473,
+    1263
+   ],
+   [
+    543,
+    1313
+   ],
+   [
+    514,
+    1434
+   ],
+   [
+    347,
+    1439
+   ],
+   [
+    198,
+    1240
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "tripolitania",
+  "name": "Tripolitania",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Africa",
+  "path": [
+   [
+    265,
+    1592
+   ],
+   [
+    792,
+    1588
+   ],
+   [
+    716,
+    1517
+   ],
+   [
+    514,
+    1434
+   ],
+   [
+    347,
+    1439
+   ],
+   [
+    295,
+    1455
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Africa"
+  }
+ },
+ {
+  "id": "troy",
+  "name": "Troy",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1116,
+    559
+   ],
+   [
+    1120,
+    525
+   ],
+   [
+    1094,
+    497
+   ],
+   [
+    1080,
+    442
+   ],
+   [
+    1029,
+    452
+   ],
+   [
+    1020,
+    550
+   ],
+   [
+    950,
+    585
+   ],
+   [
+    865,
+    679
+   ],
+   [
+    873,
+    696
+   ],
+   [
+    927,
+    681
+   ],
+   [
+    1095,
+    593
+   ],
+   [
+    1101,
+    565
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "tunisia-2",
+  "name": "Tunisia",
+  "board": "main",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Africa",
+  "path": [
+   [
+    96,
+    1368
+   ],
+   [
+    71,
+    1172
+   ],
+   [
+    -6,
+    1166
+   ],
+   [
+    -8,
+    1409
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Africa"
+  }
+ },
+ {
+  "id": "tyros",
+  "name": "Tyros",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1490,
+    922
+   ],
+   [
+    1593,
+    898
+   ],
+   [
+    1695,
+    919
+   ],
+   [
+    1683,
+    948
+   ],
+   [
+    1580,
+    966
+   ],
+   [
+    1571,
+    988
+   ],
+   [
+    1496,
+    996
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "upper-egypt",
+  "name": "Upper Egypt",
+  "board": "main",
+  "sustains": 4,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Egypt",
+  "path": [
+   [
+    1567,
+    1429
+   ],
+   [
+    1552,
+    1354
+   ],
+   [
+    1523,
+    1352
+   ],
+   [
+    1371,
+    1446
+   ],
+   [
+    1360,
+    1589
+   ],
+   [
+    1503,
+    1591
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true",
+   "StartRegion": "Egypt"
+  }
+ },
+ {
+  "id": "ur",
+  "name": "Ur",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    2110,
+    644
+   ],
+   [
+    2116,
+    742
+   ],
+   [
+    2146,
+    739
+   ],
+   [
+    2166,
+    721
+   ],
+   [
+    2184,
+    721
+   ],
+   [
+    2193,
+    713
+   ],
+   [
+    2208,
+    721
+   ],
+   [
+    2227,
+    721
+   ],
+   [
+    2241,
+    713
+   ],
+   [
+    2245,
+    692
+   ],
+   [
+    2255,
+    685
+   ],
+   [
+    2240,
+    665
+   ],
+   [
+    2215,
+    670
+   ],
+   [
+    2197,
+    656
+   ],
+   [
+    2174,
+    619
+   ],
+   [
+    2162,
+    623
+   ],
+   [
+    2144,
+    615
+   ],
+   [
+    2133,
+    626
+   ],
+   [
+    2139,
+    641
+   ],
+   [
+    2124,
+    640
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true",
+   "CitySite": "white"
+  }
+ },
+ {
+  "id": "van",
+  "name": "Van",
+  "board": "main",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1536,
+    501
+   ],
+   [
+    1581,
+    501
+   ],
+   [
+    1589,
+    472
+   ],
+   [
+    1627,
+    463
+   ],
+   [
+    1648,
+    467
+   ],
+   [
+    1660,
+    488
+   ],
+   [
+    1692,
+    489
+   ],
+   [
+    1714,
+    474
+   ],
+   [
+    1747,
+    456
+   ],
+   [
+    1758,
+    341
+   ],
+   [
+    1681,
+    318
+   ],
+   [
+    1614,
+    331
+   ],
+   [
+    1485,
+    407
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "western-desert",
+  "name": "Western Desert",
+  "board": "main",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1321,
+    1387
+   ],
+   [
+    1156,
+    1326
+   ],
+   [
+    1167,
+    1139
+   ],
+   [
+    1239,
+    1141
+   ],
+   [
+    1297,
+    1213
+   ],
+   [
+    1318,
+    1223
+   ],
+   [
+    1372,
+    1292
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "western-mediterranean-2",
+  "name": "Western Mediterranean",
+  "board": "main",
+  "sustains": 0,
+  "isWater": true,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": true,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    -8,
+    927
+   ],
+   [
+    -9,
+    975
+   ],
+   [
+    172,
+    957
+   ],
+   [
+    205,
+    898
+   ],
+   [
+    366,
+    867
+   ],
+   [
+    342,
+    815
+   ],
+   [
+    282,
+    778
+   ],
+   [
+    60,
+    668
+   ],
+   [
+    43,
+    714
+   ],
+   [
+    90,
+    765
+   ],
+   [
+    82,
+    912
+   ]
+  ],
+  "flags": {
+   "OpenSea": "true"
+  }
+ },
+ {
+  "id": "aquitania",
+  "name": "Aquitania",
+  "board": "western",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    383,
+    579
+   ],
+   [
+    317,
+    541
+   ],
+   [
+    227,
+    537
+   ],
+   [
+    195,
+    408
+   ],
+   [
+    310,
+    219
+   ],
+   [
+    358,
+    217
+   ],
+   [
+    404,
+    244
+   ],
+   [
+    438,
+    265
+   ],
+   [
+    500,
+    421
+   ],
+   [
+    466,
+    566
+   ],
+   [
+    432,
+    565
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "baetica",
+  "name": "Baetica",
+  "board": "western",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Iberia",
+  "path": [
+   [
+    152,
+    778
+   ],
+   [
+    191,
+    904
+   ],
+   [
+    0,
+    989
+   ],
+   [
+    0,
+    796
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Iberia"
+  }
+ },
+ {
+  "id": "baleares",
+  "name": "Baleares",
+  "board": "western",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    384,
+    879
+   ],
+   [
+    465,
+    816
+   ],
+   [
+    511,
+    812
+   ],
+   [
+    538,
+    914
+   ],
+   [
+    458,
+    946
+   ],
+   [
+    396,
+    939
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "bay-of-biscay",
+  "name": "Bay of Biscay",
+  "board": "western",
+  "sustains": 0,
+  "isWater": true,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": true,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    62,
+    161
+   ],
+   [
+    -1,
+    103
+   ],
+   [
+    -1,
+    544
+   ],
+   [
+    172,
+    573
+   ],
+   [
+    227,
+    536
+   ],
+   [
+    193,
+    406
+   ],
+   [
+    101,
+    333
+   ]
+  ],
+  "flags": {
+   "OpenSea": "true"
+  }
+ },
+ {
+  "id": "belgica",
+  "name": "Belgica",
+  "board": "western",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    641,
+    148
+   ],
+   [
+    596,
+    66
+   ],
+   [
+    568,
+    40
+   ],
+   [
+    484,
+    52
+   ],
+   [
+    469,
+    1
+   ],
+   [
+    416,
+    1
+   ],
+   [
+    404,
+    95
+   ],
+   [
+    301,
+    184
+   ],
+   [
+    310,
+    219
+   ],
+   [
+    358,
+    217
+   ],
+   [
+    404,
+    244
+   ],
+   [
+    438,
+    265
+   ],
+   [
+    500,
+    421
+   ],
+   [
+    584,
+    412
+   ],
+   [
+    601,
+    182
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "britannia",
+  "name": "Britannia",
+  "board": "western",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1,
+    1
+   ],
+   [
+    140,
+    2
+   ],
+   [
+    253,
+    0
+   ],
+   [
+    223,
+    61
+   ],
+   [
+    187,
+    95
+   ],
+   [
+    147,
+    92
+   ],
+   [
+    61,
+    158
+   ],
+   [
+    0,
+    102
+   ]
+  ],
+  "flags": {
+   "HasWesternMap": "1"
+  }
+ },
+ {
+  "id": "cirta",
+  "name": "Cirta",
+  "board": "western",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Africa",
+  "path": [
+   [
+    740,
+    982
+   ],
+   [
+    749,
+    1166
+   ],
+   [
+    706,
+    1308
+   ],
+   [
+    598,
+    1308
+   ],
+   [
+    572,
+    998
+   ]
+  ],
+  "flags": {
+   "CitySite": "true",
+   "StartRegion": "Africa"
+  }
+ },
+ {
+  "id": "corduba",
+  "name": "Corduba",
+  "board": "western",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Iberia",
+  "path": [
+   [
+    190,
+    902
+   ],
+   [
+    226,
+    909
+   ],
+   [
+    317,
+    1023
+   ],
+   [
+    253,
+    1093
+   ],
+   [
+    -1,
+    1102
+   ],
+   [
+    0,
+    987
+   ]
+  ],
+  "flags": {
+   "CitySite": "true",
+   "StartRegion": "Iberia"
+  }
+ },
+ {
+  "id": "east-mauretania",
+  "name": "East Mauretania",
+  "board": "western",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    423,
+    1041
+   ],
+   [
+    456,
+    1309
+   ],
+   [
+    239,
+    1309
+   ],
+   [
+    271,
+    1112
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "ebusus",
+  "name": "Ebusus",
+  "board": "western",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    602,
+    801
+   ],
+   [
+    625,
+    836
+   ],
+   [
+    608,
+    886
+   ],
+   [
+    538,
+    913
+   ],
+   [
+    509,
+    810
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "gaul",
+  "name": "Gaul",
+  "board": "western",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    637,
+    408
+   ],
+   [
+    693,
+    467
+   ],
+   [
+    698,
+    492
+   ],
+   [
+    647,
+    525
+   ],
+   [
+    474,
+    527
+   ],
+   [
+    497,
+    424
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true"
+  }
+ },
+ {
+  "id": "hispania",
+  "name": "Hispania",
+  "board": "western",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    180,
+    734
+   ],
+   [
+    308,
+    742
+   ],
+   [
+    305,
+    814
+   ],
+   [
+    225,
+    909
+   ],
+   [
+    191,
+    903
+   ],
+   [
+    153,
+    778
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "iberus",
+  "name": "Iberus",
+  "board": "western",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    363,
+    712
+   ],
+   [
+    464,
+    794
+   ],
+   [
+    466,
+    817
+   ],
+   [
+    383,
+    880
+   ],
+   [
+    304,
+    815
+   ],
+   [
+    309,
+    741
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "londinium",
+  "name": "Londinium",
+  "board": "western",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    223,
+    55
+   ],
+   [
+    259,
+    -3
+   ],
+   [
+    417,
+    0
+   ],
+   [
+    405,
+    97
+   ],
+   [
+    297,
+    187
+   ],
+   [
+    70,
+    197
+   ],
+   [
+    62,
+    159
+   ],
+   [
+    144,
+    94
+   ],
+   [
+    185,
+    96
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "lower-germany",
+  "name": "Lower Germany",
+  "board": "western",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    639,
+    146
+   ],
+   [
+    596,
+    66
+   ],
+   [
+    568,
+    40
+   ],
+   [
+    484,
+    52
+   ],
+   [
+    469,
+    1
+   ],
+   [
+    710,
+    2
+   ],
+   [
+    738,
+    162
+   ],
+   [
+    698,
+    147
+   ],
+   [
+    663,
+    158
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "lugdunensis",
+  "name": "Lugdunensis",
+  "board": "western",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    298,
+    185
+   ],
+   [
+    310,
+    219
+   ],
+   [
+    195,
+    406
+   ],
+   [
+    100,
+    334
+   ],
+   [
+    71,
+    199
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "lusitania",
+  "name": "Lusitania",
+  "board": "western",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Iberia",
+  "path": [
+   [
+    170,
+    574
+   ],
+   [
+    179,
+    736
+   ],
+   [
+    153,
+    778
+   ],
+   [
+    -1,
+    795
+   ],
+   [
+    1,
+    545
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Iberia"
+  }
+ },
+ {
+  "id": "massilia",
+  "name": "Massilia",
+  "board": "western",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    648,
+    525
+   ],
+   [
+    697,
+    490
+   ],
+   [
+    766,
+    564
+   ],
+   [
+    711,
+    644
+   ],
+   [
+    667,
+    653
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "narbo",
+  "name": "Narbo",
+  "board": "western",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    649,
+    526
+   ],
+   [
+    668,
+    654
+   ],
+   [
+    583,
+    671
+   ],
+   [
+    468,
+    566
+   ],
+   [
+    475,
+    527
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true"
+  }
+ },
+ {
+  "id": "new-africa",
+  "name": "New Africa",
+  "board": "western",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    572,
+    997
+   ],
+   [
+    600,
+    1310
+   ],
+   [
+    456,
+    1309
+   ],
+   [
+    420,
+    1041
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "new-carthage",
+  "name": "New Carthage",
+  "board": "western",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    305,
+    815
+   ],
+   [
+    384,
+    879
+   ],
+   [
+    395,
+    938
+   ],
+   [
+    317,
+    1021
+   ],
+   [
+    225,
+    907
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "pyrenees",
+  "name": "Pyrenees",
+  "board": "western",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    427,
+    565
+   ],
+   [
+    467,
+    564
+   ],
+   [
+    583,
+    671
+   ],
+   [
+    463,
+    794
+   ],
+   [
+    363,
+    713
+   ],
+   [
+    381,
+    580
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "rhaetia",
+  "name": "Rhaetia",
+  "board": "western",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    657,
+    352
+   ],
+   [
+    722,
+    357
+   ],
+   [
+    746,
+    423
+   ],
+   [
+    692,
+    467
+   ],
+   [
+    637,
+    407
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "rhenus",
+  "name": "Rhenus",
+  "board": "western",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    672,
+    200
+   ],
+   [
+    697,
+    205
+   ],
+   [
+    704,
+    244
+   ],
+   [
+    704,
+    244
+   ],
+   [
+    684,
+    251
+   ],
+   [
+    686,
+    282
+   ],
+   [
+    660,
+    351
+   ],
+   [
+    720,
+    355
+   ],
+   [
+    758,
+    288
+   ],
+   [
+    738,
+    162
+   ],
+   [
+    698,
+    147
+   ],
+   [
+    663,
+    158
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "tarraconensis",
+  "name": "Tarraconensis",
+  "board": "western",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    170,
+    574
+   ],
+   [
+    228,
+    537
+   ],
+   [
+    312,
+    540
+   ],
+   [
+    349,
+    562
+   ],
+   [
+    382,
+    578
+   ],
+   [
+    365,
+    712
+   ],
+   [
+    309,
+    742
+   ],
+   [
+    177,
+    735
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "upper-germany",
+  "name": "Upper Germany",
+  "board": "western",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    672,
+    200
+   ],
+   [
+    697,
+    205
+   ],
+   [
+    704,
+    244
+   ],
+   [
+    704,
+    244
+   ],
+   [
+    684,
+    251
+   ],
+   [
+    686,
+    282
+   ],
+   [
+    634,
+    408
+   ],
+   [
+    584,
+    414
+   ],
+   [
+    599,
+    186
+   ],
+   [
+    624,
+    156
+   ],
+   [
+    641,
+    150
+   ],
+   [
+    663,
+    158
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "west-mauretania",
+  "name": "West Mauretania",
+  "board": "western",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    253,
+    1092
+   ],
+   [
+    270,
+    1112
+   ],
+   [
+    241,
+    1309
+   ],
+   [
+    -2,
+    1308
+   ],
+   [
+    -2,
+    1100
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "abu-dhabi",
+  "name": "Abu Dhabi",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    540,
+    1025
+   ],
+   [
+    514,
+    886
+   ],
+   [
+    483,
+    863
+   ],
+   [
+    506,
+    782
+   ],
+   [
+    621,
+    819
+   ],
+   [
+    612,
+    873
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "ahwaz",
+  "name": "Ahwaz",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Sumeria",
+  "path": [
+   [
+    56,
+    591
+   ],
+   [
+    111,
+    598
+   ],
+   [
+    153,
+    685
+   ],
+   [
+    153,
+    741
+   ],
+   [
+    60,
+    704
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Sumeria"
+  }
+ },
+ {
+  "id": "al-gharbia",
+  "name": "Al Gharbia",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    540,
+    1024
+   ],
+   [
+    515,
+    889
+   ],
+   [
+    482,
+    864
+   ],
+   [
+    420,
+    884
+   ],
+   [
+    431,
+    1067
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "al-jibal",
+  "name": "Al Jibal",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    611,
+    1028
+   ],
+   [
+    684,
+    1076
+   ],
+   [
+    668,
+    1104
+   ],
+   [
+    614,
+    1134
+   ],
+   [
+    555,
+    1133
+   ],
+   [
+    555,
+    1071
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "al-wusta",
+  "name": "Al Wusta",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    923,
+    979
+   ],
+   [
+    780,
+    989
+   ],
+   [
+    806,
+    1133
+   ],
+   [
+    882,
+    1166
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "apolagos",
+  "name": "Apolagos",
+  "board": "eastern",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Sumeria",
+  "path": [
+   [
+    83,
+    899
+   ],
+   [
+    85,
+    998
+   ],
+   [
+    197,
+    1002
+   ],
+   [
+    146,
+    822
+   ],
+   [
+    44,
+    745
+   ],
+   [
+    45,
+    857
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Sumeria"
+  }
+ },
+ {
+  "id": "arabian-sea",
+  "name": "Arabian Sea",
+  "board": "eastern",
+  "sustains": 0,
+  "isWater": true,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": true,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    845,
+    1233
+   ],
+   [
+    715,
+    1459
+   ],
+   [
+    715,
+    1594
+   ],
+   [
+    817,
+    1591
+   ],
+   [
+    818,
+    1531
+   ],
+   [
+    972,
+    1437
+   ]
+  ],
+  "flags": {
+   "OpenSea": "true"
+  }
+ },
+ {
+  "id": "aracosta",
+  "name": "Aracosta",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    829,
+    274
+   ],
+   [
+    779,
+    280
+   ],
+   [
+    757,
+    281
+   ],
+   [
+    750,
+    273
+   ],
+   [
+    758,
+    260
+   ],
+   [
+    751,
+    254
+   ],
+   [
+    767,
+    178
+   ],
+   [
+    752,
+    146
+   ],
+   [
+    876,
+    146
+   ],
+   [
+    922,
+    125
+   ],
+   [
+    949,
+    157
+   ],
+   [
+    947,
+    208
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "aria",
+  "name": "Aria",
+  "board": "eastern",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    439,
+    361
+   ],
+   [
+    424,
+    361
+   ],
+   [
+    418,
+    371
+   ],
+   [
+    412,
+    359
+   ],
+   [
+    322,
+    447
+   ],
+   [
+    170,
+    412
+   ],
+   [
+    182,
+    399
+   ],
+   [
+    165,
+    389
+   ],
+   [
+    167,
+    303
+   ],
+   [
+    340,
+    226
+   ],
+   [
+    437,
+    258
+   ],
+   [
+    537,
+    214
+   ],
+   [
+    544,
+    227
+   ],
+   [
+    476,
+    331
+   ],
+   [
+    477,
+    361
+   ],
+   [
+    459,
+    359
+   ],
+   [
+    463,
+    368
+   ],
+   [
+    451,
+    373
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "artacona",
+  "name": "Artacona",
+  "board": "eastern",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    603,
+    227
+   ],
+   [
+    586,
+    228
+   ],
+   [
+    573,
+    220
+   ],
+   [
+    574,
+    200
+   ],
+   [
+    561,
+    206
+   ],
+   [
+    538,
+    203
+   ],
+   [
+    537,
+    168
+   ],
+   [
+    562,
+    138
+   ],
+   [
+    623,
+    138
+   ],
+   [
+    642,
+    153
+   ],
+   [
+    640,
+    171
+   ],
+   [
+    640,
+    192
+   ],
+   [
+    626,
+    205
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true"
+  }
+ },
+ {
+  "id": "ash-sharqija",
+  "name": "Ash Sharqija",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    611,
+    1028
+   ],
+   [
+    684,
+    1076
+   ],
+   [
+    668,
+    1104
+   ],
+   [
+    660,
+    1111
+   ],
+   [
+    714,
+    1160
+   ],
+   [
+    778,
+    989
+   ],
+   [
+    778,
+    906
+   ],
+   [
+    733,
+    843
+   ],
+   [
+    622,
+    822
+   ],
+   [
+    612,
+    869
+   ],
+   [
+    541,
+    1024
+   ],
+   [
+    578,
+    1053
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "banda-abbas",
+  "name": "Banda Abbas",
+  "board": "eastern",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    515,
+    575
+   ],
+   [
+    515,
+    606
+   ],
+   [
+    534,
+    626
+   ],
+   [
+    511,
+    650
+   ],
+   [
+    511,
+    689
+   ],
+   [
+    429,
+    689
+   ],
+   [
+    428,
+    647
+   ],
+   [
+    494,
+    572
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "barna",
+  "name": "Barna",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    791,
+    565
+   ],
+   [
+    882,
+    509
+   ],
+   [
+    846,
+    469
+   ],
+   [
+    771,
+    433
+   ],
+   [
+    696,
+    474
+   ],
+   [
+    708,
+    500
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "basri",
+  "name": "Basri",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    799,
+    377
+   ],
+   [
+    903,
+    423
+   ],
+   [
+    933,
+    462
+   ],
+   [
+    962,
+    436
+   ],
+   [
+    828,
+    275
+   ],
+   [
+    816,
+    275
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "bat",
+  "name": "Bat",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    768,
+    654
+   ],
+   [
+    733,
+    842
+   ],
+   [
+    620,
+    820
+   ],
+   [
+    642,
+    699
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "carmania",
+  "name": "Carmania",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    427,
+    648
+   ],
+   [
+    338,
+    647
+   ],
+   [
+    334,
+    585
+   ],
+   [
+    400,
+    582
+   ],
+   [
+    416,
+    543
+   ],
+   [
+    483,
+    526
+   ],
+   [
+    494,
+    572
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "chanhu-daro",
+  "name": "Chanhu-Daro",
+  "board": "eastern",
+  "sustains": 5,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Indus",
+  "path": [
+   [
+    1190,
+    -4
+   ],
+   [
+    1192,
+    31
+   ],
+   [
+    1071,
+    159
+   ],
+   [
+    1045,
+    144
+   ],
+   [
+    1026,
+    149
+   ],
+   [
+    1018,
+    144
+   ],
+   [
+    1004,
+    119
+   ],
+   [
+    984,
+    95
+   ],
+   [
+    975,
+    56
+   ],
+   [
+    983,
+    54
+   ],
+   [
+    997,
+    54
+   ],
+   [
+    981,
+    22
+   ],
+   [
+    997,
+    11
+   ],
+   [
+    993,
+    -1
+   ]
+  ],
+  "flags": {
+   "CitySite": "white",
+   "Floodplain": "true",
+   "StartRegion": "Indus"
+  }
+ },
+ {
+  "id": "fav",
+  "name": "Fav",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    130,
+    1187
+   ],
+   [
+    130,
+    1217
+   ],
+   [
+    18,
+    1215
+   ],
+   [
+    15,
+    1098
+   ],
+   [
+    71,
+    1106
+   ],
+   [
+    91,
+    1162
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "gedrosla",
+  "name": "Gedrosla",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    698,
+    476
+   ],
+   [
+    652,
+    378
+   ],
+   [
+    715,
+    325
+   ],
+   [
+    719,
+    301
+   ],
+   [
+    699,
+    279
+   ],
+   [
+    716,
+    285
+   ],
+   [
+    723,
+    270
+   ],
+   [
+    741,
+    271
+   ],
+   [
+    751,
+    254
+   ],
+   [
+    758,
+    257
+   ],
+   [
+    753,
+    271
+   ],
+   [
+    756,
+    282
+   ],
+   [
+    819,
+    277
+   ],
+   [
+    800,
+    375
+   ],
+   [
+    772,
+    433
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "gerrha",
+  "name": "Gerrha",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    294,
+    917
+   ],
+   [
+    284,
+    984
+   ],
+   [
+    199,
+    1002
+   ],
+   [
+    146,
+    821
+   ],
+   [
+    220,
+    831
+   ],
+   [
+    235,
+    855
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "gulashkird",
+  "name": "Gulashkird",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    515,
+    575
+   ],
+   [
+    494,
+    570
+   ],
+   [
+    485,
+    526
+   ],
+   [
+    585,
+    501
+   ],
+   [
+    612,
+    535
+   ],
+   [
+    618,
+    560
+   ],
+   [
+    592,
+    557
+   ],
+   [
+    571,
+    566
+   ],
+   [
+    541,
+    555
+   ],
+   [
+    534,
+    567
+   ],
+   [
+    520,
+    567
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "gulf-of-oman",
+  "name": "Gulf of Oman",
+  "board": "eastern",
+  "sustains": 0,
+  "isWater": true,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    641,
+    700
+   ],
+   [
+    816,
+    636
+   ],
+   [
+    872,
+    648
+   ],
+   [
+    937,
+    738
+   ],
+   [
+    942,
+    812
+   ],
+   [
+    1193,
+    814
+   ],
+   [
+    1192,
+    332
+   ],
+   [
+    1044,
+    332
+   ],
+   [
+    977,
+    422
+   ],
+   [
+    882,
+    509
+   ],
+   [
+    643,
+    654
+   ],
+   [
+    608,
+    661
+   ],
+   [
+    543,
+    616
+   ],
+   [
+    533,
+    627
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "gulf-of-persia",
+  "name": "Gulf of Persia",
+  "board": "eastern",
+  "sustains": 0,
+  "isWater": true,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1,
+    700
+   ],
+   [
+    47,
+    745
+   ],
+   [
+    143,
+    819
+   ],
+   [
+    219,
+    830
+   ],
+   [
+    233,
+    806
+   ],
+   [
+    273,
+    806
+   ],
+   [
+    292,
+    831
+   ],
+   [
+    356,
+    826
+   ],
+   [
+    421,
+    883
+   ],
+   [
+    481,
+    865
+   ],
+   [
+    505,
+    782
+   ],
+   [
+    509,
+    689
+   ],
+   [
+    494,
+    689
+   ],
+   [
+    473,
+    732
+   ],
+   [
+    367,
+    773
+   ],
+   [
+    211,
+    772
+   ],
+   [
+    157,
+    744
+   ],
+   [
+    62,
+    705
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "hadramaut",
+  "name": "Hadramaut",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    809,
+    1294
+   ],
+   [
+    715,
+    1158
+   ],
+   [
+    539,
+    1458
+   ],
+   [
+    713,
+    1459
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "harmoza",
+  "name": "Harmoza",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    515,
+    575
+   ],
+   [
+    515,
+    606
+   ],
+   [
+    532,
+    627
+   ],
+   [
+    543,
+    616
+   ],
+   [
+    604,
+    661
+   ],
+   [
+    641,
+    653
+   ],
+   [
+    618,
+    560
+   ],
+   [
+    592,
+    557
+   ],
+   [
+    571,
+    566
+   ],
+   [
+    541,
+    555
+   ],
+   [
+    534,
+    567
+   ],
+   [
+    520,
+    567
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "herat",
+  "name": "Herat",
+  "board": "eastern",
+  "sustains": 4,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    603,
+    227
+   ],
+   [
+    586,
+    228
+   ],
+   [
+    573,
+    220
+   ],
+   [
+    574,
+    200
+   ],
+   [
+    561,
+    206
+   ],
+   [
+    538,
+    203
+   ],
+   [
+    539,
+    218
+   ],
+   [
+    564,
+    267
+   ],
+   [
+    573,
+    268
+   ],
+   [
+    576,
+    281
+   ],
+   [
+    587,
+    281
+   ],
+   [
+    587,
+    264
+   ],
+   [
+    595,
+    268
+   ],
+   [
+    629,
+    242
+   ],
+   [
+    640,
+    171
+   ],
+   [
+    637,
+    215
+   ],
+   [
+    629,
+    201
+   ]
+  ],
+  "flags": {
+   "CitySite": "white",
+   "Floodplain": "true"
+  }
+ },
+ {
+  "id": "indian-ocean",
+  "name": "Indian Ocean",
+  "board": "eastern",
+  "sustains": 0,
+  "isWater": true,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": true,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    846,
+    1231
+   ],
+   [
+    884,
+    1166
+   ],
+   [
+    925,
+    979
+   ],
+   [
+    995,
+    931
+   ],
+   [
+    995,
+    817
+   ],
+   [
+    1193,
+    817
+   ],
+   [
+    1195,
+    1592
+   ],
+   [
+    1023,
+    1594
+   ],
+   [
+    1022,
+    1513
+   ]
+  ],
+  "flags": {
+   "OpenSea": "true"
+  }
+ },
+ {
+  "id": "karachi",
+  "name": "Karachi",
+  "board": "eastern",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Indus",
+  "path": [
+   [
+    1192,
+    258
+   ],
+   [
+    1199,
+    331
+   ],
+   [
+    1101,
+    332
+   ],
+   [
+    1119,
+    263
+   ],
+   [
+    1120,
+    245
+   ],
+   [
+    1106,
+    220
+   ],
+   [
+    1095,
+    204
+   ],
+   [
+    1101,
+    191
+   ],
+   [
+    1109,
+    204
+   ],
+   [
+    1123,
+    211
+   ],
+   [
+    1135,
+    225
+   ],
+   [
+    1163,
+    238
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true",
+   "StartRegion": "Indus"
+  }
+ },
+ {
+  "id": "kerman",
+  "name": "Kerman",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    485,
+    526
+   ],
+   [
+    585,
+    501
+   ],
+   [
+    477,
+    361
+   ],
+   [
+    459,
+    359
+   ],
+   [
+    463,
+    368
+   ],
+   [
+    451,
+    373
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "kurangan",
+  "name": "Kurangan",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    334,
+    582
+   ],
+   [
+    338,
+    647
+   ],
+   [
+    311,
+    657
+   ],
+   [
+    280,
+    693
+   ],
+   [
+    255,
+    693
+   ],
+   [
+    240,
+    706
+   ],
+   [
+    238,
+    660
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "lyan",
+  "name": "Lyan",
+  "board": "eastern",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    362,
+    772
+   ],
+   [
+    381,
+    766
+   ],
+   [
+    348,
+    701
+   ],
+   [
+    333,
+    716
+   ],
+   [
+    320,
+    712
+   ],
+   [
+    305,
+    718
+   ],
+   [
+    301,
+    711
+   ],
+   [
+    284,
+    712
+   ],
+   [
+    268,
+    694
+   ],
+   [
+    255,
+    694
+   ],
+   [
+    240,
+    705
+   ],
+   [
+    228,
+    722
+   ],
+   [
+    228,
+    745
+   ],
+   [
+    213,
+    771
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "makkan",
+  "name": "Makkan",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    932,
+    462
+   ],
+   [
+    882,
+    509
+   ],
+   [
+    846,
+    469
+   ],
+   [
+    771,
+    433
+   ],
+   [
+    799,
+    377
+   ],
+   [
+    903,
+    422
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "mana",
+  "name": "Mana",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    294,
+    917
+   ],
+   [
+    299,
+    893
+   ],
+   [
+    288,
+    859
+   ],
+   [
+    296,
+    830
+   ],
+   [
+    355,
+    827
+   ],
+   [
+    420,
+    884
+   ],
+   [
+    431,
+    1067
+   ],
+   [
+    283,
+    982
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "mazirah",
+  "name": "Mazirah",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    994,
+    931
+   ],
+   [
+    994,
+    815
+   ],
+   [
+    941,
+    814
+   ],
+   [
+    878,
+    890
+   ],
+   [
+    878,
+    936
+   ],
+   [
+    922,
+    978
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "mazun",
+  "name": "Mazun",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    935,
+    736
+   ],
+   [
+    941,
+    814
+   ],
+   [
+    878,
+    890
+   ],
+   [
+    828,
+    797
+   ],
+   [
+    886,
+    671
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "megan",
+  "name": "Megan",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    640,
+    654
+   ],
+   [
+    790,
+    563
+   ],
+   [
+    710,
+    501
+   ],
+   [
+    681,
+    529
+   ],
+   [
+    650,
+    539
+   ],
+   [
+    633,
+    542
+   ],
+   [
+    618,
+    560
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "mochendo-daro",
+  "name": "Mochendo-Daro",
+  "board": "eastern",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    922,
+    -3
+   ],
+   [
+    921,
+    124
+   ],
+   [
+    953,
+    163
+   ],
+   [
+    1023,
+    163
+   ],
+   [
+    1026,
+    149
+   ],
+   [
+    1018,
+    144
+   ],
+   [
+    1004,
+    119
+   ],
+   [
+    984,
+    95
+   ],
+   [
+    975,
+    56
+   ],
+   [
+    983,
+    54
+   ],
+   [
+    997,
+    54
+   ],
+   [
+    981,
+    22
+   ],
+   [
+    997,
+    11
+   ],
+   [
+    993,
+    -1
+   ]
+  ],
+  "flags": {
+   "CitySite": "white",
+   "Floodplain": "true"
+  }
+ },
+ {
+  "id": "moscha",
+  "name": "Moscha",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    809,
+    1294
+   ],
+   [
+    715,
+    1158
+   ],
+   [
+    776,
+    996
+   ],
+   [
+    806,
+    1132
+   ],
+   [
+    881,
+    1167
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "nisa",
+  "name": "Nisa",
+  "board": "eastern",
+  "sustains": 5,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Persia",
+  "path": [
+   [
+    1,
+    -1
+   ],
+   [
+    372,
+    0
+   ],
+   [
+    338,
+    225
+   ],
+   [
+    165,
+    303
+   ],
+   [
+    92,
+    179
+   ],
+   [
+    58,
+    144
+   ],
+   [
+    1,
+    112
+   ]
+  ],
+  "flags": {
+   "CitySite": "true",
+   "StartRegion": "Persia",
+   "HasEasternMap": "1"
+  }
+ },
+ {
+  "id": "nurabad",
+  "name": "Nurabad",
+  "board": "eastern",
+  "sustains": 3,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    311,
+    657
+   ],
+   [
+    338,
+    647
+   ],
+   [
+    348,
+    701
+   ],
+   [
+    333,
+    716
+   ],
+   [
+    320,
+    712
+   ],
+   [
+    305,
+    718
+   ],
+   [
+    301,
+    711
+   ],
+   [
+    284,
+    712
+   ],
+   [
+    268,
+    694
+   ],
+   [
+    282,
+    692
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "oman",
+  "name": "Oman",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    768,
+    654
+   ],
+   [
+    733,
+    842
+   ],
+   [
+    779,
+    906
+   ],
+   [
+    887,
+    670
+   ],
+   [
+    871,
+    647
+   ],
+   [
+    815,
+    638
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "onitas",
+  "name": "Onitas",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    978,
+    423
+   ],
+   [
+    962,
+    436
+   ],
+   [
+    828,
+    275
+   ],
+   [
+    948,
+    206
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "pala",
+  "name": "Pala",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Indus",
+  "path": [
+   [
+    1194,
+    261
+   ],
+   [
+    1153,
+    233
+   ],
+   [
+    1129,
+    223
+   ],
+   [
+    1121,
+    208
+   ],
+   [
+    1108,
+    207
+   ],
+   [
+    1101,
+    193
+   ],
+   [
+    1084,
+    167
+   ],
+   [
+    1072,
+    158
+   ],
+   [
+    1194,
+    26
+   ]
+  ],
+  "flags": {
+   "CitySite": "white",
+   "Floodplain": "true",
+   "StartRegion": "Indus"
+  }
+ },
+ {
+  "id": "parsian",
+  "name": "Parsian",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    473,
+    733
+   ],
+   [
+    381,
+    767
+   ],
+   [
+    349,
+    701
+   ],
+   [
+    428,
+    689
+   ],
+   [
+    493,
+    688
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "pasagardes",
+  "name": "Pasagardes",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    439,
+    361
+   ],
+   [
+    424,
+    361
+   ],
+   [
+    418,
+    371
+   ],
+   [
+    412,
+    359
+   ],
+   [
+    322,
+    447
+   ],
+   [
+    334,
+    585
+   ],
+   [
+    400,
+    582
+   ],
+   [
+    416,
+    543
+   ],
+   [
+    483,
+    526
+   ],
+   [
+    451,
+    373
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "persepolis",
+  "name": "Persepolis",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    53,
+    535
+   ],
+   [
+    152,
+    419
+   ],
+   [
+    164,
+    421
+   ],
+   [
+    173,
+    411
+   ],
+   [
+    320,
+    446
+   ],
+   [
+    334,
+    585
+   ],
+   [
+    237,
+    661
+   ],
+   [
+    109,
+    598
+   ],
+   [
+    56,
+    590
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "port-dialx",
+  "name": "Port Dialx",
+  "board": "eastern",
+  "sustains": 4,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    1023,
+    166
+   ],
+   [
+    1044,
+    332
+   ],
+   [
+    1101,
+    332
+   ],
+   [
+    1119,
+    263
+   ],
+   [
+    1120,
+    245
+   ],
+   [
+    1106,
+    220
+   ],
+   [
+    1095,
+    204
+   ],
+   [
+    1101,
+    191
+   ],
+   [
+    1087,
+    177
+   ],
+   [
+    1076,
+    160
+   ],
+   [
+    1052,
+    143
+   ],
+   [
+    1025,
+    145
+   ]
+  ],
+  "flags": {
+   "CitySite": "white",
+   "Floodplain": "true"
+  }
+ },
+ {
+  "id": "portas-caspianas",
+  "name": "Portas Caspianas",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    78,
+    356
+   ],
+   [
+    91,
+    346
+   ],
+   [
+    88,
+    327
+   ],
+   [
+    94,
+    316
+   ],
+   [
+    104,
+    310
+   ],
+   [
+    152,
+    275
+   ],
+   [
+    90,
+    175
+   ],
+   [
+    46,
+    257
+   ],
+   [
+    64,
+    326
+   ],
+   [
+    56,
+    338
+   ],
+   [
+    64,
+    356
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "portas-persas",
+  "name": "Portas Persas",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Sumeria",
+  "path": [
+   [
+    236,
+    661
+   ],
+   [
+    111,
+    598
+   ],
+   [
+    153,
+    685
+   ],
+   [
+    153,
+    741
+   ],
+   [
+    212,
+    771
+   ],
+   [
+    227,
+    748
+   ],
+   [
+    226,
+    720
+   ],
+   [
+    240,
+    706
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Sumeria"
+  }
+ },
+ {
+  "id": "prophtasia",
+  "name": "Prophtasia",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Persia",
+  "path": [
+   [
+    715,
+    -1
+   ],
+   [
+    372,
+    0
+   ],
+   [
+    338,
+    225
+   ],
+   [
+    436,
+    259
+   ],
+   [
+    536,
+    213
+   ],
+   [
+    537,
+    168
+   ],
+   [
+    562,
+    138
+   ],
+   [
+    623,
+    138
+   ],
+   [
+    642,
+    155
+   ],
+   [
+    674,
+    130
+   ],
+   [
+    670,
+    108
+   ],
+   [
+    674,
+    89
+   ]
+  ],
+  "flags": {
+   "CitySite": "true",
+   "StartRegion": "Persia"
+  }
+ },
+ {
+  "id": "pura",
+  "name": "Pura",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    615,
+    381
+   ],
+   [
+    652,
+    378
+   ],
+   [
+    710,
+    501
+   ],
+   [
+    681,
+    529
+   ],
+   [
+    650,
+    539
+   ],
+   [
+    633,
+    542
+   ],
+   [
+    618,
+    560
+   ],
+   [
+    611,
+    534
+   ],
+   [
+    478,
+    361
+   ],
+   [
+    476,
+    332
+   ],
+   [
+    543,
+    229
+   ],
+   [
+    565,
+    266
+   ],
+   [
+    571,
+    267
+   ],
+   [
+    575,
+    280
+   ],
+   [
+    586,
+    282
+   ]
+  ],
+  "flags": {
+   "CitySite": "true",
+   "Floodplain": "true"
+  }
+ },
+ {
+  "id": "randamar",
+  "name": "Randamar",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Persia",
+  "path": [
+   [
+    715,
+    -1
+   ],
+   [
+    922,
+    -2
+   ],
+   [
+    921,
+    124
+   ],
+   [
+    872,
+    148
+   ],
+   [
+    751,
+    148
+   ],
+   [
+    642,
+    155
+   ],
+   [
+    674,
+    130
+   ],
+   [
+    670,
+    108
+   ],
+   [
+    674,
+    89
+   ]
+  ],
+  "flags": {
+   "CitySite": "true",
+   "StartRegion": "Persia"
+  }
+ },
+ {
+  "id": "rhages",
+  "name": "Rhages",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    148,
+    402
+   ],
+   [
+    152,
+    419
+   ],
+   [
+    164,
+    421
+   ],
+   [
+    180,
+    399
+   ],
+   [
+    166,
+    389
+   ],
+   [
+    165,
+    302
+   ],
+   [
+    149,
+    277
+   ],
+   [
+    89,
+    320
+   ],
+   [
+    96,
+    343
+   ],
+   [
+    87,
+    356
+   ],
+   [
+    135,
+    404
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "riyadh",
+  "name": "Riyadh",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    292,
+    1221
+   ],
+   [
+    322,
+    1285
+   ],
+   [
+    259,
+    1320
+   ],
+   [
+    181,
+    1290
+   ],
+   [
+    185,
+    1199
+   ],
+   [
+    249,
+    1179
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "rub-al-khali",
+  "name": "Rub al Khali",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": "Semites",
+  "path": [
+   [
+    292,
+    1221
+   ],
+   [
+    322,
+    1285
+   ],
+   [
+    259,
+    1320
+   ],
+   [
+    213,
+    1593
+   ],
+   [
+    508,
+    1595
+   ],
+   [
+    538,
+    1459
+   ],
+   [
+    714,
+    1159
+   ],
+   [
+    657,
+    1111
+   ],
+   [
+    615,
+    1134
+   ],
+   [
+    555,
+    1134
+   ],
+   [
+    554,
+    1070
+   ],
+   [
+    578,
+    1053
+   ],
+   [
+    540,
+    1026
+   ],
+   [
+    434,
+    1068
+   ],
+   [
+    284,
+    984
+   ],
+   [
+    248,
+    1178
+   ]
+  ],
+  "flags": {
+   "StartRegion": "Semites"
+  }
+ },
+ {
+  "id": "saba",
+  "name": "Saba",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    714,
+    1601
+   ],
+   [
+    509,
+    1592
+   ],
+   [
+    538,
+    1459
+   ],
+   [
+    713,
+    1459
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "seistan-inferior",
+  "name": "Seistan Inferior",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    615,
+    381
+   ],
+   [
+    652,
+    378
+   ],
+   [
+    719,
+    322
+   ],
+   [
+    719,
+    301
+   ],
+   [
+    699,
+    279
+   ],
+   [
+    627,
+    242
+   ],
+   [
+    595,
+    268
+   ],
+   [
+    586,
+    265
+   ],
+   [
+    584,
+    278
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "seistan-superior",
+  "name": "Seistan Superior",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    637,
+    215
+   ],
+   [
+    628,
+    243
+   ],
+   [
+    699,
+    279
+   ],
+   [
+    716,
+    285
+   ],
+   [
+    723,
+    270
+   ],
+   [
+    741,
+    271
+   ],
+   [
+    751,
+    254
+   ],
+   [
+    767,
+    178
+   ],
+   [
+    752,
+    146
+   ],
+   [
+    642,
+    153
+   ],
+   [
+    640,
+    171
+   ],
+   [
+    640,
+    192
+   ],
+   [
+    626,
+    205
+   ]
+  ],
+  "flags": {
+   "Floodplain": "true"
+  }
+ },
+ {
+  "id": "shahi-tumo",
+  "name": "Shahi Tumo",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": true,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    949,
+    204
+   ],
+   [
+    950,
+    163
+   ],
+   [
+    1023,
+    163
+   ],
+   [
+    1044,
+    333
+   ],
+   [
+    977,
+    421
+   ]
+  ],
+  "flags": {
+   "CitySite": "true",
+   "Floodplain": "true"
+  }
+ },
+ {
+  "id": "shiraz",
+  "name": "Shiraz",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    427,
+    648
+   ],
+   [
+    338,
+    647
+   ],
+   [
+    349,
+    701
+   ],
+   [
+    427,
+    689
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "socotra",
+  "name": "Socotra",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    817,
+    1599
+   ],
+   [
+    816,
+    1533
+   ],
+   [
+    973,
+    1436
+   ],
+   [
+    1022,
+    1514
+   ],
+   [
+    1022,
+    1604
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "tilmun",
+  "name": "Tilmun",
+  "board": "eastern",
+  "sustains": 1,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    294,
+    917
+   ],
+   [
+    299,
+    893
+   ],
+   [
+    288,
+    859
+   ],
+   [
+    296,
+    830
+   ],
+   [
+    274,
+    806
+   ],
+   [
+    232,
+    806
+   ],
+   [
+    220,
+    831
+   ],
+   [
+    235,
+    855
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ },
+ {
+  "id": "ummannar",
+  "name": "Ummannar",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": false,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    531,
+    628
+   ],
+   [
+    512,
+    650
+   ],
+   [
+    506,
+    782
+   ],
+   [
+    620,
+    820
+   ],
+   [
+    641,
+    702
+   ]
+  ],
+  "flags": {}
+ },
+ {
+  "id": "wedi-samad",
+  "name": "Wedi Samad",
+  "board": "eastern",
+  "sustains": 2,
+  "isWater": false,
+  "isCitySite": true,
+  "isFloodplain": false,
+  "isOpenSea": false,
+  "isVolcanoSite": false,
+  "startRegion": null,
+  "path": [
+   [
+    923,
+    979
+   ],
+   [
+    780,
+    989
+   ],
+   [
+    779,
+    903
+   ],
+   [
+    829,
+    800
+   ],
+   [
+    878,
+    892
+   ],
+   [
+    877,
+    933
+   ]
+  ],
+  "flags": {
+   "CitySite": "true"
+  }
+ }
+]

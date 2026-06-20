@@ -1,0 +1,299 @@
+{
+  "_doc": "Archaeological Succession Track (rules §33-35). Each turn a player's marker advances one space, but may not enter a new epoch unless that epoch's entry requirements are met (§33.2); a player short of the required cities is frozen (§33.3); a player ending a turn with no cities slides back one space (§33.4, except in Stone Age). The game ends when a marker reaches the finish square or the time limit (§34).",
+  "track": {
+    "_doc": "Read from the board AST band (map-ast.svg): 16 numbered spaces worth 100 points each (Victory Points 100..1600), plus the START arrow (space 0) and the FINISH square (space 16 = 1600). The epoch shading is a SINGLE layout shared by every nation's marker lane — nations advance along the same track at different RATES (meeting the uniform entry requirements at different times), so the track is not per-nation. `epochStart` is the first space of each epoch; boundaries read from the band are approximate (the START arrow art is oversized) but the entry requirements below are exact.",
+    "spaces": 16,
+    "finishSpace": 16,
+    "pointsPerSpace": 100,
+    "epochStart": {
+      "stone": 1,
+      "earlyBronze": 4,
+      "lateBronze": 7,
+      "earlyIron": 10,
+      "lateIron": 13
+    },
+    "lateIronThresholds": [
+      1300,
+      1500,
+      1700
+    ]
+  },
+  "tracksByCiv": {
+    "_doc": "Per-nation AST tracks, ALL boundaries read from the VASSAL per-civ AST strips (ASTstrip-<civ>.svg) via scripts/ast-epochs.mjs. Each strip lays its epoch regions on the chart at nation-specific columns: Stone | EarlyBronze(grey) | LateBronze(gap) | EarlyIron(grey) | LateIron(numbered cells) | Finish(16). `epochStart` is the first space of each epoch; `lateIronThresholds` is the civ-card point value to enter each Late Iron Age space (§33.25). lateIron begins at 16 - lateIronThresholds.length (the numbered cells run to space 15; space 16 is the finish, which carries no card threshold).",
+    "africa": {
+      "spaces": 16,
+      "finishSpace": 16,
+      "pointsPerSpace": 100,
+      "epochStart": {
+        "stone": 1,
+        "earlyBronze": 5,
+        "lateBronze": 8,
+        "earlyIron": 11,
+        "lateIron": 14
+      },
+      "lateIronThresholds": [
+        1300,
+        1600
+      ]
+    },
+    "asia": {
+      "spaces": 16,
+      "finishSpace": 16,
+      "pointsPerSpace": 100,
+      "epochStart": {
+        "stone": 1,
+        "earlyBronze": 5,
+        "lateBronze": 8,
+        "earlyIron": 10,
+        "lateIron": 13
+      },
+      "lateIronThresholds": [
+        1200,
+        1500,
+        1800
+      ]
+    },
+    "assyria": {
+      "spaces": 16,
+      "finishSpace": 16,
+      "pointsPerSpace": 100,
+      "epochStart": {
+        "stone": 1,
+        "earlyBronze": 5,
+        "lateBronze": 8,
+        "earlyIron": 10,
+        "lateIron": 14
+      },
+      "lateIronThresholds": [
+        1500,
+        1800
+      ]
+    },
+    "babylon": {
+      "spaces": 16,
+      "finishSpace": 16,
+      "pointsPerSpace": 100,
+      "epochStart": {
+        "stone": 1,
+        "earlyBronze": 5,
+        "lateBronze": 8,
+        "earlyIron": 10,
+        "lateIron": 14
+      },
+      "lateIronThresholds": [
+        1600,
+        1900
+      ]
+    },
+    "crete": {
+      "spaces": 16,
+      "finishSpace": 16,
+      "pointsPerSpace": 100,
+      "epochStart": {
+        "stone": 1,
+        "earlyBronze": 5,
+        "lateBronze": 9,
+        "earlyIron": 11,
+        "lateIron": 14
+      },
+      "lateIronThresholds": [
+        1300,
+        1600
+      ]
+    },
+    "egypt": {
+      "spaces": 16,
+      "finishSpace": 16,
+      "pointsPerSpace": 100,
+      "epochStart": {
+        "stone": 1,
+        "earlyBronze": 4,
+        "lateBronze": 7,
+        "earlyIron": 10,
+        "lateIron": 13
+      },
+      "lateIronThresholds": [
+        1300,
+        1600,
+        1900
+      ]
+    },
+    "iberia": {
+      "spaces": 16,
+      "finishSpace": 16,
+      "pointsPerSpace": 100,
+      "epochStart": {
+        "stone": 1,
+        "earlyBronze": 5,
+        "lateBronze": 8,
+        "earlyIron": 11,
+        "lateIron": 14
+      },
+      "lateIronThresholds": [
+        1400,
+        1700
+      ]
+    },
+    "illyria": {
+      "spaces": 16,
+      "finishSpace": 16,
+      "pointsPerSpace": 100,
+      "epochStart": {
+        "stone": 1,
+        "earlyBronze": 6,
+        "lateBronze": 8,
+        "earlyIron": 11,
+        "lateIron": 13
+      },
+      "lateIronThresholds": [
+        1200,
+        1500,
+        1800
+      ]
+    },
+    "indus": {
+      "spaces": 16,
+      "finishSpace": 16,
+      "pointsPerSpace": 100,
+      "epochStart": {
+        "stone": 1,
+        "earlyBronze": 4,
+        "lateBronze": 7,
+        "earlyIron": 10,
+        "lateIron": 14
+      },
+      "lateIronThresholds": [
+        1100,
+        1300
+      ]
+    },
+    "italy": {
+      "spaces": 16,
+      "finishSpace": 16,
+      "pointsPerSpace": 100,
+      "epochStart": {
+        "stone": 1,
+        "earlyBronze": 5,
+        "lateBronze": 8,
+        "earlyIron": 11,
+        "lateIron": 14
+      },
+      "lateIronThresholds": [
+        1400,
+        1700
+      ]
+    },
+    "persia": {
+      "spaces": 16,
+      "finishSpace": 16,
+      "pointsPerSpace": 100,
+      "epochStart": {
+        "stone": 1,
+        "earlyBronze": 6,
+        "lateBronze": 8,
+        "earlyIron": 11,
+        "lateIron": 14
+      },
+      "lateIronThresholds": [
+        1200,
+        1400
+      ]
+    },
+    "semites": {
+      "spaces": 16,
+      "finishSpace": 16,
+      "pointsPerSpace": 100,
+      "epochStart": {
+        "stone": 1,
+        "earlyBronze": 4,
+        "lateBronze": 7,
+        "earlyIron": 10,
+        "lateIron": 14
+      },
+      "lateIronThresholds": [
+        1100,
+        1300
+      ]
+    },
+    "sumeria": {
+      "spaces": 16,
+      "finishSpace": 16,
+      "pointsPerSpace": 100,
+      "epochStart": {
+        "stone": 1,
+        "earlyBronze": 4,
+        "lateBronze": 7,
+        "earlyIron": 10,
+        "lateIron": 14
+      },
+      "lateIronThresholds": [
+        1100,
+        1300
+      ]
+    },
+    "thrace": {
+      "spaces": 16,
+      "finishSpace": 16,
+      "pointsPerSpace": 100,
+      "epochStart": {
+        "stone": 1,
+        "earlyBronze": 6,
+        "lateBronze": 9,
+        "earlyIron": 11,
+        "lateIron": 13
+      },
+      "lateIronThresholds": [
+        1200,
+        1400,
+        1700
+      ]
+    }
+  },
+  "epochs": [
+    {
+      "id": "stone",
+      "name": "Stone Age",
+      "requirements": {}
+    },
+    {
+      "id": "earlyBronze",
+      "name": "Early Bronze Age",
+      "requirements": {
+        "cities": 2
+      }
+    },
+    {
+      "id": "lateBronze",
+      "name": "Late Bronze Age",
+      "requirements": {
+        "cities": 3,
+        "cardGroups": 3
+      }
+    },
+    {
+      "id": "earlyIron",
+      "name": "Early Iron Age",
+      "requirements": {
+        "cities": 4,
+        "cards": 9,
+        "cardGroups": 5
+      }
+    },
+    {
+      "id": "lateIron",
+      "name": "Late Iron Age",
+      "requirements": {
+        "cities": 5,
+        "perSpaceCardValue": true
+      }
+    }
+  ],
+  "victoryScoring": {
+    "_doc": "rules §35.1: total = cardFaceValue + commoditySetValue + treasuryTokens + astSpaces*pointsPerAstSpace + cities*pointsPerCity. Late Iron Age entry (§33.25) requires the player's civilization-card face value to at least equal the space's printed point value (space * pointsPerSpace).",
+    "pointsPerAstSpace": 100,
+    "pointsPerCity": 50,
+    "includeCardFaceValue": true,
+    "includeCommodityValue": true,
+    "includeTreasury": true
+  }
+}

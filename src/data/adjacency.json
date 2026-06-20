@@ -1,0 +1,1690 @@
+{
+ "abu-dhabi": [
+  "al-gharbia",
+  "ash-sharqija",
+  "bat",
+  "gulf-of-persia",
+  "rub-al-khali",
+  "ummannar"
+ ],
+ "ahwaz": [
+  "gulf-of-persia",
+  "persepolis",
+  "portas-persas",
+  "susa"
+ ],
+ "al-gharbia": [
+  "abu-dhabi",
+  "ash-sharqija",
+  "gulf-of-persia",
+  "mana",
+  "rub-al-khali"
+ ],
+ "al-jibal": [
+  "ash-sharqija",
+  "rub-al-khali"
+ ],
+ "al-wusta": [
+  "ash-sharqija",
+  "indian-ocean",
+  "mazirah",
+  "moscha",
+  "wedi-samad"
+ ],
+ "apolagos": [
+  "arabia",
+  "chaldaea",
+  "gerrha",
+  "gulf-of-persia"
+ ],
+ "arabia": [
+  "apolagos",
+  "chaldaea",
+  "fav",
+  "gerrha",
+  "mana",
+  "midian",
+  "petra",
+  "riyadh",
+  "rub-al-khali",
+  "sumeria",
+  "syria"
+ ],
+ "arabian-sea": [
+  "hadramaut",
+  "indian-ocean",
+  "moscha",
+  "saba",
+  "socotra"
+ ],
+ "aracosta": [
+  "basri",
+  "gedrosla",
+  "mochendo-daro",
+  "onitas",
+  "randamar",
+  "seistan-superior",
+  "shahi-tumo"
+ ],
+ "aria": [
+  "herat",
+  "kerman",
+  "nisa",
+  "pasagardes",
+  "persepolis",
+  "prophtasia",
+  "pura",
+  "rhages"
+ ],
+ "artacona": [
+  "herat",
+  "prophtasia",
+  "randamar",
+  "seistan-superior"
+ ],
+ "ash-sharqija": [
+  "abu-dhabi",
+  "al-gharbia",
+  "al-jibal",
+  "al-wusta",
+  "bat",
+  "hadramaut",
+  "moscha",
+  "oman",
+  "rub-al-khali",
+  "ummannar",
+  "wedi-samad"
+ ],
+ "banda-abbas": [
+  "carmania",
+  "gulashkird",
+  "gulf-of-oman",
+  "gulf-of-persia",
+  "harmoza",
+  "parsian",
+  "shiraz",
+  "ummannar"
+ ],
+ "barna": [
+  "gedrosla",
+  "gulf-of-oman",
+  "makkan",
+  "megan",
+  "pura"
+ ],
+ "basri": [
+  "aracosta",
+  "gedrosla",
+  "gulf-of-oman",
+  "makkan",
+  "onitas"
+ ],
+ "bat": [
+  "abu-dhabi",
+  "ash-sharqija",
+  "gulf-of-oman",
+  "oman",
+  "ummannar"
+ ],
+ "carmania": [
+  "banda-abbas",
+  "gulashkird",
+  "kerman",
+  "kurangan",
+  "nurabad",
+  "pasagardes",
+  "persepolis",
+  "shiraz"
+ ],
+ "chaldaea": [
+  "apolagos",
+  "arabia",
+  "charax",
+  "gulf-of-persia",
+  "sumeria",
+  "susa",
+  "ur"
+ ],
+ "chanhu-daro": [
+  "mochendo-daro",
+  "pala",
+  "port-dialx"
+ ],
+ "fav": [
+  "arabia"
+ ],
+ "gedrosla": [
+  "aracosta",
+  "barna",
+  "basri",
+  "makkan",
+  "pura",
+  "seistan-inferior",
+  "seistan-superior"
+ ],
+ "gerrha": [
+  "apolagos",
+  "arabia",
+  "gulf-of-persia",
+  "mana",
+  "rub-al-khali",
+  "tilmun"
+ ],
+ "gulashkird": [
+  "banda-abbas",
+  "carmania",
+  "harmoza",
+  "kerman",
+  "megan",
+  "pasagardes",
+  "pura"
+ ],
+ "gulf-of-oman": [
+  "banda-abbas",
+  "barna",
+  "basri",
+  "bat",
+  "harmoza",
+  "indian-ocean",
+  "karachi",
+  "makkan",
+  "mazirah",
+  "mazun",
+  "megan",
+  "oman",
+  "onitas",
+  "port-dialx",
+  "shahi-tumo",
+  "ummannar"
+ ],
+ "gulf-of-persia": [
+  "abu-dhabi",
+  "ahwaz",
+  "al-gharbia",
+  "apolagos",
+  "banda-abbas",
+  "chaldaea",
+  "gerrha",
+  "lyan",
+  "mana",
+  "parsian",
+  "portas-persas",
+  "susa",
+  "tilmun",
+  "ummannar"
+ ],
+ "hadramaut": [
+  "arabian-sea",
+  "ash-sharqija",
+  "moscha",
+  "rub-al-khali",
+  "saba"
+ ],
+ "harmoza": [
+  "banda-abbas",
+  "gulashkird",
+  "gulf-of-oman",
+  "megan",
+  "pura",
+  "ummannar"
+ ],
+ "herat": [
+  "aria",
+  "artacona",
+  "prophtasia",
+  "pura",
+  "seistan-inferior",
+  "seistan-superior"
+ ],
+ "indian-ocean": [
+  "al-wusta",
+  "arabian-sea",
+  "gulf-of-oman",
+  "mazirah",
+  "moscha",
+  "socotra",
+  "wedi-samad"
+ ],
+ "karachi": [
+  "gulf-of-oman",
+  "pala",
+  "port-dialx"
+ ],
+ "kerman": [
+  "aria",
+  "carmania",
+  "gulashkird",
+  "pasagardes",
+  "pura"
+ ],
+ "kurangan": [
+  "carmania",
+  "lyan",
+  "nurabad",
+  "pasagardes",
+  "persepolis",
+  "portas-persas",
+  "shiraz"
+ ],
+ "lyan": [
+  "gulf-of-persia",
+  "kurangan",
+  "nurabad",
+  "parsian",
+  "portas-persas",
+  "shiraz"
+ ],
+ "makkan": [
+  "barna",
+  "basri",
+  "gedrosla",
+  "gulf-of-oman"
+ ],
+ "mana": [
+  "al-gharbia",
+  "arabia",
+  "gerrha",
+  "gulf-of-persia",
+  "rub-al-khali",
+  "tilmun"
+ ],
+ "mazirah": [
+  "al-wusta",
+  "gulf-of-oman",
+  "indian-ocean",
+  "mazun",
+  "wedi-samad"
+ ],
+ "mazun": [
+  "gulf-of-oman",
+  "mazirah",
+  "oman",
+  "wedi-samad"
+ ],
+ "media": [
+  "caspian-sea",
+  "caucasus",
+  "elam",
+  "lesser-armenia",
+  "nisa",
+  "parthia",
+  "portas-caspianas"
+ ],
+ "megan": [
+  "barna",
+  "gulashkird",
+  "gulf-of-oman",
+  "harmoza",
+  "pura"
+ ],
+ "mochendo-daro": [
+  "aracosta",
+  "chanhu-daro",
+  "port-dialx",
+  "randamar",
+  "shahi-tumo"
+ ],
+ "moscha": [
+  "al-wusta",
+  "arabian-sea",
+  "ash-sharqija",
+  "hadramaut",
+  "indian-ocean",
+  "rub-al-khali"
+ ],
+ "nisa": [
+  "aria",
+  "media",
+  "portas-caspianas",
+  "prophtasia",
+  "rhages"
+ ],
+ "nurabad": [
+  "carmania",
+  "kurangan",
+  "lyan",
+  "parsian",
+  "shiraz"
+ ],
+ "oman": [
+  "ash-sharqija",
+  "bat",
+  "gulf-of-oman",
+  "mazun",
+  "wedi-samad"
+ ],
+ "onitas": [
+  "aracosta",
+  "basri",
+  "gulf-of-oman",
+  "shahi-tumo"
+ ],
+ "pala": [
+  "chanhu-daro",
+  "karachi",
+  "port-dialx"
+ ],
+ "parsian": [
+  "banda-abbas",
+  "gulf-of-persia",
+  "lyan",
+  "nurabad",
+  "shiraz"
+ ],
+ "parthia": [
+  "babylonia",
+  "elam",
+  "media",
+  "persepolis",
+  "portas-caspianas",
+  "rhages",
+  "susa"
+ ],
+ "pasagardes": [
+  "aria",
+  "carmania",
+  "gulashkird",
+  "kerman",
+  "kurangan",
+  "persepolis"
+ ],
+ "persepolis": [
+  "ahwaz",
+  "aria",
+  "carmania",
+  "kurangan",
+  "parthia",
+  "pasagardes",
+  "portas-persas",
+  "rhages",
+  "susa"
+ ],
+ "port-dialx": [
+  "chanhu-daro",
+  "gulf-of-oman",
+  "karachi",
+  "mochendo-daro",
+  "pala",
+  "shahi-tumo"
+ ],
+ "portas-caspianas": [
+  "media",
+  "nisa",
+  "parthia",
+  "rhages"
+ ],
+ "portas-persas": [
+  "ahwaz",
+  "gulf-of-persia",
+  "kurangan",
+  "lyan",
+  "persepolis"
+ ],
+ "prophtasia": [
+  "aria",
+  "artacona",
+  "herat",
+  "nisa",
+  "randamar",
+  "seistan-superior"
+ ],
+ "pura": [
+  "aria",
+  "barna",
+  "gedrosla",
+  "gulashkird",
+  "harmoza",
+  "herat",
+  "kerman",
+  "megan",
+  "seistan-inferior"
+ ],
+ "randamar": [
+  "aracosta",
+  "artacona",
+  "mochendo-daro",
+  "prophtasia",
+  "seistan-superior"
+ ],
+ "rhages": [
+  "aria",
+  "nisa",
+  "parthia",
+  "persepolis",
+  "portas-caspianas"
+ ],
+ "riyadh": [
+  "arabia",
+  "rub-al-khali"
+ ],
+ "rub-al-khali": [
+  "abu-dhabi",
+  "al-gharbia",
+  "al-jibal",
+  "arabia",
+  "ash-sharqija",
+  "gerrha",
+  "hadramaut",
+  "mana",
+  "moscha",
+  "riyadh",
+  "saba"
+ ],
+ "saba": [
+  "arabian-sea",
+  "hadramaut",
+  "rub-al-khali"
+ ],
+ "seistan-inferior": [
+  "gedrosla",
+  "herat",
+  "pura",
+  "seistan-superior"
+ ],
+ "seistan-superior": [
+  "aracosta",
+  "artacona",
+  "gedrosla",
+  "herat",
+  "prophtasia",
+  "randamar",
+  "seistan-inferior"
+ ],
+ "shahi-tumo": [
+  "aracosta",
+  "gulf-of-oman",
+  "mochendo-daro",
+  "onitas",
+  "port-dialx"
+ ],
+ "shiraz": [
+  "banda-abbas",
+  "carmania",
+  "kurangan",
+  "lyan",
+  "nurabad",
+  "parsian"
+ ],
+ "socotra": [
+  "arabian-sea",
+  "indian-ocean"
+ ],
+ "susa": [
+  "ahwaz",
+  "babylonia",
+  "chaldaea",
+  "gulf-of-persia",
+  "parthia",
+  "persepolis",
+  "ur"
+ ],
+ "tilmun": [
+  "gerrha",
+  "gulf-of-persia",
+  "mana"
+ ],
+ "ummannar": [
+  "abu-dhabi",
+  "ash-sharqija",
+  "banda-abbas",
+  "bat",
+  "gulf-of-oman",
+  "gulf-of-persia",
+  "harmoza"
+ ],
+ "wedi-samad": [
+  "al-wusta",
+  "ash-sharqija",
+  "indian-ocean",
+  "mazirah",
+  "mazun",
+  "oman"
+ ],
+ "adriatic-sea": [
+  "appolonia",
+  "dalmatia",
+  "illyricum",
+  "pannonia-2",
+  "rubicon",
+  "samnium",
+  "tarentum"
+ ],
+ "aegean-sea": [
+  "chalkis",
+  "eretria",
+  "ionia",
+  "knossos",
+  "lemnos",
+  "lesbos",
+  "miletus",
+  "rhodes",
+  "thera",
+  "thessalonica",
+  "troy"
+ ],
+ "aleppo": [
+  "antiochia",
+  "assyria",
+  "cilicia",
+  "phoenicia",
+  "syria"
+ ],
+ "alexandria": [
+  "eastern-mediterranean",
+  "memphis",
+  "tanis",
+  "western-desert"
+ ],
+ "ankara": [
+  "bithynia",
+  "gordium",
+  "kanesh",
+  "phrygia",
+  "sinope"
+ ],
+ "antiochia": [
+  "aleppo",
+  "cilicia",
+  "galatia",
+  "phoenicia",
+  "salamis"
+ ],
+ "appolonia": [
+  "adriatic-sea",
+  "epirus",
+  "illyricum",
+  "ithaka",
+  "macedonia",
+  "paeonia",
+  "tarentum"
+ ],
+ "argos": [
+  "athens",
+  "corinth",
+  "phaestos",
+  "sparta",
+  "thera"
+ ],
+ "armenia": [
+  "cappadocia",
+  "caucasus",
+  "lesser-armenia",
+  "nalchik",
+  "niniveh",
+  "van"
+ ],
+ "assyria": [
+  "aleppo",
+  "carrhae",
+  "cilicia",
+  "niniveh",
+  "syria",
+  "van"
+ ],
+ "athens": [
+  "argos",
+  "chalkis",
+  "corinth",
+  "delphi",
+  "eretria",
+  "thera"
+ ],
+ "babylon": [
+  "babylonia",
+  "charax",
+  "mesopotamia",
+  "sumeria",
+  "ur"
+ ],
+ "babylonia": [
+  "babylon",
+  "elam",
+  "mesopotamia",
+  "niniveh",
+  "parthia",
+  "susa",
+  "ur"
+ ],
+ "bithynia": [
+  "ankara",
+  "black-sea",
+  "gordium",
+  "phrygia",
+  "sardes",
+  "troy"
+ ],
+ "black-sea": [
+  "bithynia",
+  "bycantinum",
+  "cappadocia",
+  "crimea",
+  "danube",
+  "kuban",
+  "mikop",
+  "moesia",
+  "phrygia",
+  "sinope",
+  "thyras",
+  "troy"
+ ],
+ "buhen": [
+  "ptolemais",
+  "thebes",
+  "upper-egypt"
+ ],
+ "bycantinum": [
+  "black-sea",
+  "lemnos",
+  "moesia",
+  "thrace",
+  "troy"
+ ],
+ "campania": [
+  "central-mediterranean",
+  "milazzo",
+  "neapolis",
+  "samnium",
+  "syracus",
+  "tarentum",
+  "western-mediterranean-2"
+ ],
+ "cappadocia": [
+  "armenia",
+  "black-sea",
+  "mikop",
+  "nalchik",
+  "sinope",
+  "van"
+ ],
+ "carales-2": [
+  "sardinia-2",
+  "western-mediterranean-2"
+ ],
+ "carrhae": [
+  "assyria",
+  "mari",
+  "mesopotamia",
+  "niniveh",
+  "syria"
+ ],
+ "carthago": [
+  "central-mediterranean",
+  "numidia-2",
+  "palermo",
+  "thapsus",
+  "western-mediterranean-2"
+ ],
+ "caspian-sea": [
+  "caucasus",
+  "media"
+ ],
+ "caucasus": [
+  "armenia",
+  "caspian-sea",
+  "lesser-armenia",
+  "media",
+  "nalchik"
+ ],
+ "central-mediterranean": [
+  "campania",
+  "carthago",
+  "corinth",
+  "cyrene",
+  "delphi",
+  "eastern-mediterranean",
+  "ithaka",
+  "libya",
+  "palermo",
+  "phaestos",
+  "sparta",
+  "syracus",
+  "tarentum",
+  "thapsus",
+  "tripoli"
+ ],
+ "chalkis": [
+  "aegean-sea",
+  "athens",
+  "delphi",
+  "eretria",
+  "thessalonica",
+  "thessaly"
+ ],
+ "charax": [
+  "babylon",
+  "chaldaea",
+  "sumeria",
+  "ur"
+ ],
+ "cilicia": [
+  "aleppo",
+  "antiochia",
+  "assyria",
+  "galatia",
+  "kanesh",
+  "van"
+ ],
+ "cisalpina-2": [
+  "etruria-2",
+  "pannonia-2",
+  "rhaetia",
+  "rhenus",
+  "rubicon"
+ ],
+ "corinth": [
+  "argos",
+  "athens",
+  "central-mediterranean",
+  "delphi",
+  "sparta"
+ ],
+ "corsica-2": [
+  "etruria-2",
+  "massilia",
+  "roma",
+  "sardinia-2",
+  "western-mediterranean-2"
+ ],
+ "crimea": [
+  "black-sea",
+  "danube",
+  "kuban",
+  "scythia"
+ ],
+ "cyprus": [
+  "eastern-mediterranean",
+  "galatia",
+  "lycia",
+  "salamis"
+ ],
+ "cyrenaica": [
+  "cyrene",
+  "eastern-mediterranean",
+  "jalo",
+  "siwa",
+  "western-desert"
+ ],
+ "cyrene": [
+  "central-mediterranean",
+  "cyrenaica",
+  "eastern-mediterranean",
+  "jalo",
+  "libya"
+ ],
+ "dacia": [
+  "danube",
+  "germania-2",
+  "illyricum",
+  "moesia",
+  "scythia",
+  "sudeten"
+ ],
+ "dalmatia": [
+  "adriatic-sea",
+  "illyricum",
+  "pannonia-2"
+ ],
+ "damascus": [
+  "jericho",
+  "phoenicia",
+  "sidon",
+  "syria",
+  "tyros"
+ ],
+ "danube": [
+  "black-sea",
+  "crimea",
+  "dacia",
+  "moesia",
+  "scythia",
+  "thyras"
+ ],
+ "delphi": [
+  "athens",
+  "central-mediterranean",
+  "chalkis",
+  "corinth",
+  "epirus",
+  "ithaka",
+  "thessaly"
+ ],
+ "eastern-desert": [
+  "fayum",
+  "memphis",
+  "ptolemais",
+  "sinai",
+  "tanis",
+  "upper-egypt"
+ ],
+ "eastern-mediterranean": [
+  "alexandria",
+  "central-mediterranean",
+  "cyprus",
+  "cyrenaica",
+  "cyrene",
+  "gaza",
+  "jerusalem",
+  "knossos",
+  "lycia",
+  "phaestos",
+  "phoenicia",
+  "rhodes",
+  "salamis",
+  "sidon",
+  "tanis",
+  "tyros",
+  "western-desert"
+ ],
+ "elam": [
+  "babylonia",
+  "lesser-armenia",
+  "media",
+  "niniveh",
+  "parthia"
+ ],
+ "epirus": [
+  "appolonia",
+  "delphi",
+  "ithaka",
+  "macedonia",
+  "thessaly"
+ ],
+ "eretria": [
+  "aegean-sea",
+  "athens",
+  "chalkis",
+  "thera"
+ ],
+ "etruria-2": [
+  "cisalpina-2",
+  "corsica-2",
+  "gaul",
+  "massilia",
+  "rhaetia",
+  "roma",
+  "rubicon"
+ ],
+ "fayum": [
+  "eastern-desert",
+  "memphis",
+  "siwa",
+  "upper-egypt",
+  "western-desert"
+ ],
+ "galatia": [
+  "antiochia",
+  "cilicia",
+  "cyprus",
+  "gordium",
+  "ionia",
+  "kanesh",
+  "lycia",
+  "salamis"
+ ],
+ "gaza": [
+  "eastern-mediterranean",
+  "jerusalem",
+  "sinai",
+  "tanis"
+ ],
+ "germania-2": [
+  "dacia",
+  "illyricum",
+  "lower-germany",
+  "pannonia-2",
+  "rhenus",
+  "sudeten"
+ ],
+ "gordium": [
+  "ankara",
+  "bithynia",
+  "galatia",
+  "ionia",
+  "kanesh",
+  "sardes"
+ ],
+ "illyricum": [
+  "adriatic-sea",
+  "appolonia",
+  "dacia",
+  "dalmatia",
+  "germania-2",
+  "moesia",
+  "paeonia",
+  "pannonia-2"
+ ],
+ "ionia": [
+  "aegean-sea",
+  "galatia",
+  "gordium",
+  "lesbos",
+  "lycia",
+  "miletus",
+  "sardes"
+ ],
+ "ithaka": [
+  "appolonia",
+  "central-mediterranean",
+  "delphi",
+  "epirus",
+  "tarentum"
+ ],
+ "jalo": [
+  "cyrenaica",
+  "cyrene",
+  "libya",
+  "siwa",
+  "tripolitania"
+ ],
+ "jericho": [
+  "damascus",
+  "jerusalem",
+  "petra",
+  "syria",
+  "tyros"
+ ],
+ "jerusalem": [
+  "eastern-mediterranean",
+  "gaza",
+  "jericho",
+  "petra",
+  "sinai",
+  "tyros"
+ ],
+ "kanesh": [
+  "ankara",
+  "cilicia",
+  "galatia",
+  "gordium",
+  "sinope",
+  "van"
+ ],
+ "knossos": [
+  "aegean-sea",
+  "eastern-mediterranean",
+  "phaestos",
+  "rhodes",
+  "thera"
+ ],
+ "kuban": [
+  "black-sea",
+  "crimea",
+  "mikop",
+  "scythia"
+ ],
+ "lemnos": [
+  "aegean-sea",
+  "bycantinum",
+  "thessalonica",
+  "thrace",
+  "troy"
+ ],
+ "lesbos": [
+  "aegean-sea",
+  "ionia",
+  "sardes",
+  "troy"
+ ],
+ "lesser-armenia": [
+  "armenia",
+  "caucasus",
+  "elam",
+  "media",
+  "niniveh"
+ ],
+ "libya": [
+  "central-mediterranean",
+  "cyrene",
+  "jalo",
+  "tripoli",
+  "tripolitania"
+ ],
+ "lycia": [
+  "cyprus",
+  "eastern-mediterranean",
+  "galatia",
+  "ionia",
+  "miletus",
+  "rhodes"
+ ],
+ "macedonia": [
+  "appolonia",
+  "epirus",
+  "paeonia",
+  "thessalonica",
+  "thessaly",
+  "thrace"
+ ],
+ "mari": [
+  "carrhae",
+  "mesopotamia",
+  "sumeria",
+  "syria"
+ ],
+ "memphis": [
+  "alexandria",
+  "eastern-desert",
+  "fayum",
+  "tanis",
+  "western-desert"
+ ],
+ "mesopotamia": [
+  "babylon",
+  "babylonia",
+  "carrhae",
+  "mari",
+  "niniveh",
+  "sumeria"
+ ],
+ "midian": [
+  "arabia",
+  "petra",
+  "ptolemais",
+  "red-sea",
+  "sinai"
+ ],
+ "mikop": [
+  "black-sea",
+  "cappadocia",
+  "kuban",
+  "nalchik"
+ ],
+ "milazzo": [
+  "campania",
+  "palermo",
+  "syracus",
+  "western-mediterranean-2"
+ ],
+ "miletus": [
+  "aegean-sea",
+  "ionia",
+  "lycia",
+  "rhodes"
+ ],
+ "moesia": [
+  "black-sea",
+  "bycantinum",
+  "dacia",
+  "danube",
+  "illyricum",
+  "paeonia",
+  "thrace",
+  "thyras"
+ ],
+ "nalchik": [
+  "armenia",
+  "cappadocia",
+  "caucasus",
+  "mikop"
+ ],
+ "neapolis": [
+  "campania",
+  "roma",
+  "samnium",
+  "western-mediterranean-2"
+ ],
+ "niniveh": [
+  "armenia",
+  "assyria",
+  "babylonia",
+  "carrhae",
+  "elam",
+  "lesser-armenia",
+  "mesopotamia",
+  "van"
+ ],
+ "nubia": [
+  "ptolemais",
+  "red-sea",
+  "thebes"
+ ],
+ "numidia-2": [
+  "carthago",
+  "cirta",
+  "thapsus",
+  "tunisia-2",
+  "western-mediterranean-2"
+ ],
+ "paeonia": [
+  "appolonia",
+  "illyricum",
+  "macedonia",
+  "moesia",
+  "thrace"
+ ],
+ "palermo": [
+  "carthago",
+  "central-mediterranean",
+  "milazzo",
+  "syracus",
+  "western-mediterranean-2"
+ ],
+ "pannonia-2": [
+  "adriatic-sea",
+  "cisalpina-2",
+  "dalmatia",
+  "germania-2",
+  "illyricum",
+  "rhenus",
+  "rubicon"
+ ],
+ "petra": [
+  "arabia",
+  "jericho",
+  "jerusalem",
+  "midian",
+  "sinai",
+  "syria"
+ ],
+ "phaestos": [
+  "argos",
+  "central-mediterranean",
+  "eastern-mediterranean",
+  "knossos",
+  "sparta",
+  "thera"
+ ],
+ "phoenicia": [
+  "aleppo",
+  "antiochia",
+  "damascus",
+  "eastern-mediterranean",
+  "salamis",
+  "sidon",
+  "syria"
+ ],
+ "phrygia": [
+  "ankara",
+  "bithynia",
+  "black-sea",
+  "sinope"
+ ],
+ "ptolemais": [
+  "buhen",
+  "eastern-desert",
+  "midian",
+  "nubia",
+  "red-sea",
+  "sinai",
+  "thebes",
+  "upper-egypt"
+ ],
+ "red-sea": [
+  "midian",
+  "nubia",
+  "ptolemais"
+ ],
+ "rhodes": [
+  "aegean-sea",
+  "eastern-mediterranean",
+  "knossos",
+  "lycia",
+  "miletus"
+ ],
+ "roma": [
+  "corsica-2",
+  "etruria-2",
+  "neapolis",
+  "rubicon",
+  "samnium",
+  "western-mediterranean-2"
+ ],
+ "rubicon": [
+  "adriatic-sea",
+  "cisalpina-2",
+  "etruria-2",
+  "pannonia-2",
+  "roma",
+  "samnium"
+ ],
+ "sabrata": [
+  "sahara",
+  "thapsus",
+  "tripoli",
+  "tripolitania",
+  "tunisia-2"
+ ],
+ "sahara": [
+  "sabrata",
+  "tripolitania",
+  "tunisia-2"
+ ],
+ "salamis": [
+  "antiochia",
+  "cyprus",
+  "eastern-mediterranean",
+  "galatia",
+  "phoenicia"
+ ],
+ "samnium": [
+  "adriatic-sea",
+  "campania",
+  "neapolis",
+  "roma",
+  "rubicon",
+  "tarentum"
+ ],
+ "sardes": [
+  "bithynia",
+  "gordium",
+  "ionia",
+  "lesbos",
+  "troy"
+ ],
+ "sardinia-2": [
+  "carales-2",
+  "corsica-2",
+  "western-mediterranean-2"
+ ],
+ "scythia": [
+  "crimea",
+  "dacia",
+  "danube",
+  "kuban",
+  "sudeten"
+ ],
+ "sidon": [
+  "damascus",
+  "eastern-mediterranean",
+  "phoenicia",
+  "tyros"
+ ],
+ "sinai": [
+  "eastern-desert",
+  "gaza",
+  "jerusalem",
+  "midian",
+  "petra",
+  "ptolemais",
+  "tanis"
+ ],
+ "sinope": [
+  "ankara",
+  "black-sea",
+  "cappadocia",
+  "kanesh",
+  "phrygia",
+  "van"
+ ],
+ "siwa": [
+  "cyrenaica",
+  "fayum",
+  "jalo",
+  "upper-egypt",
+  "western-desert"
+ ],
+ "sparta": [
+  "argos",
+  "central-mediterranean",
+  "corinth",
+  "phaestos"
+ ],
+ "sudeten": [
+  "dacia",
+  "germania-2",
+  "scythia"
+ ],
+ "sumeria": [
+  "arabia",
+  "babylon",
+  "chaldaea",
+  "charax",
+  "mari",
+  "mesopotamia",
+  "syria"
+ ],
+ "syracus": [
+  "campania",
+  "central-mediterranean",
+  "milazzo",
+  "palermo"
+ ],
+ "syria": [
+  "aleppo",
+  "arabia",
+  "assyria",
+  "carrhae",
+  "damascus",
+  "jericho",
+  "mari",
+  "petra",
+  "phoenicia",
+  "sumeria"
+ ],
+ "tanis": [
+  "alexandria",
+  "eastern-desert",
+  "eastern-mediterranean",
+  "gaza",
+  "memphis",
+  "sinai"
+ ],
+ "tarentum": [
+  "adriatic-sea",
+  "appolonia",
+  "campania",
+  "central-mediterranean",
+  "ithaka",
+  "samnium"
+ ],
+ "thapsus": [
+  "carthago",
+  "central-mediterranean",
+  "numidia-2",
+  "sabrata",
+  "tripoli",
+  "tunisia-2"
+ ],
+ "thebes": [
+  "buhen",
+  "nubia",
+  "ptolemais"
+ ],
+ "thera": [
+  "aegean-sea",
+  "argos",
+  "athens",
+  "eretria",
+  "knossos",
+  "phaestos"
+ ],
+ "thessalonica": [
+  "aegean-sea",
+  "chalkis",
+  "lemnos",
+  "macedonia",
+  "thessaly",
+  "thrace"
+ ],
+ "thessaly": [
+  "chalkis",
+  "delphi",
+  "epirus",
+  "macedonia",
+  "thessalonica"
+ ],
+ "thrace": [
+  "bycantinum",
+  "lemnos",
+  "macedonia",
+  "moesia",
+  "paeonia",
+  "thessalonica"
+ ],
+ "thyras": [
+  "black-sea",
+  "danube",
+  "moesia"
+ ],
+ "tripoli": [
+  "central-mediterranean",
+  "libya",
+  "sabrata",
+  "thapsus",
+  "tripolitania"
+ ],
+ "tripolitania": [
+  "jalo",
+  "libya",
+  "sabrata",
+  "sahara",
+  "tripoli"
+ ],
+ "troy": [
+  "aegean-sea",
+  "bithynia",
+  "black-sea",
+  "bycantinum",
+  "lemnos",
+  "lesbos",
+  "sardes"
+ ],
+ "tunisia-2": [
+  "cirta",
+  "numidia-2",
+  "sabrata",
+  "sahara",
+  "thapsus"
+ ],
+ "tyros": [
+  "damascus",
+  "eastern-mediterranean",
+  "jericho",
+  "jerusalem",
+  "sidon"
+ ],
+ "upper-egypt": [
+  "buhen",
+  "eastern-desert",
+  "fayum",
+  "ptolemais",
+  "siwa"
+ ],
+ "ur": [
+  "babylon",
+  "babylonia",
+  "chaldaea",
+  "charax",
+  "susa"
+ ],
+ "van": [
+  "armenia",
+  "assyria",
+  "cappadocia",
+  "cilicia",
+  "kanesh",
+  "niniveh",
+  "sinope"
+ ],
+ "western-desert": [
+  "alexandria",
+  "cyrenaica",
+  "eastern-mediterranean",
+  "fayum",
+  "memphis",
+  "siwa"
+ ],
+ "western-mediterranean-2": [
+  "baleares",
+  "campania",
+  "carales-2",
+  "carthago",
+  "cirta",
+  "corduba",
+  "corsica-2",
+  "east-mauretania",
+  "ebusus",
+  "iberus",
+  "massilia",
+  "milazzo",
+  "narbo",
+  "neapolis",
+  "new-africa",
+  "new-carthage",
+  "numidia-2",
+  "palermo",
+  "pyrenees",
+  "roma",
+  "sardinia-2",
+  "west-mauretania"
+ ],
+ "aquitania": [
+  "bay-of-biscay",
+  "belgica",
+  "gaul",
+  "lugdunensis",
+  "narbo",
+  "pyrenees",
+  "tarraconensis"
+ ],
+ "baetica": [
+  "corduba",
+  "hispania",
+  "lusitania"
+ ],
+ "baleares": [
+  "ebusus",
+  "iberus",
+  "new-carthage",
+  "western-mediterranean-2"
+ ],
+ "bay-of-biscay": [
+  "aquitania",
+  "britannia",
+  "londinium",
+  "lugdunensis",
+  "lusitania",
+  "tarraconensis"
+ ],
+ "belgica": [
+  "aquitania",
+  "gaul",
+  "londinium",
+  "lower-germany",
+  "lugdunensis",
+  "upper-germany"
+ ],
+ "britannia": [
+  "bay-of-biscay",
+  "londinium"
+ ],
+ "cirta": [
+  "new-africa",
+  "numidia-2",
+  "tunisia-2",
+  "western-mediterranean-2"
+ ],
+ "corduba": [
+  "baetica",
+  "hispania",
+  "new-carthage",
+  "west-mauretania",
+  "western-mediterranean-2"
+ ],
+ "east-mauretania": [
+  "new-africa",
+  "west-mauretania",
+  "western-mediterranean-2"
+ ],
+ "ebusus": [
+  "baleares",
+  "western-mediterranean-2"
+ ],
+ "gaul": [
+  "aquitania",
+  "belgica",
+  "etruria-2",
+  "massilia",
+  "narbo",
+  "rhaetia",
+  "upper-germany"
+ ],
+ "hispania": [
+  "baetica",
+  "corduba",
+  "iberus",
+  "lusitania",
+  "new-carthage",
+  "tarraconensis"
+ ],
+ "iberus": [
+  "baleares",
+  "hispania",
+  "new-carthage",
+  "pyrenees",
+  "tarraconensis",
+  "western-mediterranean-2"
+ ],
+ "londinium": [
+  "bay-of-biscay",
+  "belgica",
+  "britannia",
+  "lugdunensis"
+ ],
+ "lower-germany": [
+  "belgica",
+  "germania-2",
+  "rhenus",
+  "upper-germany"
+ ],
+ "lugdunensis": [
+  "aquitania",
+  "bay-of-biscay",
+  "belgica",
+  "londinium"
+ ],
+ "lusitania": [
+  "baetica",
+  "bay-of-biscay",
+  "hispania",
+  "tarraconensis"
+ ],
+ "massilia": [
+  "corsica-2",
+  "etruria-2",
+  "gaul",
+  "narbo",
+  "western-mediterranean-2"
+ ],
+ "narbo": [
+  "aquitania",
+  "gaul",
+  "massilia",
+  "pyrenees",
+  "western-mediterranean-2"
+ ],
+ "new-africa": [
+  "cirta",
+  "east-mauretania",
+  "western-mediterranean-2"
+ ],
+ "new-carthage": [
+  "baleares",
+  "corduba",
+  "hispania",
+  "iberus",
+  "western-mediterranean-2"
+ ],
+ "pyrenees": [
+  "aquitania",
+  "iberus",
+  "narbo",
+  "tarraconensis",
+  "western-mediterranean-2"
+ ],
+ "rhaetia": [
+  "cisalpina-2",
+  "etruria-2",
+  "gaul",
+  "rhenus",
+  "upper-germany"
+ ],
+ "rhenus": [
+  "cisalpina-2",
+  "germania-2",
+  "lower-germany",
+  "pannonia-2",
+  "rhaetia",
+  "upper-germany"
+ ],
+ "tarraconensis": [
+  "aquitania",
+  "bay-of-biscay",
+  "hispania",
+  "iberus",
+  "lusitania",
+  "pyrenees"
+ ],
+ "upper-germany": [
+  "belgica",
+  "gaul",
+  "lower-germany",
+  "rhaetia",
+  "rhenus"
+ ],
+ "west-mauretania": [
+  "corduba",
+  "east-mauretania",
+  "western-mediterranean-2"
+ ]
+}

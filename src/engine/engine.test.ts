@@ -1,0 +1,228 @@
+import { describe, expect, it } from 'vitest';
+import { Rng } from 'digital-boardgame-framework';
+import { validateData, advanceById, commodities, calamities, pieceCounts } from '../data/index.js';
+import {
+  commoditySetValue,
+  handValue,
+  creditTowards,
+  netAdvanceCost,
+  cardGroupsHeld,
+  pieceCensus,
+  pieceConservationProblems,
+} from './helpers.js';
+import { createGame, adapter, victoryScore } from './index.js';
+import type { Action, GameState } from './types.js';
+
+describe('data integrity', () => {
+  it('has no cross-reference problems', () => {
+    expect(validateData()).toEqual([]);
+  });
+  it('has 114 commodity cards total', () => {
+    expect(commodities.reduce((s, c) => s + c.count, 0)).toBe(114);
+  });
+  it('forms one connected map across all three panels (seam areas merged)', async () => {
+    const { areas, adjacency, areaById } = await import('../data/index.js');
+    // BFS over the whole adjacency graph from any area.
+    const seen = new Set<string>([areas[0]!.id]);
+    const stack = [areas[0]!.id];
+    while (stack.length) { const x = stack.pop()!; for (const n of adjacency[x] ?? []) if (!seen.has(n)) { seen.add(n); stack.push(n); } }
+    expect(seen.size).toBe(areas.length); // single connected component
+    // All three panels are represented and therefore mutually reachable.
+    const boards = new Set(areas.map((a) => a.board));
+    expect(boards).toEqual(new Set(['western', 'main', 'eastern']));
+    // Adjacency is symmetric and references only real areas.
+    for (const [id, nbrs] of Object.entries(adjacency)) {
+      for (const n of nbrs) { expect(areaById.has(n)).toBe(true); expect(adjacency[n]).toContain(id); }
+    }
+  });
+});
+
+describe('calamity trade status (verified vs rules §9.1)', () => {
+  it('is exactly 8 tradable / 4 non-tradable', () => {
+    expect(calamities.filter((c) => c.tradable).map((c) => c.id).sort()).toEqual(
+      ['barbarianhordes', 'civildisorder', 'epidemic', 'iconoclasm', 'piracy', 'slaverevolt', 'superstition', 'treachery'].sort(),
+    );
+    expect(calamities.filter((c) => !c.tradable).map((c) => c.id).sort()).toEqual(
+      ['civilwar', 'famine', 'flood', 'volcano'].sort(),
+    );
+  });
+});
+
+describe('commodity scoring', () => {
+  it('values a set as n^2 * value, capped at count', () => {
+    expect(commoditySetValue('salt', 3)).toBe(9 * 3); // value 3
+    expect(commoditySetValue('gold', 2)).toBe(4 * 9);
+    // capped at count (salt count 9)
+    expect(commoditySetValue('salt', 99)).toBe(81 * 3);
+  });
+  it('sums hand value across commodities', () => {
+    expect(handValue({ salt: 2, gold: 1 })).toBe(4 * 3 + 1 * 9);
+  });
+  it('matches the printed card value rows (verified vs rules p.5)', () => {
+    // Iron (value 2, 8 cards): 2,8,18,32,50,72,98,128
+    expect([1, 2, 3, 4, 5, 6, 7, 8].map((n) => commoditySetValue('iron', n))).toEqual([2, 8, 18, 32, 50, 72, 98, 128]);
+    // Wine (value 5, 6 cards): 5,20,45,80,125,180
+    expect([1, 2, 3, 4, 5, 6].map((n) => commoditySetValue('wine', n))).toEqual([5, 20, 45, 80, 125, 180]);
+    // Ivory (value 9, 4 cards): 9,36,81,144
+    expect([1, 2, 3, 4].map((n) => commoditySetValue('ivory', n))).toEqual([9, 36, 81, 144]);
+  });
+  it('mining bumps the best mineable set by one card', () => {
+    const base = handValue({ iron: 2 });
+    const mined = handValue({ iron: 2 }, { mining: true });
+    expect(mined).toBeGreaterThan(base);
+    // iron value 2: set of 3 (18) vs set of 2 (8) => gain 10
+    expect(mined - base).toBe(commoditySetValue('iron', 3) - commoditySetValue('iron', 2));
+  });
+});
+
+describe('advance credits', () => {
+  it('pottery credits 10 to other crafts and to democracy/monotheism', () => {
+    expect(creditTowards(['pottery'], 'clothmaking')).toBe(10);
+    expect(creditTowards(['pottery'], 'democracy')).toBe(10);
+    expect(creditTowards(['pottery'], 'astronomy')).toBe(0); // sciences, not credited by pottery
+  });
+  it('credits reduce net cost but never below zero', () => {
+    // engineering (140) gives 20 to philosophy; with many sciences could exceed.
+    const owned = ['astronomy', 'coinage', 'medicine', 'engineering', 'mathematics'];
+    const net = netAdvanceCost(owned, 'philosophy');
+    expect(net).toBeGreaterThanOrEqual(0);
+    expect(net).toBeLessThan(advanceById.get('philosophy')!.cost);
+  });
+  it('counts dual-group cards in both groups', () => {
+    // mysticism is Religion + Arts
+    const groups = cardGroupsHeld(['mysticism']);
+    expect(groups.has('Religion')).toBe(true);
+    expect(groups.has('Arts')).toBe(true);
+  });
+});
+
+describe('game setup', () => {
+  it('creates a normalized state waiting on an interactive decision', () => {
+    const s = createGame({ players: ['egypt', 'babylon', 'crete'], seed: 7 });
+    expect(s.turn).toBe(1);
+    // After the auto phases (taxation/expansion/census) the first interactive
+    // phase with a waiting actor is ship construction.
+    expect(adapter.currentActor(s)).not.toBeNull();
+    expect(['shipConstruction', 'movement', 'cityConstruction', 'acquireAdvances']).toContain(s.phase);
+  });
+  it('places one starting token per civ and stocks the rest', () => {
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 1 });
+    // population should be >=1 each after growth
+    for (const id of s.seating) {
+      let pop = 0;
+      for (const a of Object.values(s.areas)) pop += a.tokens[id] ?? 0;
+      expect(pop).toBeGreaterThanOrEqual(1);
+    }
+  });
+});
+
+describe('legal actions are always non-empty and applicable', () => {
+  it('every legal action applies without throwing', () => {
+    const s = createGame({ players: ['egypt', 'babylon', 'crete'], seed: 3 });
+    const actor = adapter.currentActor(s)!;
+    const actions = adapter.legalActions(s, actor);
+    expect(actions.length).toBeGreaterThan(0);
+    for (const a of actions) {
+      expect(() => adapter.applyAction(s, a, actor)).not.toThrow();
+    }
+  });
+});
+
+/** Drive a full game with random-but-legal play; it must terminate with a
+ *  winner and never throw or stall. */
+function playRandomGame(seed: number, maxTurns = 40): GameState {
+  let s = createGame({ players: ['egypt', 'babylon', 'crete', 'assyria'], seed, maxTurns });
+  const rng = new Rng(seed ^ 0x9e3779b9);
+  let steps = 0;
+  while (adapter.result(s) == null && steps++ < 20000) {
+    const actor = adapter.currentActor(s);
+    if (actor == null) break;
+    const actions = adapter.legalActions(s, actor);
+    // Bias slightly toward non-pass so the game progresses, but pass is always last.
+    const choice = actions.length > 1 && rng.next() < 0.7
+      ? actions[rng.int(actions.length - 1)]!
+      : { type: 'pass' as const };
+    s = adapter.applyAction(s, choice as Action, actor);
+  }
+  return s;
+}
+
+describe('full random playthrough', () => {
+  it('terminates with a winner under a turn cap', () => {
+    const s = playRandomGame(42, 30);
+    const res = adapter.result(s);
+    expect(res).not.toBeNull();
+    expect(res!.winners.length).toBeGreaterThanOrEqual(1);
+  });
+  it('is deterministic for a fixed seed', () => {
+    const a = playRandomGame(99, 25);
+    const b = playRandomGame(99, 25);
+    expect(victoryScore(a, a.seating[0]!)).toBe(victoryScore(b, b.seating[0]!));
+    expect(a.turn).toBe(b.turn);
+  });
+});
+
+describe('physical component conservation', () => {
+  it('starts with the full fixed supply (55 tokens / 9 cities / 4 ships) per nation', () => {
+    const s = createGame({ players: ['egypt', 'babylon', 'crete', 'assyria'], seed: 8 });
+    for (const id of s.seating) {
+      expect(pieceCensus(s, id)).toEqual({ tokens: 55, cities: 9, ships: 4 });
+    }
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
+  });
+
+  // The invariant: across stock + treasury + board, every nation's tokens,
+  // cities and ships must ALWAYS sum to the fixed per-nation totals — checked
+  // after every action, across many seeds and player counts.
+  it.each([1, 7, 21, 42, 99, 123, 777, 2024])(
+    'conserves every nations pieces after every action of a full game (seed %i)',
+    (seed) => {
+      let s = createGame({ players: ['egypt', 'babylon', 'crete', 'assyria'], seed, maxTurns: 30 });
+      const rng = new Rng(seed);
+      let steps = 0;
+      expect(pieceConservationProblems(s, pieceCounts)).toEqual([]); // at setup
+      while (adapter.result(s) == null && steps++ < 20000) {
+        const actor = adapter.currentActor(s);
+        if (actor == null) break;
+        const actions = adapter.legalActions(s, actor);
+        const choice = actions.length > 1 && rng.next() < 0.7 ? actions[rng.int(actions.length - 1)]! : { type: 'pass' as const };
+        s = adapter.applyAction(s, choice as Action, actor);
+        const problems = pieceConservationProblems(s, pieceCounts);
+        expect(problems, `seed ${seed} step ${steps} (${s.phase})`).toEqual([]);
+      }
+      expect(steps).toBeGreaterThan(5);
+    },
+  );
+
+  it('holds for a 2-player and a 6-player game too', () => {
+    for (const players of [['egypt', 'babylon'], ['egypt', 'babylon', 'crete', 'assyria', 'thrace', 'illyria']]) {
+      let s = createGame({ players, seed: 55, maxTurns: 20 });
+      const rng = new Rng(55);
+      let steps = 0;
+      while (adapter.result(s) == null && steps++ < 20000) {
+        const actor = adapter.currentActor(s);
+        if (actor == null) break;
+        const actions = adapter.legalActions(s, actor);
+        s = adapter.applyAction(s, (actions.length > 1 && rng.next() < 0.6 ? actions[rng.int(actions.length - 1)]! : { type: 'pass' as const }) as Action, actor);
+        expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
+      }
+    }
+  });
+});
+
+describe('victory scoring', () => {
+  it('counts AST, cities, treasury, cards and commodities', () => {
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 5 });
+    const p = s.players['egypt']!;
+    p.treasury = 50;
+    p.astSpace = 2;
+    p.advances = ['pottery']; // face 45
+    p.hand = { salt: 2 }; // 4*3 = 12
+    // find an empty area to give egypt a city
+    const aid = Object.keys(s.areas)[0]!;
+    s.areas[aid] = { tokens: {}, city: 'egypt' };
+    const score = victoryScore(s, 'egypt');
+    // 45 (advance) + 12 (salt set) + 50 (treasury) + 2*100 (ast) + 1*50 (city)
+    expect(score).toBe(45 + 12 + 50 + 200 + 50);
+  });
+});

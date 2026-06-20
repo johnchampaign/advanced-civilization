@@ -1,0 +1,16 @@
+# dependencies / build output
+node_modules/
+dist/
+dist-ui/
+*.tgz
+package/
+
+# downloaded + extracted source artifacts (re-creatable via scripts/; the
+# committed game data lives in src/data/*.json). Anchored to the top-level dir
+# so public/assets/ (the served board SVG) is NOT ignored.
+/assets/
+
+# runtime / secrets
+.data/
+.env
+.dev.vars

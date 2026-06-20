@@ -1,0 +1,163 @@
+{
+ "_doc": "14 civilizations (player nations) confirmed from VASSAL player-mat boards and AST rows. `color` is a conventional display color. `startAreas` are the nation's legal opening areas — taken authoritatively from the VASSAL StartRegion zone tags (areas.json `startRegion`); a player places initial tokens in one. `start` is the canonical default opening area (the first listed). `pieceCounts` per rules §5.1 / VASSAL CardSlots (55 tokens, 9 cities, 4 ships per national set).",
+ "pieceCounts": {
+  "tokens": 55,
+  "cities": 9,
+  "ships": 4
+ },
+ "civilizations": [
+  {
+   "id": "egypt",
+   "name": "Egypt",
+   "color": "#d4af37",
+   "start": "thebes",
+   "startAreas": [
+    "thebes",
+    "upper-egypt",
+    "nubia",
+    "buhen",
+    "siwa",
+    "jalo"
+   ]
+  },
+  {
+   "id": "africa",
+   "name": "Africa",
+   "color": "#8b4513",
+   "start": "tunisia-2",
+   "startAreas": [
+    "tunisia-2",
+    "cirta",
+    "tripolitania",
+    "sahara"
+   ]
+  },
+  {
+   "id": "crete",
+   "name": "Crete",
+   "color": "#1e90ff",
+   "start": "knossos",
+   "startAreas": [
+    "knossos",
+    "phaestos"
+   ]
+  },
+  {
+   "id": "asia",
+   "name": "Asia",
+   "color": "#9acd32",
+   "start": "mikop",
+   "startAreas": [
+    "mikop",
+    "kuban"
+   ]
+  },
+  {
+   "id": "assyria",
+   "name": "Assyria",
+   "color": "#b22222",
+   "start": "caucasus",
+   "startAreas": [
+    "caucasus",
+    "nalchik"
+   ]
+  },
+  {
+   "id": "babylon",
+   "name": "Babylon",
+   "color": "#4b0082",
+   "start": "susa",
+   "startAreas": [
+    "susa",
+    "media",
+    "parthia"
+   ]
+  },
+  {
+   "id": "sumeria",
+   "name": "Sumeria",
+   "color": "#008080",
+   "start": "chaldaea",
+   "startAreas": [
+    "chaldaea",
+    "ahwaz",
+    "apolagos",
+    "susa",
+    "portas-persas"
+   ]
+  },
+  {
+   "id": "thrace",
+   "name": "Thrace",
+   "color": "#ff8c00",
+   "start": "scythia",
+   "startAreas": [
+    "scythia"
+   ]
+  },
+  {
+   "id": "illyria",
+   "name": "Illyria",
+   "color": "#2f4f4f",
+   "start": "sudeten",
+   "startAreas": [
+    "sudeten",
+    "germania-2"
+   ]
+  },
+  {
+   "id": "italy",
+   "name": "Italy",
+   "color": "#daa520",
+   "start": "etruria-2",
+   "startAreas": [
+    "etruria-2",
+    "cisalpina-2",
+    "pannonia-2"
+   ]
+  },
+  {
+   "id": "iberia",
+   "name": "Iberia",
+   "color": "#556b2f",
+   "start": "baetica",
+   "startAreas": [
+    "baetica",
+    "corduba",
+    "lusitania"
+   ]
+  },
+  {
+   "id": "persia",
+   "name": "Persia",
+   "color": "#c71585",
+   "start": "nisa",
+   "startAreas": [
+    "nisa",
+    "prophtasia",
+    "randamar"
+   ]
+  },
+  {
+   "id": "semites",
+   "name": "Semites",
+   "color": "#a0522d",
+   "start": "arabia",
+   "startAreas": [
+    "arabia",
+    "rub-al-khali"
+   ]
+  },
+  {
+   "id": "indus",
+   "name": "Indus",
+   "color": "#20b2aa",
+   "start": "chanhu-daro",
+   "startAreas": [
+    "chanhu-daro",
+    "karachi",
+    "pala"
+   ]
+  }
+ ]
+}

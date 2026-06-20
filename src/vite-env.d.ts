@@ -8,3 +8,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/** Build id injected by the framework's `versionStamp` Vite plugin. */
+declare const __DBF_BUILD_ID__: string;

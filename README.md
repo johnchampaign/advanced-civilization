@@ -3,6 +3,10 @@
 A digital port of Avalon Hill's **Advanced Civilization** (1991), built on
 [`digital-boardgame-framework`](https://www.npmjs.com/package/digital-boardgame-framework).
 
+**Play online:** https://advanced-civilization.pages.dev
+(Local hotseat + AI works with no setup; online multiplayer needs the Supabase
+env vars below set on the Cloudflare Pages project.)
+
 Rules source: the [Advanced Civilization rules & guide (OCR)](https://astro.ucla.edu/~ianc/files/civ/civ_rules_and_guide_ocr.pdf).
 Map / card / advance data extracted from the
 [VASSAL module](https://obj.vassalengine.org/images/e/ee/AdvancedCivilization_v1.0.vmod).
@@ -157,6 +161,40 @@ npm run serve     # build + run the HTTP host (filesystem store) on :8787
 Verified end-to-end (`src/server/multiplayer.test.ts` + a live HTTP smoke test):
 distinct per-seat tokens, bad tokens rejected, only the seat on the clock may
 move, opponents' hands redacted in per-seat views, and moves persisted.
+
+### Deploying (Cloudflare Pages + Supabase)
+
+Deployed at https://advanced-civilization.pages.dev (project `advanced-civilization`).
+
+- `src/server/handlers.ts` — one platform-agnostic `handleApi()` router shared by
+  the Node dev host (FsStore) and the Pages Function (Supabase), so dev and prod
+  are true parity.
+- `functions/api/[[path]].ts` — the Cloudflare Pages Function: builds a
+  `GameServer` over `SupabaseStore` + `SupabaseBroadcaster` and delegates to
+  `handleApi`. Imports only the Workers-safe server barrel (no `node:fs`).
+- `wrangler.toml` — `pages_build_output_dir = dist-ui`, `nodejs_compat`.
+
+Build command (Pages project setting): `npm run build:ui`. Manual deploy:
+
+```bash
+npm run build:ui
+npx wrangler pages deploy dist-ui --project-name advanced-civilization
+```
+
+To enable online multiplayer, set these as Pages environment variables / secrets
+(Production) and redeploy:
+
+| variable | purpose |
+| --- | --- |
+| `SUPABASE_URL` | Supabase project URL (server store + broadcaster) |
+| `SUPABASE_SERVICE_KEY` | service-role key (server only — bypasses RLS) |
+| `RESEND_API_KEY` *(optional)* | turn-notification emails |
+| `MAIL_FROM` *(optional)* | from-address for those emails |
+
+Apply `supabase/schema.sql` to the Supabase project once (creates the `dbf_*`
+tables with RLS on). For instant client refresh (vs. polling), also build the SPA
+with `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` (anon key is safe in the
+bundle; Realtime only).
 
 ## Online lobby & bug reporting (UI)
 

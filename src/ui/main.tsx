@@ -20,7 +20,7 @@ function Root() {
         <button className="civ-btn" style={{ fontSize: 16, padding: '10px 18px' }} onClick={() => setMode('hotseat')}>Local hotseat + AI</button>
         <button className="civ-btn" style={{ fontSize: 16, padding: '10px 18px' }} onClick={() => setMode('online')}>Online multiplayer</button>
       </div>
-      <p className="civ-lbl" style={{ color: '#aaa' }}>Online needs the game server running (<code>npm run serve</code>).</p>
+      <p className="civ-lbl" style={{ color: '#aaa' }}>Hotseat runs entirely in your browser. Online multiplayer creates a shareable game with a link per seat.</p>
     </div>
   );
 }

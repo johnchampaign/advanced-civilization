@@ -109,7 +109,7 @@ export function OnlineGame({ gameId, token }: { gameId: string; token: string })
             />
           : <InfoView view={view} state={s} focus={you} />}
       </div>
-      <div className="civ-bar" style={{ display: 'flex', gap: 6, padding: 6, minHeight: 170 }}>
+      <div className="civ-bar" style={{ display: 'flex', gap: 6, padding: 6, minHeight: 170, maxHeight: '42vh' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, width: 78 }}>
           {(['map', 'ast', 'census', 'tools', 'goods'] as View[]).map((v) => (
             <button key={v} className={`civ-nav ${view === v ? 'on' : ''}`} onClick={() => setView(v)}>{v.toUpperCase()}</button>

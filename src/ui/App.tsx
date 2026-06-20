@@ -72,7 +72,7 @@ export default function App() {
           : <InfoView view={view} state={state} focus={focus} />}
       </div>
 
-      <div className="civ-bar" style={{ display: 'flex', gap: 6, padding: 6, minHeight: 170 }}>
+      <div className="civ-bar" style={{ display: 'flex', gap: 6, padding: 6, minHeight: 170, maxHeight: '42vh' }}>
         {/* left nav */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, width: 78 }}>
           {(['map', 'ast', 'census', 'tools', 'goods'] as View[]).map((v) => (
@@ -560,17 +560,20 @@ export function MovementControls({ planner }: { planner: MovementPlanner }) {
       )}
 
       {queued.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minHeight: 0 }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span className="civ-lbl">Planned moves (not final):</span>
+            <span className="civ-lbl">Planned moves — {queued.length} (not final):</span>
             <button className="civ-btn" onClick={undoLast}>↶ Undo last</button>
           </div>
-          {queued.map((q, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span>{q.byShip ? '⛵ ' : ''}{name(q.from)} → {name(q.to)} ({q.count})</span>
-              <button className="civ-btn" onClick={() => removeQueued(i)}>✕</button>
-            </div>
-          ))}
+          {/* Compact, scrollable grid so a long move list never crowds out the map. */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '2px 8px', maxHeight: 96, overflowY: 'auto', paddingRight: 4 }}>
+            {queued.map((q, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+                <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{q.byShip ? '⛵ ' : ''}{name(q.from)} → {name(q.to)} ({q.count})</span>
+                <button className="civ-btn" style={{ padding: '0 6px', lineHeight: '18px' }} onClick={() => removeQueued(i)}>✕</button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

@@ -99,11 +99,12 @@ export function OnlineGame({ gameId, token }: { gameId: string; token: string })
       <div ref={boardRef} style={{ flex: 1, position: 'relative', overflow: 'auto', background: '#0d3a4a' }}>
         {view === 'map'
           ? <Board
-              state={s}
+              state={inMovement ? planner.previewState : s}
               selected={inMovement ? planner.origin : selected}
               onSelect={inMovement ? planner.onBoardClick : setSelected}
               highlight={inMovement ? planner.highlight : legalAreas(game.legalActions, s.phase)}
               origin={inMovement ? planner.origin : null}
+              moved={inMovement ? planner.moved : undefined}
               zoomTo={inMovement ? planner.origin : null}
             />
           : <InfoView view={view} state={s} focus={you} />}

@@ -61,11 +61,12 @@ export default function App() {
       <div ref={boardRef} style={{ flex: 1, position: 'relative', overflow: 'auto', background: '#0d3a4a' }}>
         {view === 'map'
           ? <Board
-              state={state}
+              state={inMovement ? planner.previewState : state}
               selected={inMovement ? planner.origin : selectedArea}
               onSelect={inMovement ? planner.onBoardClick : setSelectedArea}
               highlight={inMovement ? planner.highlight : legalAreas(legal, state.phase)}
               origin={inMovement ? planner.origin : null}
+              moved={inMovement ? planner.moved : undefined}
               zoomTo={inMovement ? planner.origin : null}
             />
           : <InfoView view={view} state={state} focus={focus} />}
@@ -172,12 +173,14 @@ export function legalAreas(legal: Action[], _phase: string): Set<string> {
 
 // ---- Board ---------------------------------------------------------------
 
-export function Board({ state, selected, onSelect, highlight, zoomTo, origin }: {
+export function Board({ state, selected, onSelect, highlight, zoomTo, origin, moved }: {
   state: GameState; selected: string | null; onSelect: (a: string | null) => void; highlight: Set<string>;
   /** When set, the board zooms in toward this area's anchor (e.g. a chosen move origin). */
   zoomTo?: string | null;
   /** The move origin, drawn with a distinct marker so destinations read clearly. */
   origin?: string | null;
+  /** Areas that received planned-but-not-official moves (dashed marker). */
+  moved?: Set<string>;
 }) {
   const zoomAnchor = zoomTo ? anchors[zoomTo] : null;
   const zoomStyle = zoomAnchor
@@ -200,6 +203,7 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin }: 
           const isHi = highlight.has(aid);
           const isSel = selected === aid;
           const isOrigin = origin === aid;
+          const isMoved = !!moved?.has(aid);
           const isPirate = a.city === PIRATE;
           const cityColor = a.city ? (isPirate ? '#111' : (civById.get(a.city)?.color ?? '#444')) : null;
           const ships = Object.entries(a.ships ?? {}).filter(([, n]) => n > 0);
@@ -208,6 +212,7 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin }: 
               {/* Invisible hit target so areas with no markers still capture clicks. */}
               <circle cx={an.x} cy={an.y} r={an.r + 6} fill="transparent" />
               {(isHi || isSel || isOrigin) && <circle cx={an.x} cy={an.y} r={an.r + 10} fill="none" stroke={isOrigin ? '#ffd23f' : isSel ? '#fff' : '#5cf'} strokeWidth={isOrigin ? 5 : 4} pointerEvents="none" />}
+              {isMoved && <circle cx={an.x} cy={an.y} r={an.r + 13} fill="none" stroke="#ffd23f" strokeWidth={3} strokeDasharray="5 4" pointerEvents="none" />}
               {a.city && <rect x={an.x - an.r} y={an.y - an.r} width={an.r * 2} height={an.r * 2} fill={cityColor!} stroke="#000" strokeWidth={2} />}
               {isPirate && <text x={an.x} y={an.y + an.r * 0.45} textAnchor="middle" fontSize={an.r * 1.3} fill="#fff">☠</text>}
               {owners.map(([owner, n], i) => {
@@ -384,10 +389,17 @@ export interface MovementPlanner {
   onBoardClick: (area: string | null) => void;
   setCount: (n: number) => void;
   removeQueued: (i: number) => void;
+  /** Undo the most recently planned move. */
+  undoLast: () => void;
   /** Submit the queued moves as one `move` action (player then done for phase). */
   commit: () => void;
   /** Pass without moving. */
   pass: () => void;
+  /** The board state with all queued moves applied — render this during movement
+   *  so planned moves show as already done (units sitting at their destinations). */
+  previewState: GameState;
+  /** Areas that received queued (not-yet-official) tokens, to mark on the board. */
+  moved: Set<string>;
 }
 
 /** Drives the click-to-move flow, shared by hotseat and online clients. Pass the
@@ -457,20 +469,43 @@ export function useMovementPlanner(
   }, [active, origin, origins, dests, count, available]);
 
   const removeQueued = useCallback((i: number) => setQueued((q) => q.filter((_, j) => j !== i)), []);
+  const undoLast = useCallback(() => setQueued((q) => q.slice(0, -1)), []);
   const commit = useCallback(() => { if (queued.length) onApply({ type: 'move', moves: queued }); }, [queued, onApply]);
   const pass = useCallback(() => onApply({ type: 'pass' }), [onApply]);
 
-  return { active, origin, count, queued, highlight, available, onBoardClick, setCount, removeQueued, commit, pass };
+  // Preview: apply queued moves to a clone so the board shows them as done.
+  const previewState = useMemo(() => {
+    if (!active || !actor || queued.length === 0) return state;
+    const clone: GameState = JSON.parse(JSON.stringify(state));
+    for (const q of queued) {
+      const from = clone.areas[q.from] ?? (clone.areas[q.from] = { tokens: {} });
+      const to = clone.areas[q.to] ?? (clone.areas[q.to] = { tokens: {} });
+      from.tokens[actor] = (from.tokens[actor] ?? 0) - q.count;
+      if ((from.tokens[actor] ?? 0) <= 0) delete from.tokens[actor];
+      to.tokens[actor] = (to.tokens[actor] ?? 0) + q.count;
+      if (q.byShip) {
+        from.ships = from.ships ?? {}; to.ships = to.ships ?? {};
+        from.ships[actor] = (from.ships[actor] ?? 0) - 1;
+        if ((from.ships[actor] ?? 0) <= 0) delete from.ships[actor];
+        to.ships[actor] = (to.ships[actor] ?? 0) + 1;
+      }
+    }
+    return clone;
+  }, [active, actor, state, queued]);
+
+  const moved = useMemo(() => new Set(queued.map((q) => q.to)), [queued]);
+
+  return { active, origin, count, queued, highlight, available, onBoardClick, setCount, removeQueued, undoLast, commit, pass, previewState, moved };
 }
 
 export function MovementControls({ planner }: { planner: MovementPlanner }) {
-  const { origin, count, queued, available, setCount, removeQueued, commit, pass } = planner;
+  const { origin, count, queued, available, setCount, removeQueued, undoLast, commit, pass } = planner;
   const cap = origin ? available(origin) : 0;
   const name = (a: string) => areaById.get(a)?.name ?? a;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {!origin ? (
-        <span className="civ-lbl">Click an area with your tokens to move <b>from</b>{queued.length ? '' : ', or finish below'}.</span>
+        <span className="civ-lbl">Click an area with your tokens to move <b>from</b>. Planned moves show on the map right away (dashed marker) and aren't final until you finish.</span>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span className="civ-lbl">From <b>{name(origin)}</b> — choose how many, then click a highlighted destination:</span>
@@ -487,7 +522,10 @@ export function MovementControls({ planner }: { planner: MovementPlanner }) {
 
       {queued.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span className="civ-lbl">Planned moves:</span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span className="civ-lbl">Planned moves (not final):</span>
+            <button className="civ-btn" onClick={undoLast}>↶ Undo last</button>
+          </div>
           {queued.map((q, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span>{q.byShip ? '⛵ ' : ''}{name(q.from)} → {name(q.to)} ({q.count})</span>
@@ -498,8 +536,9 @@ export function MovementControls({ planner }: { planner: MovementPlanner }) {
       )}
 
       <div style={{ display: 'flex', gap: 4 }}>
-        <button className="civ-btn" disabled={queued.length === 0} onClick={commit}>Execute {queued.length || ''} move{queued.length === 1 ? '' : 's'}</button>
-        <button className="civ-btn" onClick={pass}>Done moving (no move)</button>
+        <button className="civ-btn" onClick={() => (queued.length ? commit() : pass())}>
+          {queued.length ? `Finish moving — make ${queued.length} move${queued.length === 1 ? '' : 's'} official` : 'Finish moving (no move)'}
+        </button>
       </div>
     </div>
   );

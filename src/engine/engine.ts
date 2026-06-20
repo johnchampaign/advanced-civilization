@@ -420,6 +420,7 @@ function runTradeAcquisition(s: GameState): void {
   for (const id of s.activeOrder) {
     const p = player(s, id);
     const cities = Math.min(9, cityCount(s, id));
+    let drawn = 0;
     for (let stack = 1; stack <= cities; stack++) {
       const pile = s.trade.stacks[stack];
       if (!pile || pile.length === 0) continue;
@@ -428,12 +429,17 @@ function runTradeAcquisition(s: GameState): void {
       // `calamity:<id>` so tradable ones can be passed during the trade phase
       // and non-tradable ones are simply retained (§27.3).
       p.hand[card] = (p.hand[card] ?? 0) + 1;
+      drawn += 1;
       if (card.startsWith('calamity:')) {
         const calId = card.slice('calamity:'.length);
         s.calamityTradedFrom[calId] = id; // drawer is the original holder
-        s.log.push(`${id} drew calamity ${calamityById.get(calId)?.name ?? calId}.`);
+        // Do NOT log the specific calamity here: a drawn card is secret until
+        // trading ends (§27.3/§27.4) — naming it publicly would leak which player
+        // holds it. Its effect is logged at resolution instead.
       }
     }
+    // Safe public summary: the count equals city count, which is already visible.
+    if (drawn > 0) s.log.push(`${id} collected ${drawn} trade card${drawn === 1 ? '' : 's'} (1 per city, from stacks 1–${cities}).`);
   }
   s.rngState = rng.serialize();
 }

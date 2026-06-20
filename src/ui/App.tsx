@@ -636,14 +636,24 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
 const isCal = (c: string) => c.startsWith('calamity:');
 const cardLabel = (c: string) => (isCal(c) ? `⚠ ${c.slice(9)}` : c);
 
+const COMMODITY_ORDER = ['ochre', 'hides', 'iron', 'papyrus', 'salt', 'timber', 'grain', 'oil', 'cloth', 'wine', 'bronze', 'silver', 'resin', 'spices', 'dye', 'gems', 'gold', 'ivory'];
+
+/** Trade panel (§28), laid out after the 1995 game's "Declare Trade Offers"
+ *  screen: pick cards from your hand to give, mark which are truthfully *stated*
+ *  (shown to your partner) vs handed over *face-down*, and say what you want in
+ *  return. Per §28.3 you must give ≥3 cards and truthfully state ≥2; the rest may
+ *  be anything (incl. tradable calamities) "regardless of what was said". */
 function TradeControls({ state, actor, onApply }: { state: GameState; actor: PlayerId; onApply: (a: Action) => void }) {
   const me = state.players[actor]!;
   const offer = state.negotiation.pendingOffer;
   const [partner, setPartner] = useState<PlayerId>(state.seating.find((p) => p !== actor)!);
   const [give, setGive] = useState<Record<string, number>>({});
+  const [faceDown, setFaceDown] = useState<Set<string>>(new Set()); // card types given but NOT declared
   const [wantCard, setWantCard] = useState<string>('');
   const [wantCount, setWantCount] = useState(3);
+  const cName = (c: string) => (isCal(c) ? `⚠ ${c.slice(9)}` : commodityById.get(c)?.name ?? c);
 
+  // ---- Responding to an offer aimed at me ----
   if (offer && offer.to === actor) {
     const need = offer.request.count;
     const declared = offer.request.declared;
@@ -656,48 +666,82 @@ function TradeControls({ state, actor, onApply }: { state: GameState; actor: Pla
       while (avail > 0 && total < need) { giveActual[c] = (giveActual[c] ?? 0) + 1; avail--; total++; }
     }
     const canAccept = have && total === need;
+    const declaredGiven = Object.values(offer.offer.declared).reduce((a, b) => a + b, 0);
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div className="civ-msg" style={{ padding: 6 }}>
-          <b>{civById.get(offer.from)?.name}</b> offers {Object.values(offer.offer.declared).reduce((a, b) => a + b, 0)}+ cards
-          (declared {Object.entries(offer.offer.declared).map(([c, n]) => `${n}× ${cardLabel(c)}`).join(', ') || '—'}); wants {need} incl. {Object.entries(declared).map(([c, n]) => `${n}× ${c}`).join(', ')}.
+        <div className="civ-msg" style={{ padding: 8 }}>
+          <div><b style={{ color: civById.get(offer.from)?.color }}>{civById.get(offer.from)?.name}</b> offers you a trade:</div>
+          <div style={{ marginTop: 4 }}>States: {Object.entries(offer.offer.declared).map(([c, n]) => `${n}× ${cName(c)}`).join(', ') || '—'} <span className="civ-lbl">(plus more face-down — could be anything, even a calamity)</span></div>
+          <div>Wants <b>{need}</b> from you, including {Object.entries(declared).map(([c, n]) => `${n}× ${cName(c)}`).join(', ')}.</div>
         </div>
         <button className="civ-btn" disabled={!canAccept} onClick={() => onApply({ type: 'respondTrade', accept: true, give: { actual: giveActual, declared } })}>
-          {canAccept ? `Accept (give ${Object.entries(giveActual).map(([c, n]) => `${n}× ${cardLabel(c)}`).join(', ')})` : 'Cannot fulfil'}
+          {canAccept ? `Accept — give ${Object.entries(giveActual).map(([c, n]) => `${n}× ${cName(c)}`).join(', ')}` : 'Cannot fulfil this request'}
         </button>
         <button className="civ-btn" onClick={() => onApply({ type: 'respondTrade', accept: false })}>Decline</button>
       </div>
     );
   }
 
+  // ---- Building my own offer ----
   const giveTotal = Object.values(give).reduce((a, b) => a + b, 0);
   const declared: Record<string, number> = {};
-  for (const [c, n] of Object.entries(give)) if (!isCal(c)) declared[c] = n;
-  const declaredTotal = Object.values(declared).reduce((a, b) => a + b, 0);
-  const canPropose = giveTotal >= 3 && declaredTotal >= 2 && wantCount >= 3 && wantCard !== '';
-  const toggle = (c: string) => setGive((g) => { const cur = g[c] ?? 0; const max = me.hand[c] ?? 0; const next = cur >= max ? 0 : cur + 1; const out = { ...g }; if (next === 0) delete out[c]; else out[c] = next; return out; });
+  for (const [c, n] of Object.entries(give)) if (!faceDown.has(c)) declared[c] = n;
+  const statedTotal = Object.values(declared).reduce((a, b) => a + b, 0);
+  const canPropose = giveTotal >= 3 && statedTotal >= 2 && wantCount >= 3 && wantCard !== '';
+  const addCard = (c: string) => {
+    setGive((g) => ((g[c] ?? 0) >= (me.hand[c] ?? 0) ? g : { ...g, [c]: (g[c] ?? 0) + 1 }));
+    if (isCal(c)) setFaceDown((s) => new Set(s).add(c)); // calamities default face-down
+  };
+  const removeCard = (c: string) => setGive((g) => { const n = (g[c] ?? 0) - 1; const o = { ...g }; if (n <= 0) { delete o[c]; setFaceDown((s) => { const x = new Set(s); x.delete(c); return x; }); } else o[c] = n; return o; });
+  const toggleFaceDown = (c: string) => setFaceDown((s) => { const x = new Set(s); x.has(c) ? x.delete(c) : x.add(c); return x; });
+  const hint = giveTotal < 3 ? 'Add at least 3 cards to give.' : statedTotal < 2 ? 'Mark at least 2 cards as "stated" (truthful).' : !wantCard ? 'Choose what you want in return.' : '';
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-      <span className="civ-lbl">Your cards (click to add to offer):</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span className="civ-lbl">Your hand — click a card to add it to your offer:</span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-        {Object.entries(me.hand).filter(([, n]) => n > 0).map(([c, n]) => (
-          <button className={`civ-btn ${give[c] ? 'on' : ''}`} key={c} onClick={() => toggle(c)}>{cardLabel(c)} {give[c] ? `(${give[c]}/${n})` : `×${n}`}</button>
-        ))}
+        {Object.entries(me.hand).filter(([, n]) => n > 0).map(([c, n]) => {
+          const left = n - (give[c] ?? 0);
+          return <button className="civ-btn" key={c} disabled={left <= 0} onClick={() => addCard(c)} title={isCal(c) ? 'calamity' : `value ${commodityById.get(c)?.value}`}>{cName(c)} ×{left}</button>;
+        })}
         {Object.keys(me.hand).length === 0 && <span className="civ-lbl">(no cards)</span>}
       </div>
+
+      {giveTotal > 0 && (
+        <div style={{ background: 'rgba(0,0,0,0.12)', borderRadius: 4, padding: '5px 7px' }}>
+          <div className="civ-lbl">You give ({giveTotal}) — {statedTotal} stated{statedTotal < 2 ? ' (need ≥2)' : ''}, {giveTotal - statedTotal} face-down:</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 3 }}>
+            {Object.entries(give).map(([c, n]) => {
+              const down = faceDown.has(c);
+              return (
+                <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, border: '1px solid #7a4a18', borderRadius: 4, padding: '1px 4px', background: down ? 'rgba(60,40,20,0.5)' : 'rgba(90,140,106,0.35)' }}>
+                  {cName(c)} ×{n}
+                  <button className="civ-btn" style={{ padding: '0 5px', fontSize: 11 }} title={down ? 'Given face-down (not declared)' : 'Truthfully stated to your partner'} onClick={() => toggleFaceDown(c)}>{down ? '🙈 face-down' : '👁 stated'}</button>
+                  <button className="civ-btn" style={{ padding: '0 5px' }} onClick={() => removeCard(c)}>✕</button>
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
         <span className="civ-lbl">To</span>
         <select value={partner} onChange={(e) => setPartner(e.target.value)}>{state.seating.filter((p) => p !== actor).map((p) => <option key={p} value={p}>{civById.get(p)?.name}</option>)}</select>
-        <span className="civ-lbl">want 2×</span>
+        <span className="civ-lbl">you want</span>
+        <input type="number" min={3} value={wantCount} onChange={(e) => setWantCount(Math.max(3, +e.target.value))} style={{ width: 46 }} />
+        <span className="civ-lbl">cards, incl. 2×</span>
         <select value={wantCard} onChange={(e) => setWantCard(e.target.value)}>
           <option value="">commodity…</option>
-          {['ochre', 'hides', 'iron', 'papyrus', 'salt', 'timber', 'grain', 'oil', 'cloth', 'wine', 'bronze', 'silver', 'resin', 'spices', 'dye', 'gems', 'gold', 'ivory'].map((c) => <option key={c} value={c}>{c}</option>)}
+          {COMMODITY_ORDER.map((c) => <option key={c} value={c}>{commodityById.get(c)?.name ?? c}</option>)}
         </select>
-        <span className="civ-lbl">in</span>
-        <input type="number" min={3} value={wantCount} onChange={(e) => setWantCount(+e.target.value)} style={{ width: 42 }} />
       </div>
+
+      {hint && <span className="civ-lbl" style={{ color: '#8a3b12' }}>{hint}</span>}
       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-        <button className="civ-btn" disabled={!canPropose} onClick={() => onApply({ type: 'proposeTrade', to: partner, offer: { actual: give, declared }, request: { count: wantCount, declared: { [wantCard]: 2 } } })}>Propose ({giveTotal}↔{wantCount})</button>
+        <button className="civ-btn" disabled={!canPropose} onClick={() => { onApply({ type: 'proposeTrade', to: partner, offer: { actual: give, declared }, request: { count: wantCount, declared: { [wantCard]: 2 } } }); setGive({}); setFaceDown(new Set()); setWantCard(''); }}>
+          Offer {giveTotal || ''} ↔ {wantCount} to {civById.get(partner)?.name}
+        </button>
         {me.treasury >= 18 && (state.trade.stacks[9]?.length ?? 0) > 0 && (
           <button className="civ-btn" onClick={() => onApply({ type: 'buyTradeCard', count: 1 })}>Buy Gold/Ivory (18)</button>
         )}

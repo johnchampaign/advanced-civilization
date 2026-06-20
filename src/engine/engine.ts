@@ -414,11 +414,12 @@ function checkCitySupport(s: GameState): void {
 function runTradeAcquisition(s: GameState): void {
   s.pendingCalamities = [];
   const rng = Rng.fromState(s.rngState);
-  // Each player draws the top card of stacks 1..min(cities,9). More cities ->
-  // more and higher-value cards (rules §26/§27, modeled).
+  // §27.1: a player draws one card from each of stacks 1..N, where N is the
+  // number of cities on the board. A city-less player draws nothing — building
+  // your first city is what starts the flow of trade cards.
   for (const id of s.activeOrder) {
     const p = player(s, id);
-    const cities = Math.max(1, Math.min(9, cityCount(s, id)));
+    const cities = Math.min(9, cityCount(s, id));
     for (let stack = 1; stack <= cities; stack++) {
       const pile = s.trade.stacks[stack];
       if (!pile || pile.length === 0) continue;
@@ -1158,6 +1159,17 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
       return state.activeOrder[n.turnPointer % state.activeOrder.length] ?? null;
     }
     return actingPlayer(state);
+  }
+
+  /** Engine-decided legality (the GameServer prefers this over exact-matching
+   *  legalActions). Essential for parameterized actions — movement orders with a
+   *  chosen subset count, trade proposals — that legalActions() can't enumerate. */
+  tryApplyAction(state: GameState, action: Action, actor: PlayerId): { state: GameState; ok: boolean; reason?: string } {
+    try {
+      return { state: this.applyAction(state, action, actor), ok: true };
+    } catch (e) {
+      return { state, ok: false, reason: (e as Error).message };
+    }
   }
 
   applyAction(state: GameState, action: Action, actor: PlayerId): GameState {

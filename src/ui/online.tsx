@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useGame } from 'digital-boardgame-framework/client';
 import type { GameClientApi } from 'digital-boardgame-framework/client';
 import type { LogEntry } from 'digital-boardgame-framework';
@@ -6,7 +6,7 @@ import { adapter } from '../engine/index.js';
 import type { Action, GameState, PlayerId } from '../engine/index.js';
 import { civilizations, civById } from '../data/index.js';
 import { createCivClient, createNetworkGame, realtimeSubscribe, tokenFromInvite } from '../client/api.js';
-import { ActionList, Board, InfoView, MovementControls, StatusPanel, legalAreas, prettyPhase, useMovementPlanner, type View } from './App.js';
+import { ActionList, Board, InfoView, MovementControls, StatusPanel, legalAreas, nationFocusArea, prettyPhase, scrollBoardTo, useMovementPlanner, type View } from './App.js';
 
 const API = ''; // same-origin; Vite proxies /api -> the GameServer host
 // Placeholder so the movement-planner hook can run before the game view loads.
@@ -77,6 +77,16 @@ export function OnlineGame({ gameId, token }: { gameId: string; token: string })
   const moveActor = game.view && game.yourTurn && game.view.phase === 'movement' ? ((game.you ?? null) as PlayerId | null) : null;
   const planner = useMovementPlanner(game.view ?? EMPTY_STATE, moveActor, game.legalActions, submitAction);
 
+  const boardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!game.view || view !== 'map') return;
+    const me = (game.you ?? game.view.seating[0]!) as PlayerId;
+    const inMove = !!game.yourTurn && game.view.phase === 'movement';
+    const target = inMove && planner.origin ? planner.origin : nationFocusArea(game.view, me);
+    const t = setTimeout(() => scrollBoardTo(boardRef.current, target), 60);
+    return () => clearTimeout(t);
+  }, [game.view?.phase, game.yourTurn, game.you, planner.origin, view]);
+
   if (game.error) return <Centered>Connection error: {game.error.message}</Centered>;
   if (!game.view) return <Centered>Connecting to game {gameId}…</Centered>;
   const s = game.view;
@@ -86,7 +96,7 @@ export function OnlineGame({ gameId, token }: { gameId: string; token: string })
 
   return (
     <>
-      <div style={{ flex: 1, position: 'relative', overflow: 'auto', background: '#0d3a4a' }}>
+      <div ref={boardRef} style={{ flex: 1, position: 'relative', overflow: 'auto', background: '#0d3a4a' }}>
         {view === 'map'
           ? <Board
               state={s}

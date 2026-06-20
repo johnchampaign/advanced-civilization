@@ -43,6 +43,14 @@ export default function App() {
   const planner = useMovementPlanner(state, actor, legal, apply);
   const inMovement = !!actor && seats[actor] === 'human' && state.phase === 'movement';
 
+  const boardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (view !== 'map') return;
+    const target = inMovement && planner.origin ? planner.origin : (actor ? nationFocusArea(state, actor) : null);
+    const t = setTimeout(() => scrollBoardTo(boardRef.current, target), 60);
+    return () => clearTimeout(t);
+  }, [actor, state.phase, view, inMovement, planner.origin]);
+
   const newGame = () => { const seed = Date.now() & 0xffff; rng.current = new Rng(seed); setState(createGame({ players: DEFAULT_PLAYERS, seed, maxTurns: 60 })); setView('map'); };
 
   // The nation shown in the status/info panels: the current actor, else seat 0.
@@ -50,7 +58,7 @@ export default function App() {
 
   return (
     <>
-      <div style={{ flex: 1, position: 'relative', overflow: 'auto', background: '#0d3a4a' }}>
+      <div ref={boardRef} style={{ flex: 1, position: 'relative', overflow: 'auto', background: '#0d3a4a' }}>
         {view === 'map'
           ? <Board
               state={state}
@@ -123,6 +131,34 @@ function messageFor(phase: string): string {
     movement: 'is moving', cityConstruction: 'is building cities', trade: 'is trading', acquireAdvances: 'is acquiring advances',
   };
   return verbs[phase] ?? prettyPhase(phase);
+}
+
+/** The area best representing a nation's position (largest stack / a city), used
+ *  to recenter the map on the player. */
+export function nationFocusArea(state: GameState, id: PlayerId): string | null {
+  let best: string | null = null, bestScore = -1;
+  for (const [aid, a] of Object.entries(state.areas)) {
+    if (!anchors[aid]) continue;
+    const score = (a.tokens[id] ?? 0) + (a.city === id ? 6 : 0);
+    if (score > bestScore && score > 0) { bestScore = score; best = aid; }
+  }
+  return best;
+}
+
+/** Smoothly scroll the board's scroll container so `areaId` is centered. The map
+ *  SVG has no height until it loads, so defer until the image is ready. */
+export function scrollBoardTo(container: HTMLElement | null, areaId: string | null) {
+  if (!container || !areaId) return;
+  const an = anchors[areaId];
+  const img = container.querySelector('img[alt="map"]') as HTMLImageElement | null;
+  if (!an || !img) return;
+  const doScroll = () => {
+    if (!img.clientWidth || !img.clientHeight) return;
+    const sx = img.clientWidth / MAIN_VIEWBOX.w, sy = img.clientHeight / MAIN_VIEWBOX.h;
+    container.scrollTo({ left: an.x * sx - container.clientWidth / 2, top: an.y * sy - container.clientHeight / 2, behavior: 'smooth' });
+  };
+  if (img.complete && img.clientHeight) doScroll();
+  else img.addEventListener('load', doScroll, { once: true });
 }
 
 export function legalAreas(legal: Action[], _phase: string): Set<string> {

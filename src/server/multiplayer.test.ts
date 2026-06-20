@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Rng } from 'digital-boardgame-framework';
 import { GameServer, NoopBroadcaster, NoopNotifier } from 'digital-boardgame-framework/server';
 import { FsStore } from 'digital-boardgame-framework/server/node';
 import { adapter, codec, createGame } from '../engine/index.js';
-import type { Action, GameState } from '../engine/index.js';
+import type { Action, GameState, PlayerId } from '../engine/index.js';
+import { HeuristicAI } from '../ai/heuristic.js';
 
 function makeServer() {
   const store = new FsStore(mkdtempSync(join(tmpdir(), 'civ-mp-')));
@@ -50,17 +52,25 @@ describe('async multiplayer (GameServer + filesystem store)', () => {
 
   it('persists moves and redacts opponent hands in per-seat views (§27.4)', async () => {
     const { s, gameId, egypt, babylon } = await newGame();
-    // Play (passing) until trade-card acquisition has filled hands (the trade phase).
+    // Drive both seats with the heuristic AI so cities actually get built — a
+    // city-less player draws no trade cards (§27.1), so we must play to a trade
+    // phase where Egypt holds a city to have any hand to redact.
+    const ai = new HeuristicAI();
+    const egyptHand = (n: GameState) => Object.values(n.players['egypt']!.hand).reduce((a, b) => a + b, 0);
     let guard = 0;
-    while (guard++ < 300) {
+    while (guard++ < 600) {
       const info = await s.fetch(gameId, egypt);
-      if (info.view.phase === 'trade' || info.gameOver) break;
-      await s.submit(gameId, info.yourTurn ? egypt : babylon, { type: 'pass' });
+      if (info.gameOver) break;
+      if (info.view.phase === 'trade' && egyptHand(info.view) > 0) break;
+      const seat = info.yourTurn ? egypt : babylon;
+      const view = info.yourTurn ? info.view : (await s.fetch(gameId, babylon)).view;
+      const actor: PlayerId = info.yourTurn ? 'egypt' : 'babylon';
+      const action = await ai.selectAction({ state: view, actor, adapter, rng: new Rng(guard) });
+      await s.submit(gameId, seat, action);
     }
     const egyptView = await s.fetch(gameId, egypt);
     const babylonView = await s.fetch(gameId, babylon);
     expect(egyptView.view.phase).toBe('trade');
-    const egyptHand = (n: GameState) => Object.values(n.players['egypt']!.hand).reduce((a, b) => a + b, 0);
     expect(egyptHand(egyptView.view)).toBeGreaterThan(0); // Egypt sees its own cards…
     expect(egyptHand(babylonView.view)).toBe(0);          // …redacted in Babylon's view
   });

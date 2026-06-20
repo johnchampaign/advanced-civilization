@@ -226,3 +226,60 @@ describe('victory scoring', () => {
     expect(score).toBe(45 + 12 + 50 + 200 + 50);
   });
 });
+
+describe('movement & trade-card acquisition rules', () => {
+  // Advance the game (everyone passing) until it reaches the given phase.
+  function advanceToPhase(s: GameState, phase: string, cap = 400): GameState {
+    let g = s, n = 0;
+    while (g.phase !== phase && n++ < cap) {
+      const actor = adapter.currentActor(g);
+      if (!actor) break;
+      g = adapter.applyAction(g, { type: 'pass' }, actor);
+    }
+    return g;
+  }
+
+  it('accepts a partial-count move via tryApplyAction (subset of a stack)', () => {
+    const g = advanceToPhase(createGame({ players: ['egypt', 'babylon'], seed: 7 }), 'movement');
+    expect(g.phase).toBe('movement');
+    const actor = adapter.currentActor(g)!;
+    // Find an area where the actor has >= 2 tokens and a non-water neighbour.
+    const moves = adapter.legalActions(g, actor).filter((a): a is Extract<Action, { type: 'move' }> => a.type === 'move' && !a.moves[0]!.byShip);
+    const full = moves.find((m) => m.moves[0]!.count >= 2)!;
+    expect(full).toBeTruthy();
+    const { from, to } = full.moves[0]!;
+    const before = g.areas[from]!.tokens[actor]!;
+    // Move just ONE token — not an enumerated full-stack option.
+    const r = adapter.tryApplyAction(g, { type: 'move', moves: [{ from, to, count: 1 }] }, actor);
+    expect(r.ok).toBe(true);
+    expect(r.state.areas[from]!.tokens[actor] ?? 0).toBe(before - 1);
+    expect(r.state.areas[to]!.tokens[actor] ?? 0).toBe(1);
+  });
+
+  it('rejects an illegal move (too many tokens) via tryApplyAction', () => {
+    const g = advanceToPhase(createGame({ players: ['egypt', 'babylon'], seed: 7 }), 'movement');
+    const actor = adapter.currentActor(g)!;
+    const move = adapter.legalActions(g, actor).find((a): a is Extract<Action, { type: 'move' }> => a.type === 'move')!;
+    const { from, to } = move.moves[0]!;
+    const r = adapter.tryApplyAction(g, { type: 'move', moves: [{ from, to, count: 999 }] }, actor);
+    expect(r.ok).toBe(false);
+  });
+
+  it('a city-less player draws no trade cards (§27.1)', () => {
+    // Everyone passes for a full turn, so no city is ever built.
+    let g = createGame({ players: ['egypt', 'babylon'], seed: 7 });
+    let n = 0;
+    while (g.turn < 2 && n++ < 400) {
+      const actor = adapter.currentActor(g);
+      if (!actor) break;
+      g = adapter.applyAction(g, { type: 'pass' }, actor);
+    }
+    // A full turn (incl. trade-card acquisition) has elapsed with no cities.
+    for (const id of g.seating) {
+      const cities = Object.values(g.areas).filter((a) => a.city === id).length;
+      const hand = Object.values(g.players[id]!.hand).reduce((x, y) => x + y, 0);
+      expect(cities).toBe(0);
+      expect(hand).toBe(0);
+    }
+  });
+});

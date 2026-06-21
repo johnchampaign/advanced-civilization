@@ -93,6 +93,11 @@ export function OnlineGame({ gameId, token }: { gameId: string; token: string })
   const you = (game.you ?? s.seating[0]!) as PlayerId;
   const onClock = adapter.currentActor(s); // safe on a redacted view (no hidden info used)
   const inMovement = !!game.yourTurn && s.phase === 'movement';
+  // Population-expansion placement by clicking the map.
+  const inPlacement = !!game.yourTurn && s.phase === 'populationExpansion';
+  const placeCaps = (inPlacement ? s.expansion?.caps[you] : undefined) ?? {};
+  const placeHighlight = new Set(Object.entries(placeCaps).filter(([, c]) => c > 0).map(([a]) => a));
+  const onPlaceClick = (area: string | null) => { if (area && (placeCaps[area] ?? 0) > 0) submitAction({ type: 'placeTokens', placements: { [area]: 1 } }); };
 
   return (
     <>
@@ -101,8 +106,8 @@ export function OnlineGame({ gameId, token }: { gameId: string; token: string })
           ? <Board
               state={inMovement ? planner.previewState : s}
               selected={inMovement ? planner.origin : selected}
-              onSelect={inMovement ? planner.onBoardClick : setSelected}
-              highlight={inMovement ? planner.highlight : legalAreas(game.legalActions, s.phase)}
+              onSelect={inMovement ? planner.onBoardClick : inPlacement ? onPlaceClick : setSelected}
+              highlight={inMovement ? planner.highlight : inPlacement ? placeHighlight : legalAreas(game.legalActions, s.phase)}
               origin={inMovement ? planner.origin : null}
               moved={inMovement ? planner.moved : undefined}
               zoomTo={inMovement ? planner.origin : null}

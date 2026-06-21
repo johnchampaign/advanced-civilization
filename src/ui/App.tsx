@@ -44,6 +44,11 @@ export default function App() {
 
   const planner = useMovementPlanner(state, actor, legal, apply);
   const inMovement = !!actor && seats[actor] === 'human' && state.phase === 'movement';
+  // Population-expansion placement by clicking the map (areas that can still grow).
+  const inPlacement = !!actor && seats[actor] === 'human' && state.phase === 'populationExpansion';
+  const placeCaps = (inPlacement && actor ? state.expansion?.caps[actor] : undefined) ?? {};
+  const placeHighlight = useMemo(() => new Set(Object.entries(placeCaps).filter(([, c]) => c > 0).map(([a]) => a)), [placeCaps]);
+  const onPlaceClick = useCallback((area: string | null) => { if (area && (placeCaps[area] ?? 0) > 0) apply({ type: 'placeTokens', placements: { [area]: 1 } }); }, [placeCaps, apply]);
 
   const boardRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -65,8 +70,8 @@ export default function App() {
           ? <Board
               state={inMovement ? planner.previewState : state}
               selected={inMovement ? planner.origin : selectedArea}
-              onSelect={inMovement ? planner.onBoardClick : setSelectedArea}
-              highlight={inMovement ? planner.highlight : legalAreas(legal, state.phase)}
+              onSelect={inMovement ? planner.onBoardClick : inPlacement ? onPlaceClick : setSelectedArea}
+              highlight={inMovement ? planner.highlight : inPlacement ? placeHighlight : legalAreas(legal, state.phase)}
               origin={inMovement ? planner.origin : null}
               moved={inMovement ? planner.moved : undefined}
               zoomTo={inMovement ? planner.origin : null}
@@ -623,7 +628,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
     const rem = state.expansion?.remaining[actor] ?? 0;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <span className="civ-lbl">Not enough tokens in stock for full growth — place your <b>{rem}</b> remaining token{rem === 1 ? '' : 's'} (§13): click an area to add one.</span>
+        <span className="civ-lbl">Not enough tokens in stock for full growth — place your <b>{rem}</b> remaining token{rem === 1 ? '' : 's'} (§13): <b>click a highlighted area on the map</b> to add one, or use a button below.</span>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
           {places.map((b, i) => { const aid = Object.keys(b.placements)[0]!; return <button className="civ-btn" key={i} onClick={() => onApply(b)}>+1 {areaById.get(aid)?.name}</button>; })}
         </div>

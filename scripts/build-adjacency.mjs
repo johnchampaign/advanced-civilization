@@ -54,6 +54,17 @@ for (const ids of Object.values(byName)) {
   for (const id of ids) for (const n of adjacency[id]) union.add(n);
   for (const id of ids) { for (const n of union) if (n !== id) adjacency[id].push(n); for (const o of ids) if (o !== id) adjacency[id].push(o); }
 }
+// Curated removals: land areas whose polygons touch only across a sea coastline
+// (the extractor over-connects them). They must be crossed by ship via the sea
+// area instead. Both stay reachable by land through other neighbours.
+const REMOVE_EDGES = [
+  ['ptolemais', 'sinai'],   // separated by the Red Sea (report 7ff3c698)
+  ['ptolemais', 'midian'],  // separated by the Red Sea
+];
+for (const [a, b] of REMOVE_EDGES) {
+  if (adjacency[a]) adjacency[a] = adjacency[a].filter((x) => x !== b);
+  if (adjacency[b]) adjacency[b] = adjacency[b].filter((x) => x !== a);
+}
 for (const k of Object.keys(adjacency)) adjacency[k] = [...new Set(adjacency[k])].sort();
 
 // Connectivity check: how many connected components, and are all panels joined?

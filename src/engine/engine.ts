@@ -140,11 +140,12 @@ function runTaxation(s: GameState): void {
   for (const id of s.seating) {
     const p = player(s, id);
     const cities = cityCount(s, id);
-    const rate = 2; // default tax rate (Coinage may vary, §32.421 — future)
+    // Default rate 2; a player with Coinage may set 1-3 (§32.421).
+    const rate = has(p, 'coinage') ? Math.max(1, Math.min(3, p.taxRate ?? 2)) : 2;
     const collected = Math.min(p.stock, cities * rate);
     p.stock -= collected;
     p.treasury += collected;
-    if (collected > 0) s.log.push(`${id} collected ${collected} tax from ${cities} cities.`);
+    if (collected > 0) s.log.push(`${id} collected ${collected} tax (rate ${rate}) from ${cities} cities.`);
   }
 }
 
@@ -1102,6 +1103,10 @@ function applyBuyAdvance(s: GameState, actor: PlayerId, advanceId: string, spend
   for (const [cid, n] of Object.entries(spendCommodities)) if (n > 0) spentHand[cid] = n;
   const cardValue = handValue(spentHand, { mining: has(p, 'mining') });
   const credit = creditTowards(p.advances, advanceId);
+  // Treasury is paid in single tokens, so you pay EXACTLY the remaining cost from
+  // it — never overpay. (Commodity sets are indivisible, so card value may exceed
+  // the cost; that excess is unavoidable, but treasury must not be wasted.)
+  spendTreasury = Math.min(spendTreasury, Math.max(0, adv.cost - cardValue - credit));
   const paid = cardValue + spendTreasury + credit;
   if (paid < adv.cost) throw new Error(`insufficient payment: ${paid} < ${adv.cost}`);
   // Deduct, returning spent commodity cards to the bottom of their stack (§31 —
@@ -1298,6 +1303,13 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         applyBuyTradeCard(s, actor, action.count);
         s.negotiation.turnPointer += 1;
         break;
+      case 'setTaxRate': {
+        const p = player(s, actor);
+        if (!has(p, 'coinage')) throw new Error('only a player with Coinage may set the tax rate (§32.421)');
+        p.taxRate = Math.max(1, Math.min(3, Math.trunc(action.rate)));
+        s.log.push(`${actor} sets their tax rate to ${p.taxRate} (applies next taxation).`);
+        break; // adjusting the rate does not consume the turn
+      }
       case 'placeTokens':
         if (s.phase !== 'populationExpansion') throw new Error('placeTokens only in population expansion');
         applyPlaceTokens(s, actor, action.placements);
@@ -1333,6 +1345,8 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
     if (this.currentActor(state) !== actor) return [];
     const p = player(state, actor);
     const out: Action[] = [{ type: 'pass' }];
+    // Coinage holders may adjust their tax rate on any of their turns (§32.421).
+    if (has(p, 'coinage')) for (const rate of [1, 2, 3]) if (rate !== (p.taxRate ?? 2)) out.push({ type: 'setTaxRate', rate });
     switch (state.phase) {
       case 'populationExpansion': {
         // Constrained growth: offer placing one token into each area that can

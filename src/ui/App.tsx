@@ -103,9 +103,12 @@ export default function App() {
                 {actor ? <><b style={{ color: civById.get(actor)?.color }}>{civById.get(actor)?.name}</b> — {messageFor(state.phase)}</> : 'Resolving…'}
               </div>
               {actor && seats[actor] === 'human'
-                ? (inMovement
-                    ? <MovementControls planner={planner} />
-                    : <ActionList legal={legal} selectedArea={selectedArea} phase={state.phase} onApply={apply} state={state} actor={actor} />)
+                ? (<>
+                    <TaxRateControl state={state} actor={actor} onApply={apply} />
+                    {inMovement
+                      ? <MovementControls planner={planner} />
+                      : <ActionList legal={legal} selectedArea={selectedArea} phase={state.phase} onApply={apply} state={state} actor={actor} />}
+                  </>)
                 : <div className="civ-lbl" style={{ textAlign: 'center', padding: 8 }}>AI is taking its turn…</div>}
             </>
           )}
@@ -625,6 +628,20 @@ export function MovementControls({ planner }: { planner: MovementPlanner }) {
   );
 }
 
+/** Tax-rate selector, shown only to a player who owns Coinage (§32.421). */
+export function TaxRateControl({ state, actor, onApply }: { state: GameState; actor: PlayerId; onApply: (a: Action) => void }) {
+  const p = state.players[actor];
+  if (!p || !p.advances.includes('coinage')) return null;
+  const rate = p.taxRate ?? 2;
+  return (
+    <div className="civ-lbl" style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+      <b>Tax rate</b> (Coinage):
+      {[1, 2, 3].map((r) => <button key={r} className={`civ-btn ${rate === r ? 'on' : ''}`} style={{ padding: '0 8px' }} onClick={() => onApply({ type: 'setTaxRate', rate: r })}>{r}</button>)}
+      <span>· applies at your next taxation</span>
+    </div>
+  );
+}
+
 // ---- Per-phase action controls (reused) ----------------------------------
 
 export function ActionList({ legal, selectedArea, phase, onApply, state, actor }: {
@@ -714,11 +731,15 @@ function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: Pla
   const commHand = Object.entries(p.hand).filter(([c, n]) => !isCal(c) && n > 0).sort((a, b) => byCardValue(a[0], b[0]));
   const cardVal = handValue(spend, { mining });
   const credit = adv ? creditTowards(p.advances, adv.id) : 0;
-  const paid = cardVal + treasury + credit;
+  // You pay only the remaining cost from treasury — never overpay.
+  const treasuryNeeded = adv ? Math.max(0, adv.cost - cardVal - credit) : 0;
+  const maxTreasury = Math.min(p.treasury, treasuryNeeded);
+  const treasuryUsed = Math.min(treasury, maxTreasury);
+  const paid = cardVal + treasuryUsed + credit;
   const canBuy = !!adv && paid >= adv.cost;
   const addSpend = (c: string) => setSpend((s) => ((s[c] ?? 0) >= (p.hand[c] ?? 0) ? s : { ...s, [c]: (s[c] ?? 0) + 1 }));
   const rmSpend = (c: string) => setSpend((s) => { const n = (s[c] ?? 0) - 1; const o = { ...s }; if (n <= 0) delete o[c]; else o[c] = n; return o; });
-  const buy = () => { onApply({ type: 'buyAdvance', advance: sel, spendCommodities: spend, spendTreasury: treasury }); setSel(''); setSpend({}); setTreasury(0); };
+  const buy = () => { onApply({ type: 'buyAdvance', advance: sel, spendCommodities: spend, spendTreasury: treasuryUsed }); setSel(''); setSpend({}); setTreasury(0); };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -745,9 +766,9 @@ function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: Pla
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span className="civ-lbl">Treasury</span>
-            <input type="range" min={0} max={p.treasury} value={treasury} onChange={(e) => setTreasury(+e.target.value)} style={{ width: 110 }} />
-            <b>{treasury}</b>
-            <span className="civ-lbl">· paid <b style={{ color: canBuy ? '#2e6b3a' : '#8a3b12' }}>{paid}</b> / {adv.cost} (cards {cardVal}{credit ? ` + ${credit} credit` : ''} + {treasury} treasury)</span>
+            <input type="range" min={0} max={Math.max(0, maxTreasury)} value={treasuryUsed} onChange={(e) => setTreasury(+e.target.value)} style={{ width: 110 }} disabled={maxTreasury <= 0} />
+            <b>{treasuryUsed}</b>
+            <span className="civ-lbl">· paid <b style={{ color: canBuy ? '#2e6b3a' : '#8a3b12' }}>{paid}</b> / {adv.cost} (cards {cardVal}{credit ? ` + ${credit} credit` : ''} + {treasuryUsed} treasury) — exact, no overpay</span>
           </div>
           <button className="civ-btn" disabled={!canBuy} onClick={buy}>{canBuy ? `Buy ${adv.name}` : `Need ${adv.cost - paid} more`}</button>
         </div>

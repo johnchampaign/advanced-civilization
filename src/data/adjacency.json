@@ -1079,7 +1079,6 @@
  "midian": [
   "arabia",
   "petra",
-  "ptolemais",
   "red-sea",
   "sinai"
  ],
@@ -1202,10 +1201,8 @@
  "ptolemais": [
   "buhen",
   "eastern-desert",
-  "midian",
   "nubia",
   "red-sea",
-  "sinai",
   "thebes",
   "upper-egypt"
  ],
@@ -1295,7 +1292,6 @@
   "jerusalem",
   "midian",
   "petra",
-  "ptolemais",
   "tanis"
  ],
  "sinope": [

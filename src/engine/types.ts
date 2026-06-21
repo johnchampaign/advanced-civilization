@@ -93,6 +93,9 @@ export interface PlayerState {
   shipsAvailable: number;
   /** Census count recorded this turn (population on board). */
   census: number;
+  /** Tax rate this player levies each turn (§19, 1-3). Only adjustable with the
+   *  Coinage advance (§32.421); defaults to 2. */
+  taxRate?: number;
   /** Owned civilization advance ids. */
   advances: string[];
   /** Trade-card hand: card id -> count. Keys are commodity ids OR `calamity:<id>`

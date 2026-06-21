@@ -132,7 +132,7 @@ export function OnlineGame({ gameId, token }: { gameId: string; token: string })
             </div>
           )}
         </div>
-        <div className="civ-panel" style={{ width: 210, padding: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div className="civ-panel" style={{ width: 210, padding: 6, display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto', minHeight: 0 }}>
           <div style={{ textAlign: 'center', fontWeight: 800, letterSpacing: 1 }}>{prettyPhase(s.phase).toUpperCase()}</div>
           <div className="civ-lbl">Turn {s.turn} · you are <b style={{ color: civById.get(you)?.color }}>{civById.get(you)?.name}</b></div>
           <button className="civ-btn" onClick={() => downloadLog(s, gameId)}>Download game log</button>

@@ -106,7 +106,7 @@ export default function App() {
         </div>
 
         {/* right: phase + minimap */}
-        <div className="civ-panel" style={{ width: 200, padding: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div className="civ-panel" style={{ width: 200, padding: 6, display: 'flex', flexDirection: 'column', gap: 4, overflowY: 'auto', minHeight: 0 }}>
           <div style={{ textAlign: 'center', fontWeight: 800, letterSpacing: 1 }}>{prettyPhase(state.phase).toUpperCase()}</div>
           <div className="civ-lbl">Turn {state.turn}</div>
           <div style={{ flex: 1, border: '2px solid #7a4a18', background: '#0d3a4a', overflow: 'hidden' }}>
@@ -201,7 +201,11 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
         {Object.keys(anchors).map((aid) => {
           const an = anchors[aid]!;
           const a = state.areas[aid] ?? { tokens: {} as Record<string, number> };
+          const meta = areaById.get(aid);
           const owners = Object.entries(a.tokens).filter(([, n]) => n > 0);
+          // Carrying-capacity tag, shown when tokens/city would cover the printed
+          // number on the map (occupied non-water areas).
+          const showCap = !!meta && !meta.isWater && (owners.length > 0 || !!a.city) && meta.sustains > 0;
           const isHi = highlight.has(aid);
           const isSel = selected === aid;
           const isOrigin = origin === aid;
@@ -229,6 +233,12 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
               {ships.map(([owner], i) => (
                 <text key={'s' + owner} x={an.x - an.r + i * 7} y={an.y - an.r - 2} fontSize={an.r * 0.9} fill={civById.get(owner)?.color ?? '#888'}>⛵</text>
               ))}
+              {showCap && (
+                <g pointerEvents="none">
+                  <rect x={an.x + an.r - 1} y={an.y - an.r - 9} width={13} height={12} rx={2} fill="#1a1410" stroke="#ffd23f" strokeWidth={0.6} opacity={0.92} />
+                  <text x={an.x + an.r + 5.5} y={an.y - an.r + 0.5} textAnchor="middle" fontSize={9} fontWeight="bold" fill="#ffd23f">{meta!.sustains}</text>
+                </g>
+              )}
             </g>
           );
         })}

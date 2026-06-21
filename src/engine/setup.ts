@@ -14,17 +14,15 @@ export interface NewGameOptions {
   maxTurns?: number;
 }
 
-/** Build the trade-card stacks (rules §15.2): each commodity goes into its
- *  stack; each tradable calamity is shuffled into the commodity stack of its
- *  level. Non-tradable calamities are NOT in the stacks here — they are added to
- *  the draw during the acquisition phase as the rules direct, but for the
- *  digital model. Arrays are bottom→top: cards are drawn from the END (top).
+/** Build the trade-card stacks (rules §15.2). Arrays are bottom→top: cards are
+ *  drawn from the END (top, via pop()).
  *
  *  Per §15.2: for each stack 2-9, set aside `numPlayers` commodity cards as a
- *  top buffer (so no calamity is drawn until play is underway), shuffle the
- *  tradable calamity of that value into the rest, put the buffer back on top,
- *  and place the non-tradable calamity at the very bottom. The first stack gets
- *  no calamity. */
+ *  top buffer (so no calamity can be drawn on the first round), place that
+ *  level's calamities (tradable AND non-tradable) directly beneath the buffer,
+ *  then the buffer back on top — so a calamity surfaces on the (numPlayers+1)th
+ *  draw rather than being buried. The first stack gets no calamity. Resolved or
+ *  spent cards later return to the bottom and re-circulate. */
 export function buildTradeStacks(rng: Rng, numPlayers: number): TradeStacks {
   const stacks: Record<number, string[]> = {};
   const commodities: Record<number, string[]> = {};
@@ -34,13 +32,16 @@ export function buildTradeStacks(rng: Rng, numPlayers: number): TradeStacks {
   for (let s = 1; s <= 9; s++) {
     const shuffled = rng.shuffle(commodities[s]!);
     if (s === 1) { stacks[1] = shuffled; continue; } // first stack: no calamity, no buffer
+    // §15.2: deal `numPlayers` commodities off the top as a buffer, place the
+    // stack's calamities directly beneath it, then the buffer back on top — so
+    // the calamity surfaces on the (numPlayers+1)th draw, not buried at the
+    // bottom. Both tradable and non-tradable calamities sit in this band.
     const buffer = shuffled.slice(0, numPlayers); // drawn first (kept on top)
     const rest = shuffled.slice(numPlayers);
-    const tradable = ALL_CALAMITIES.filter((c) => c.tradable && c.level === s).map((c) => `calamity:${c.id}`);
-    const middle = rng.shuffle([...rest, ...tradable]);
-    const nonTradable = ALL_CALAMITIES.filter((c) => !c.tradable && c.level === s).map((c) => `calamity:${c.id}`);
-    // bottom (index 0) → top (end): non-tradable, middle (with tradable), buffer.
-    stacks[s] = [...nonTradable, ...middle, ...buffer];
+    const cals = rng.shuffle(ALL_CALAMITIES.filter((c) => c.level === s).map((c) => `calamity:${c.id}`));
+    // bottom (index 0) → top (end): rest, calamities, buffer.  pop() draws from
+    // the end: buffer first, then the calamities, then the remaining commodities.
+    stacks[s] = [...rest, ...cals, ...buffer];
   }
   return { stacks };
 }
@@ -92,7 +93,7 @@ export function createInitialState(opts: NewGameOptions): GameState {
     areas,
     trade,
     pendingCalamities: [],
-    negotiation: { turnPointer: 0, passStreak: 0, actions: 0, nextOfferId: 0, offers: [], completed: [] },
+    negotiation: { turnPointer: 0, passStreak: 0, actions: 0, nextOfferId: 0, done: [], offers: [], completed: [] },
     calamityTradedFrom: {},
     rngState: rng.serialize(),
     log: [`Game started with ${seating.length} players (seed ${seed}).`],

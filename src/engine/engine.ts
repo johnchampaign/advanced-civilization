@@ -977,7 +977,7 @@ function enterPhase(s: GameState, phase: Phase): void {
     s.activeOrder = s.activeOrder.length ? s.activeOrder : censusOrder(s);
     s.actedThisPhase = [];
     if (phase === 'trade') {
-      s.negotiation = { turnPointer: 0, passStreak: 0, actions: 0, nextOfferId: 0, offers: [], completed: [] };
+      s.negotiation = { turnPointer: 0, passStreak: 0, actions: 0, nextOfferId: 0, done: [], offers: [], completed: [] };
     }
     if (phase === 'shipConstruction') runShipMaintenance(s); // §22.3, before building
     // §13: apply growth now (auto when stock allows); constrained players are
@@ -1128,7 +1128,9 @@ function applyBuyAdvance(s: GameState, actor: PlayerId, advanceId: string, spend
 function tradePhaseEnded(s: GameState): boolean {
   const n = s.negotiation;
   const cap = 12 * Math.max(1, s.activeOrder.length);
-  return n.passStreak >= s.activeOrder.length || (n.actions ?? 0) >= cap;
+  // Phase ends once every player has passed ("Done trading"), or the cap is hit.
+  const done = n.done ?? [];
+  return s.activeOrder.every((p) => done.includes(p)) || (n.actions ?? 0) >= cap;
 }
 
 const commodityName = (c: string) => (isCalamityCard(c) ? calamityById.get(calamityIdOf(c))?.name ?? c : commodityById.get(c)?.name ?? c);
@@ -1170,9 +1172,20 @@ function applyAcceptResponse(s: GameState, actor: PlayerId, a: { offerId: number
   if (o.from !== actor) throw new Error('only the offer owner may accept a response');
   const r = o.responses.find((x) => x.from === a.responder);
   if (!r) throw new Error('no such response');
-  // Both must still hold what they pledged (they may have traded since).
-  if (!isSubMultiset(o.give.actual, player(s, actor).hand)) throw new Error('you no longer hold your offered cards');
-  if (!isSubMultiset(r.give.actual, player(s, r.from).hand)) throw new Error(`${r.from} no longer holds the responded cards`);
+  // A side may have traded away its pledged cards since. Don't crash the deal —
+  // void the stale offer/response gracefully so negotiation can continue.
+  if (!isSubMultiset(o.give.actual, player(s, actor).hand)) {
+    s.negotiation.offers = s.negotiation.offers.filter((x) => x.id !== o.id);
+    s.negotiation.actions = (s.negotiation.actions ?? 0) + 1;
+    s.log.push(`${actor}'s trade offer expired (cards no longer held).`);
+    return;
+  }
+  if (!isSubMultiset(r.give.actual, player(s, r.from).hand)) {
+    o.responses = o.responses.filter((x) => x.from !== r.from);
+    s.negotiation.actions = (s.negotiation.actions ?? 0) + 1;
+    s.log.push(`${r.from}'s trade response expired (cards no longer held).`);
+    return;
+  }
   transferCards(s, actor, r.from, o.give.actual);
   transferCards(s, r.from, actor, r.give.actual);
   (s.negotiation.completed ??= []).push({ a: actor, b: r.from, aGave: o.give, bGave: r.give });
@@ -1218,7 +1231,13 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
     if (state.phase === 'trade') {
       const n = state.negotiation;
       if (tradePhaseEnded(state)) return null;
-      return state.activeOrder[n.turnPointer % state.activeOrder.length] ?? null;
+      const done = n.done ?? [];
+      const order = state.activeOrder;
+      for (let i = 0; i < order.length; i++) {
+        const cand = order[(n.turnPointer + i) % order.length];
+        if (cand && !done.includes(cand)) return cand; // skip players who are done trading
+      }
+      return null;
     }
     return actingPlayer(state);
   }
@@ -1242,33 +1261,43 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
     switch (action.type) {
       case 'pass':
         if (s.phase === 'trade') {
-          // Yield your negotiation turn; a full pass round ends the phase.
+          // "Done trading": don't prompt this player again; phase ends when all
+          // are done. (Other players' offers no longer force you back in.)
+          s.negotiation.done = [...(s.negotiation.done ?? []), actor].filter((p, i, a) => a.indexOf(p) === i);
           s.negotiation.passStreak += 1;
           s.negotiation.turnPointer += 1;
         } else if (!s.actedThisPhase.includes(actor)) {
           s.actedThisPhase.push(actor);
         }
         break;
+      // Trade actions are round-robin: each advances the turn to the next player
+      // who isn't done. Players accumulate offers/responses across rounds and
+      // get later turns to accept; only `pass` marks you done.
       case 'postOffer':
         if (s.phase !== 'trade') throw new Error('postOffer only in trade phase');
         applyPostOffer(s, actor, action);
-        break; // turn stays with you — respond/accept/pass next
+        s.negotiation.turnPointer += 1;
+        break;
       case 'respondOffer':
         if (s.phase !== 'trade') throw new Error('respondOffer only in trade phase');
         applyRespondOffer(s, actor, action);
+        s.negotiation.turnPointer += 1;
         break;
       case 'acceptResponse':
         if (s.phase !== 'trade') throw new Error('acceptResponse only in trade phase');
         applyAcceptResponse(s, actor, action);
+        s.negotiation.turnPointer += 1;
         break;
       case 'withdrawOffer':
         if (s.phase !== 'trade') throw new Error('withdrawOffer only in trade phase');
         applyWithdrawOffer(s, actor);
+        s.negotiation.turnPointer += 1;
         break;
       case 'buyTradeCard':
         if (s.phase !== 'trade') throw new Error('buyTradeCard only in trade phase');
         applyBuyTradeCard(s, actor, action.count);
-        break; // stays this player's turn; may propose/pass next
+        s.negotiation.turnPointer += 1;
+        break;
       case 'placeTokens':
         if (s.phase !== 'populationExpansion') throw new Error('placeTokens only in population expansion');
         applyPlaceTokens(s, actor, action.placements);

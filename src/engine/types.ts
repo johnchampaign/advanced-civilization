@@ -155,6 +155,9 @@ export interface GameState {
     actions?: number;
     /** Monotonic id source for offers. */
     nextOfferId?: number;
+    /** Players who have passed ("Done trading") — skipped for the rest of the
+     *  phase so they aren't repeatedly prompted; the phase ends when all are done. */
+    done?: PlayerId[];
     /** Standing open offers anyone may respond to. */
     offers: OpenOffer[];
     /** Deals executed this phase (for the Trade Details review). */

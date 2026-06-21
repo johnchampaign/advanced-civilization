@@ -4,7 +4,7 @@ import { adapter, createGame } from '../engine/index.js';
 import type { Action, GameState, PlayerId } from '../engine/index.js';
 import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, civById, commodityById, epochs } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
-import { handValue, creditTowards } from '../engine/helpers.js';
+import { handValue, creditTowards, commoditySetValue } from '../engine/helpers.js';
 import { submitStandaloneReport, fetchMyReports, type MyReport } from '../client/api.js';
 import { anchors, MAIN_VIEWBOX } from './anchors.js';
 
@@ -410,18 +410,25 @@ function ToolsView({ state, focus }: { state: GameState; focus: PlayerId }) {
 
 function GoodsView({ state, focus }: { state: GameState; focus: PlayerId }) {
   const hand = state.players[focus]!.hand;
+  const mining = state.players[focus]!.advances.includes('mining');
   const entries = Object.entries(hand).filter(([, n]) => n > 0);
+  const commCount = entries.filter(([c]) => !isCal(c)).reduce((a, [, n]) => a + n, 0);
   return (
     <div style={{ padding: 16, color: '#eee' }}>
       <h2 style={{ marginTop: 0 }}>Trade Cards — {civById.get(focus)?.name}</h2>
+      <p className="civ-lbl" style={{ marginTop: 0 }}>
+        {commCount} commodity card{commCount === 1 ? '' : 's'} · total value <b>{handValue(hand, { mining })}</b>
+        {' '}— a card alone is worth its number; a set of n of the same commodity is worth n² × its value, so collecting pays off.
+      </p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {entries.length === 0 && <span>(no cards)</span>}
         {entries.map(([c, n]) => {
           const cal = isCal(c);
+          const setVal = cal ? 0 : commoditySetValue(c, n);
           return (
             <div key={c} style={{ padding: 8, borderRadius: 4, background: cal ? '#7a2a2a' : '#33506a', minWidth: 90 }}>
               <b>{cal ? `⚠ ${c.slice(9)}` : commodityById.get(c)?.name ?? c}</b><br />
-              <small>{cal ? 'calamity' : `value ${commodityById.get(c)?.value} ×${n}`}</small>
+              <small>{cal ? 'calamity' : `value ${commodityById.get(c)?.value} ×${n} = ${setVal}`}</small>
             </div>
           );
         })}

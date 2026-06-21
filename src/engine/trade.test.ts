@@ -39,14 +39,12 @@ describe('trade negotiation (open-offer board)', () => {
     const to = s.seating.find((p) => p !== from)!;
     s.players[from]!.hand = { salt: 2, ochre: 2 };
     s.players[to]!.hand = { iron: 2, hides: 2 };
-    // from posts an offer (gives salt2+ochre1, wants iron).
+    // from posts an offer (gives salt2+ochre1, wants iron); the turn advances.
     s = adapter.applyAction(s, { type: 'postOffer', give: { actual: { salt: 2, ochre: 1 }, declared: { salt: 2, ochre: 1 } }, wants: ['iron'] }, from);
-    expect(adapter.currentActor(s)).toBe(from); // turn stays until you pass
+    expect(adapter.currentActor(s)).toBe(to); // round-robin: turn passed to babylon
     const offerId = s.negotiation.offers[0]!.id;
-    s = adapter.applyAction(s, { type: 'pass' }, from); // yield to babylon
-    // to responds with iron2+hides1.
+    // to responds with iron2+hides1; turn advances back to from.
     s = adapter.applyAction(s, { type: 'respondOffer', offerId, give: { actual: { iron: 2, hides: 1 }, declared: { iron: 2, hides: 1 } } }, to);
-    s = adapter.applyAction(s, { type: 'pass' }, to);
     // from accepts the response → deal executes.
     s = adapter.applyAction(s, { type: 'acceptResponse', offerId, responder: to }, from);
     expect(s.players[from]!.hand).toEqual({ ochre: 1, iron: 2, hides: 1 });
@@ -70,9 +68,7 @@ describe('trade negotiation (open-offer board)', () => {
     const toView = adapter.viewFor(s, to);
     expect(toView.negotiation.offers[0]!.give.declared).toEqual({ salt: 2, wine: 1 });
     expect(toView.negotiation.offers[0]!.give.actual).toEqual({});
-    s = adapter.applyAction(s, { type: 'pass' }, from);
     s = adapter.applyAction(s, { type: 'respondOffer', offerId, give: { actual: { iron: 3 }, declared: { iron: 3 } } }, to);
-    s = adapter.applyAction(s, { type: 'pass' }, to);
     s = adapter.applyAction(s, { type: 'acceptResponse', offerId, responder: to }, from);
     // The calamity crossed to `to`; provenance recorded; resolves against the recipient.
     expect(s.players[to]!.hand['calamity:epidemic']).toBe(1);

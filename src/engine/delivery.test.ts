@@ -25,9 +25,13 @@ describe('trade-stack construction (§15.2)', () => {
     }
   });
 
-  it('places each non-tradable calamity at the very bottom of its value stack', () => {
-    for (const cal of calamities.filter((c) => !c.tradable)) {
-      expect(ts.stacks[cal.level]![0]).toBe(`calamity:${cal.id}`);
+  it('places every calamity just beneath the buffer (drawn on the numPlayers+1th draw, §15.2)', () => {
+    for (const cal of calamities) {
+      const stack = ts.stacks[cal.level]!;
+      const calsAtLevel = calamities.filter((c) => c.level === cal.level).length;
+      // The band directly below the top-of-stack buffer holds this level's calamities.
+      const band = stack.slice(-(numPlayers + calsAtLevel), stack.length - numPlayers);
+      expect(band, `stack ${cal.level} calamity band`).toContain(`calamity:${cal.id}`);
     }
   });
 });

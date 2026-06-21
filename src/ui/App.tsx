@@ -31,14 +31,16 @@ export default function App() {
     if (!actor || result || seats[actor] !== 'ai') return;
     const t = setTimeout(async () => {
       const action = await ai.selectAction({ state, actor, adapter, rng: rng.current });
-      setState((s) => adapter.applyAction(s, action, actor));
+      setState((s) => { const r = adapter.tryApplyAction(s, action, actor); return r.ok ? r.state : adapter.applyAction(s, { type: 'pass' }, actor); });
     }, 220);
     return () => clearTimeout(t);
   }, [state, actor, result, seats]);
 
   const apply = useCallback((a: Action) => {
     if (!actor) return;
-    setState((s) => adapter.applyAction(s, a, actor));
+    // Use tryApplyAction so a now-illegal action (e.g. accepting an offer the AI
+    // just consumed) is ignored rather than throwing and blanking the screen.
+    setState((s) => { const r = adapter.tryApplyAction(s, a, actor); if (!r.ok) { console.warn('action rejected:', r.reason, a); return s; } return r.state; });
     setSelectedArea(null);
   }, [actor]);
 

@@ -1,9 +1,32 @@
-import { StrictMode, useEffect, useState } from 'react';
+import { Component, StrictMode, useEffect, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { UpdateBanner } from 'digital-boardgame-framework/client';
 import App from './App.js';
 import { Lobby, OnlineGame } from './online.js';
-import { fetchUnseenResponses, markResponseSeen, type MyReport } from '../client/api.js';
+import { fetchUnseenResponses, markResponseSeen, submitStandaloneReport, type MyReport } from '../client/api.js';
+
+/** Catches render/runtime crashes so the app shows a recoverable message (with a
+ *  one-click report) instead of a blank screen. */
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null; sent: boolean }> {
+  state = { error: null as Error | null, sent: false };
+  static getDerivedStateFromError(error: Error) { return { error, sent: false }; }
+  componentDidCatch(error: Error) {
+    // Auto-file a report with the stack so crashes surface in the queue.
+    submitStandaloneReport('', { message: `App crashed: ${error.message}\n${(error.stack ?? '').slice(0, 1500)}`, severity: 'bug', category: 'crash', clientBuild: 'web-ui', userAgent: navigator.userAgent })
+      .then(() => this.setState({ sent: true })).catch(() => {});
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: '#eee', padding: 24, textAlign: 'center' }}>
+        <h2 style={{ margin: 0, color: '#ffd23f' }}>Something went wrong</h2>
+        <p style={{ maxWidth: 520, color: '#ccc' }}>The game hit an error and stopped. {this.state.sent ? 'A report was sent automatically — thank you.' : ''} You can reload to continue; recent online moves are saved.</p>
+        <code style={{ fontSize: 12, color: '#f88', maxWidth: 600, overflow: 'auto' }}>{this.state.error.message}</code>
+        <button className="civ-btn" style={{ fontSize: 16, padding: '10px 18px' }} onClick={() => location.reload()}>Reload</button>
+      </div>
+    );
+  }
+}
 
 /** "Reply to your problem report" — pops on game open when a report this device
  *  filed has been resolved with a note (one pop per reply, tracked in storage). */
@@ -56,6 +79,6 @@ createRoot(document.getElementById('root')!).render(
     {/* Shows a "A new version is available — Reload" banner when a newer build
         is deployed while this tab is open (polls /version.json). */}
     <UpdateBanner currentBuild={__DBF_BUILD_ID__} />
-    <Root />
+    <ErrorBoundary><Root /></ErrorBoundary>
   </StrictMode>,
 );

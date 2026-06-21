@@ -38,6 +38,21 @@ export async function createNetworkGame(baseUrl: string, body: { players: string
   return fetch(`${baseUrl}/api/games`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => json<{ gameId: string; invites: Record<string, string> }>(r));
 }
 
+/** Submit a standalone bug report (hotseat — no game/token). Resolves only on a
+ *  server-confirmed reportId (never a silent success). */
+export async function submitStandaloneReport(baseUrl: string, body: {
+  message: string; severity?: string; category?: string;
+  serverSnapshot?: string; reporterSide?: string; turnNumber?: number;
+  clientLog?: { turn: number; kind: string; payload: string; ts: number }[];
+  clientBuild?: string; userAgent?: string;
+}): Promise<{ reportId: string }> {
+  const res = await fetch(`${baseUrl}/api/report`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  const j = (await res.json()) as { reportId?: string };
+  if (!j.reportId) throw new Error('server did not confirm the report');
+  return { reportId: j.reportId };
+}
+
 /** Extract a seat's secret token from its invite URL. */
 export function tokenFromInvite(inviteUrl: string): string {
   return new URL(inviteUrl, location?.origin ?? 'http://localhost').searchParams.get('token') ?? '';

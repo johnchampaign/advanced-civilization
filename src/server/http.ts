@@ -2,12 +2,13 @@
 // locally (filesystem store, no Supabase). The same endpoints map cleanly to a
 // Cloudflare Pages Function / Worker for production. Run: `npm run serve`.
 import { createServer } from 'node:http';
-import { buildGameServer } from './game-server.js';
+import { buildGameServer, makeStore } from './game-server.js';
 import { handleApi } from './handlers.js';
 
 const PORT = Number(process.env.PORT ?? 8787);
 
 const server = await buildGameServer();
+const store = await makeStore(); // backs standalone hotseat reports
 
 function send(res: import('node:http').ServerResponse, code: number, body: unknown) {
   const data = JSON.stringify(body);
@@ -26,7 +27,7 @@ const http = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
     const body = req.method === 'POST' ? await readJson(req) : undefined;
     // Same router the Cloudflare Pages Function uses (dev/prod parity).
-    const result = await handleApi(server, req.method ?? 'GET', url.pathname, url.searchParams, body);
+    const result = await handleApi(server, req.method ?? 'GET', url.pathname, url.searchParams, body, (row) => store.putReport(row));
     return send(res, result.status, result.body);
   } catch (e) {
     send(res, 400, { error: (e as Error).message });

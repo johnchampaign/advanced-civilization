@@ -5,6 +5,7 @@ import type { Action, GameState, PlayerId } from '../engine/index.js';
 import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, civById, commodityById, epochs } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
 import { handValue } from '../engine/helpers.js';
+import { submitStandaloneReport } from '../client/api.js';
 import { anchors, MAIN_VIEWBOX } from './anchors.js';
 
 const DEFAULT_PLAYERS: PlayerId[] = ['egypt', 'babylon', 'crete', 'assyria'];
@@ -109,9 +110,10 @@ export default function App() {
         <div className="civ-panel" style={{ width: 200, padding: 6, display: 'flex', flexDirection: 'column', gap: 4, overflowY: 'auto', minHeight: 0 }}>
           <div style={{ textAlign: 'center', fontWeight: 800, letterSpacing: 1 }}>{prettyPhase(state.phase).toUpperCase()}</div>
           <div className="civ-lbl">Turn {state.turn}</div>
-          <div style={{ flex: 1, border: '2px solid #7a4a18', background: '#0d3a4a', overflow: 'hidden' }}>
+          <div style={{ flex: 1, border: '2px solid #7a4a18', background: '#0d3a4a', overflow: 'hidden', minHeight: 60 }}>
             <img src="/assets/map-main.svg" alt="mini" style={{ width: '100%', display: 'block', opacity: 0.9 }} />
           </div>
+          <HotseatReport state={state} focus={focus} />
         </div>
       </div>
 
@@ -816,6 +818,52 @@ function TradeControls({ state, actor, onApply }: { state: GameState; actor: Pla
         )}
         <button className="civ-btn" onClick={() => onApply({ type: 'pass' })}>Done trading (pass)</button>
       </div>
+    </div>
+  );
+}
+
+/** Bug-report + log download for hotseat play. Posts to the standalone
+ *  /api/report endpoint (no game/token); falls back to a downloadable file. */
+function HotseatReport({ state, focus }: { state: GameState; focus: PlayerId }) {
+  const [open, setOpen] = useState(false);
+  const [message, setMessage] = useState('');
+  const [severity, setSeverity] = useState<'bug' | 'rules-question' | 'feedback'>('bug');
+  const [status, setStatus] = useState<string | null>(null);
+
+  const download = () => {
+    const text = `Advanced Civilization — hotseat, turn ${state.turn}\n\n${state.log.join('\n')}\n\n--- state ---\n${JSON.stringify(state)}`;
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+    const a = document.createElement('a'); a.href = url; a.download = `civ-hotseat-turn${state.turn}.txt`; a.click();
+    URL.revokeObjectURL(url);
+  };
+  const send = async () => {
+    setStatus('Sending…');
+    try {
+      const { reportId } = await submitStandaloneReport('', {
+        message, severity, category: 'game',
+        serverSnapshot: JSON.stringify(state), reporterSide: focus, turnNumber: state.turn,
+        clientLog: state.log.map((m, i) => ({ turn: state.turn, kind: 'log', payload: m, ts: i })),
+        clientBuild: 'web-ui-hotseat', userAgent: navigator.userAgent,
+      });
+      setStatus(`Thanks! Report ${reportId.slice(0, 8)} received.`); setMessage('');
+    } catch (e) {
+      setStatus(`Couldn't send (${(e as Error).message}). Use “Download report” and email it.`);
+    }
+  };
+
+  if (!open) return <button className="civ-btn" onClick={() => setOpen(true)}>Report a problem</button>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <select value={severity} onChange={(e) => setSeverity(e.target.value as typeof severity)} style={{ fontSize: 11 }}>
+        <option value="bug">Bug</option><option value="rules-question">Rules question</option><option value="feedback">Feedback</option>
+      </select>
+      <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="What happened?" rows={3} style={{ fontSize: 12 }} />
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+        <button className="civ-btn" disabled={!message.trim()} onClick={send}>Send</button>
+        <button className="civ-btn" onClick={download}>Download report</button>
+        <button className="civ-btn" onClick={() => { setOpen(false); setStatus(null); }}>Close</button>
+      </div>
+      {status && <span className="civ-lbl" style={{ color: '#5a2d0a' }}>{status}</span>}
     </div>
   );
 }

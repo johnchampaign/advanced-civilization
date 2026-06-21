@@ -38,10 +38,11 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     : new NoopNotifier();
   const site = (env.PUBLIC_BASE_URL ?? url.origin).replace(/\/$/, '');
 
+  const store = new SupabaseStore(supabase);
   const server = new GameServer<GameState, Action, string>({
     adapter,
     codec,
-    store: new SupabaseStore(supabase),
+    store,
     broadcaster: new SupabaseBroadcaster({ supabaseUrl: env.SUPABASE_URL, serviceKey: env.SUPABASE_SERVICE_KEY }),
     notifier,
     gameUrl: (gameId, token) => `${site}/?game=${encodeURIComponent(gameId)}&token=${encodeURIComponent(token)}`,
@@ -52,7 +53,7 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     try { body = await request.json(); } catch { body = {}; }
   }
 
-  const result = await handleApi(server, request.method, url.pathname, url.searchParams, body);
+  const result = await handleApi(server, request.method, url.pathname, url.searchParams, body, (row) => store.putReport(row));
   return new Response(JSON.stringify(result.body), {
     status: result.status,
     headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' },

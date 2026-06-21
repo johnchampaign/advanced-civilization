@@ -3,7 +3,7 @@
 // Function (functions/api/[[path]].ts, SupabaseStore) build a GameServer and
 // delegate here. Keeping routing in one place is what makes local dev and
 // production true parity — only the store/notifier/broadcaster differ.
-import type { GameServer, ReportSubmission } from 'digital-boardgame-framework/server';
+import type { GameServer, ReportSubmission, BugReportRow } from 'digital-boardgame-framework/server';
 import { createGame, type Action, type GameState } from '../engine/index.js';
 // NOTE: import createGame from the engine (node-free), NOT newGameState from
 // game-server.ts — that module top-level-imports FsStore (node:fs), which would
@@ -27,16 +27,48 @@ function errToStatus(message: string): number {
   return 400;
 }
 
-/** Route one request. `query` carries the per-seat `?token=`. */
+/** Route one request. `query` carries the per-seat `?token=`. `putReport` (when
+ *  provided) backs the standalone `POST /api/report` used by hotseat play, which
+ *  has no game/token to attach a report to. */
 export async function handleApi(
   server: Server,
   method: string,
   pathname: string,
   query: URLSearchParams,
   body: unknown,
+  putReport?: (row: BugReportRow) => Promise<void>,
 ): Promise<ApiResult> {
   const segs = pathname.replace(/\/+$/, '').split('/').filter(Boolean);
   if (segs[0] !== 'api') return { status: 404, body: { error: 'not found' } };
+
+  // ---- standalone bug report (hotseat — no game) ----
+  if (segs[1] === 'report' && segs.length === 2 && method === 'POST') {
+    if (!putReport) return { status: 501, body: { error: 'reporting is not configured on this host' } };
+    const b = (body ?? {}) as Partial<BugReportRow> & { snapshot?: string };
+    if (typeof b.message !== 'string' || !b.message.trim()) return { status: 422, body: { error: 'message required' } };
+    const reportId = (globalThis.crypto?.randomUUID?.() ?? `r-${Date.now()}-${Math.round(Math.random() * 1e9)}`);
+    const snapshot = b.serverSnapshot ?? b.snapshot ?? '';
+    try {
+      await putReport({
+        reportId,
+        gameId: b.gameId ?? 'hotseat',
+        reporterSide: b.reporterSide ?? '?',
+        turnNumber: b.turnNumber ?? 0,
+        serverSnapshot: snapshot,
+        reporterView: snapshot,
+        clientLog: Array.isArray(b.clientLog) ? b.clientLog : [],
+        message: b.message,
+        severity: b.severity ?? 'bug',
+        category: b.category ?? 'game',
+        clientBuild: b.clientBuild,
+        userAgent: b.userAgent,
+        createdAt: new Date().toISOString(),
+      });
+      return { status: 200, body: { reportId } };
+    } catch (e) {
+      return { status: 500, body: { error: (e as Error).message } };
+    }
+  }
   const token = query.get('token') ?? '';
 
   try {

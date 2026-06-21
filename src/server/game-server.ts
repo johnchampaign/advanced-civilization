@@ -13,7 +13,7 @@ import { adapter, codec, createGame, type Action, type GameState, type NewGameOp
 
 const env = (k: string) => (typeof process !== 'undefined' ? process.env[k] : undefined);
 
-async function makeStore(): Promise<SnapshotStore> {
+export async function makeStore(): Promise<SnapshotStore> {
   const url = env('SUPABASE_URL'), key = env('SUPABASE_SERVICE_KEY');
   if (url && key) {
     const { createClient } = await import('@supabase/supabase-js');

@@ -68,6 +68,7 @@ export default function App() {
   return (
     <>
       <div ref={boardRef} style={{ flex: 1, position: 'relative', overflow: 'auto', background: '#0d3a4a' }}>
+        <CalamityBanner lines={state.lastCalamities ?? []} />
         {view === 'map'
           ? <Board
               state={inMovement ? planner.previewState : state}
@@ -1015,6 +1016,21 @@ function HotseatReport({ state, focus }: { state: GameState; focus: PlayerId }) 
           {status && <span className="civ-lbl" style={{ color: '#5a2d0a' }}>{status}</span>}
         </>
       )}
+    </div>
+  );
+}
+
+/** Prominent, dismissible banner of the latest calamity outcomes, so a calamity
+ *  striking you isn't silently buried in the log. */
+export function CalamityBanner({ lines }: { lines: string[] }) {
+  const [dismissed, setDismissed] = useState('');
+  const key = lines.join('|');
+  if (!lines.length || dismissed === key) return null;
+  return (
+    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 30, background: 'rgba(150,40,40,0.96)', color: '#fff', padding: '8px 12px', display: 'flex', alignItems: 'flex-start', gap: 10, boxShadow: '0 2px 10px #000' }}>
+      <b style={{ whiteSpace: 'nowrap' }}>⚠ Calamities this turn:</b>
+      <span style={{ flex: 1 }}>{lines.map((l, i) => <div key={i}>{l}</div>)}</span>
+      <button className="civ-btn" onClick={() => setDismissed(key)}>Dismiss</button>
     </div>
   );
 }

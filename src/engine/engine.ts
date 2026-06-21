@@ -492,6 +492,7 @@ function runTradeAcquisition(s: GameState): void {
  *  §29.6 — encoded in the severity ranks). */
 function runCalamity(s: GameState): void {
   const rng = Rng.fromState(s.rngState);
+  const logBefore = s.log.length;
   const held: { calamityId: string; holder: PlayerId }[] = [];
   for (const id of s.seating) {
     for (const card of Object.keys(player(s, id).hand)) {
@@ -515,6 +516,9 @@ function runCalamity(s: GameState): void {
   s.rngState = rng.serialize();
   s.pendingCalamities = [];
   s.calamityTradedFrom = {};
+  // Surface this turn's calamity outcomes so the UI can show them prominently
+  // (otherwise they're buried in the log and players think nothing happened).
+  s.lastCalamities = s.log.slice(logBefore).filter((l) => /suffers|defect|barbarian|pirate|lost/i.test(l));
   // §26.5: city support is re-checked after all calamities are resolved.
   checkCitySupport(s);
 }

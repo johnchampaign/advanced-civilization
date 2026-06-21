@@ -58,11 +58,15 @@ export async function handleApi(
           return untagged && r.gameId === 'hotseat' && (r.clientBuild ?? '').includes('web-ui-hotseat');
         })
         .map((r) => ({
+          reportId: r.reportId,
           message: (r.message ?? '').replace(/\s*<!--\s*reporter:[^>]*-->\s*/g, '').trim(),
           severity: r.severity,
           category: r.category,
           createdAt: r.createdAt,
           resolution: r.resolution ?? null,
+          // tagged = this exact device filed it (safe to auto-pop). Untagged
+          // legacy reports show in the list but are not auto-popped to everyone.
+          tagged: (r.message ?? '').includes(marker),
         }))
         .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
       return { status: 200, body: { reports: mine } };

@@ -66,7 +66,23 @@ export async function submitStandaloneReport(baseUrl: string, body: {
   return { reportId: j.reportId };
 }
 
-export interface MyReport { message: string; severity: string; category?: string; createdAt: string; resolution?: { at: string; note: string } | null }
+export interface MyReport { reportId: string; message: string; severity: string; category?: string; createdAt: string; resolution?: { at: string; note: string } | null; tagged?: boolean }
+
+const SEEN_KEY = 'civ-seen-responses';
+function getSeenResponses(): Set<string> {
+  try { return new Set<string>(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); } catch { return new Set(); }
+}
+export function markResponseSeen(reportId: string): void {
+  try { const s = getSeenResponses(); s.add(reportId); localStorage.setItem(SEEN_KEY, JSON.stringify([...s])); } catch { /* ignore */ }
+}
+
+/** Resolved reports the reporter hasn't seen yet — to pop on game open. */
+export async function fetchUnseenResponses(baseUrl: string): Promise<MyReport[]> {
+  const seen = getSeenResponses();
+  const reports = await fetchMyReports(baseUrl);
+  // Only auto-pop responses to reports THIS device filed (tagged), unseen.
+  return reports.filter((r) => r.tagged && r.resolution && !seen.has(r.reportId));
+}
 
 /** Fetch this browser's own reports (with any resolutions). */
 export async function fetchMyReports(baseUrl: string): Promise<MyReport[]> {

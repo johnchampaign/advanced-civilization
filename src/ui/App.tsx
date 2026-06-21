@@ -4,6 +4,7 @@ import { adapter, createGame } from '../engine/index.js';
 import type { Action, GameState, PlayerId } from '../engine/index.js';
 import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, civById, commodityById, epochs } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
+import { handValue } from '../engine/helpers.js';
 import { anchors, MAIN_VIEWBOX } from './anchors.js';
 
 const DEFAULT_PLAYERS: PlayerId[] = ['egypt', 'babylon', 'crete', 'assyria'];
@@ -741,15 +742,24 @@ function TradeControls({ state, actor, onApply }: { state: GameState; actor: Pla
           <div className="civ-lbl">Your offer — gives {Object.values(myOffer.give.actual).reduce((a, b) => a + b, 0)} (announced {chips(myOffer.give.declared)}); wants {myOffer.wants.map(cName).join(' or ')}.</div>
           {myOffer.responses.length === 0 ? <div className="civ-lbl">Waiting for responses…</div> : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 3 }}>
-              {myOffer.responses.map((r) => (
-                <div key={r.from} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                  <span><b style={{ color: civById.get(r.from)?.color }}>{civById.get(r.from)?.name}</b> offers {chips(r.give.declared)}</span>
-                  <button className="civ-btn" onClick={() => onApply({ type: 'acceptResponse', offerId: myOffer.id, responder: r.from })}>Accept</button>
-                </div>
-              ))}
+              <span className="civ-lbl">Responses — value is your hand-value gain <i>if they're not lying</i>:</span>
+              {myOffer.responses.map((r) => {
+                // If not lying: receive their declared cards, give away your offered cards.
+                const after = { ...me.hand };
+                for (const [c, k] of Object.entries(myOffer.give.actual)) { after[c] = (after[c] ?? 0) - k; if (after[c]! <= 0) delete after[c]; }
+                for (const [c, k] of Object.entries(r.give.declared)) after[c] = (after[c] ?? 0) + k;
+                const gain = handValue(after) - handValue(me.hand);
+                return (
+                  <div key={r.from} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                    <span style={{ flex: 1 }}><b style={{ color: civById.get(r.from)?.color }}>{civById.get(r.from)?.name}</b> offers {chips(r.give.declared)}</span>
+                    <b style={{ color: gain >= 0 ? '#2e6b3a' : '#8a3b12', minWidth: 38, textAlign: 'right' }}>{gain >= 0 ? '+' : ''}{gain}</b>
+                    <button className="civ-btn" onClick={() => onApply({ type: 'acceptResponse', offerId: myOffer.id, responder: r.from })}>Accept</button>
+                  </div>
+                );
+              })}
             </div>
           )}
-          <button className="civ-btn" style={{ marginTop: 4 }} onClick={() => onApply({ type: 'withdrawOffer' })}>Withdraw offer</button>
+          <button className="civ-btn" style={{ marginTop: 4 }} onClick={() => onApply({ type: 'withdrawOffer' })}>{myOffer.responses.length ? 'Reject all & withdraw' : 'Withdraw offer'}</button>
         </div>
       ) : (
         <div>

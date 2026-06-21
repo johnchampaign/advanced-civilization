@@ -10,7 +10,7 @@ import {
   pieceCensus,
   pieceConservationProblems,
 } from './helpers.js';
-import { createGame, adapter, victoryScore } from './index.js';
+import { createGame, adapter, victoryScore, normalize } from './index.js';
 import type { Action, GameState } from './types.js';
 
 describe('data integrity', () => {
@@ -281,5 +281,34 @@ describe('movement & trade-card acquisition rules', () => {
       expect(cities).toBe(0);
       expect(hand).toBe(0);
     }
+  });
+});
+
+describe('population expansion (§13 placement when stock-limited)', () => {
+  it('auto-grows when stock is ample (no pause at expansion)', () => {
+    const ample = createGame({ players: ['egypt', 'babylon'], seed: 7 });
+    expect(ample.phase).not.toBe('populationExpansion'); // grew automatically
+  });
+
+  it('pauses for the player to place limited tokens', async () => {
+    const { areas } = await import('../data/index.js');
+    let s = createGame({ players: ['egypt', 'babylon'], seed: 7 });
+    const ids = areas.filter((a) => !a.isWater).slice(0, 8).map((a) => a.id); // 8 land areas
+    s.areas = {} as typeof s.areas;
+    for (const a of ids) s.areas[a] = { tokens: { egypt: 2 } }; // each wants +2 → needs 16 growth
+    s.players['egypt']!.stock = 4; s.players['egypt']!.treasury = 20;
+    s.players['babylon']!.stock = 4; s.players['babylon']!.treasury = 20;
+    s.phase = 'taxation'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    normalize(s); // auto taxation → population expansion; egypt is stock-short → pauses
+    expect(s.phase).toBe('populationExpansion');
+    expect(adapter.currentActor(s)).toBe('egypt');
+    expect(s.expansion!.remaining['egypt']!).toBeGreaterThan(0);
+    const legal = adapter.legalActions(s, 'egypt').filter((a): a is Extract<Action, { type: 'placeTokens' }> => a.type === 'placeTokens');
+    expect(legal.length).toBeGreaterThan(0);
+    const before = s.players['egypt']!.stock;
+    const aid = Object.keys(legal[0]!.placements)[0]!;
+    s = adapter.applyAction(s, { type: 'placeTokens', placements: { [aid]: 1 } }, 'egypt');
+    expect(s.players['egypt']!.stock).toBe(before - 1);
+    expect(s.areas[aid]!.tokens['egypt']).toBe(3); // 2 + 1 placed
   });
 });

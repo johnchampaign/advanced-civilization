@@ -50,7 +50,8 @@ import {
 
 const AUTO_PHASES: Set<Phase> = new Set([
   'taxation',
-  'populationExpansion',
+  // 'populationExpansion' is INTERACTIVE only when stock can't cover all growth
+  // (the player then places their limited tokens); otherwise auto on phase entry.
   'census',
   // 'shipConstruction' is INTERACTIVE (build/maintain ships), not auto.
   'conflict',
@@ -147,25 +148,53 @@ function runTaxation(s: GameState): void {
   }
 }
 
-function runPopulationExpansion(s: GameState): void {
-  // Standard growth: +1 token to areas with exactly 1 token, +2 to areas with
-  // >=2 tokens of the player. Agriculture raises the area's support by 1
-  // (§32.241). Growth is capped by stock; we grow biggest areas first.
+/** Eligible growth per area for `id`: +1 where it has exactly 1 token, +2 where
+ *  it has >=2 (§13). */
+function growthCaps(s: GameState, id: PlayerId): Record<string, number> {
+  const caps: Record<string, number> = {};
+  for (const [aid, a] of Object.entries(s.areas)) {
+    const t = a.tokens[id] ?? 0;
+    if (t > 0) caps[aid] = t >= 2 ? 2 : 1;
+  }
+  return caps;
+}
+
+/** §13 population growth. If a player has enough stock, all growth is applied
+ *  automatically. If not, the growth is left for the player to *place* their
+ *  limited stock where they choose (interactive), via `placeTokens`. */
+function setupPopulationExpansion(s: GameState): void {
+  s.expansion = { remaining: {}, caps: {} };
   for (const id of s.seating) {
     const p = player(s, id);
-    const owned: { area: string; tokens: number }[] = [];
-    for (const [aid, a] of Object.entries(s.areas)) {
-      const t = a.tokens[id] ?? 0;
-      if (t > 0) owned.push({ area: aid, tokens: t });
-    }
-    owned.sort((a, b) => b.tokens - a.tokens);
-    for (const o of owned) {
-      if (p.stock <= 0) break;
-      const add = Math.min(o.tokens >= 2 ? 2 : 1, p.stock);
-      s.areas[o.area]!.tokens[id] = o.tokens + add;
-      p.stock -= add;
+    const caps = growthCaps(s, id);
+    const needed = Object.values(caps).reduce((a, b) => a + b, 0);
+    if (p.stock >= needed) {
+      for (const [aid, cap] of Object.entries(caps)) { s.areas[aid]!.tokens[id] = (s.areas[aid]!.tokens[id] ?? 0) + cap; p.stock -= cap; }
+      if (!s.actedThisPhase.includes(id)) s.actedThisPhase.push(id);
+    } else if (p.stock <= 0) {
+      if (!s.actedThisPhase.includes(id)) s.actedThisPhase.push(id); // nothing to place
+    } else {
+      s.expansion.remaining[id] = p.stock;
+      s.expansion.caps[id] = caps;
     }
   }
+}
+
+function applyPlaceTokens(s: GameState, actor: PlayerId, placements: Record<string, number>): void {
+  const exp = s.expansion;
+  const caps = exp?.caps[actor];
+  let rem = exp?.remaining[actor] ?? 0;
+  const p = player(s, actor);
+  if (!caps) throw new Error('no growth to place');
+  for (const [aid, n] of Object.entries(placements)) {
+    if (n <= 0) continue;
+    if ((caps[aid] ?? 0) < n) throw new Error(`exceeds growth capacity in ${aid}`);
+    if (n > rem || n > p.stock) throw new Error('not enough stock to place');
+    s.areas[aid]!.tokens[actor] = (s.areas[aid]!.tokens[actor] ?? 0) + n;
+    p.stock -= n; caps[aid] = (caps[aid] ?? 0) - n; rem -= n;
+  }
+  exp!.remaining[actor] = rem;
+  if (rem <= 0 || Object.values(caps).every((c) => c <= 0)) { if (!s.actedThisPhase.includes(actor)) s.actedThisPhase.push(actor); }
 }
 
 function runCensus(s: GameState): void {
@@ -931,7 +960,6 @@ function nextPhase(phase: Phase): Phase {
 function runAutoPhase(s: GameState): void {
   switch (s.phase) {
     case 'taxation': return runTaxation(s);
-    case 'populationExpansion': return runPopulationExpansion(s);
     case 'census': return runCensus(s);
     case 'conflict': return runConflict(s);
     case 'removeSurplus': return runRemoveSurplus(s);
@@ -952,6 +980,9 @@ function enterPhase(s: GameState, phase: Phase): void {
       s.negotiation = { turnPointer: 0, passStreak: 0, actions: 0, nextOfferId: 0, offers: [], completed: [] };
     }
     if (phase === 'shipConstruction') runShipMaintenance(s); // §22.3, before building
+    // §13: apply growth now (auto when stock allows); constrained players are
+    // left to place their limited tokens interactively.
+    if (phase === 'populationExpansion') setupPopulationExpansion(s);
   }
 }
 
@@ -1238,6 +1269,10 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         if (s.phase !== 'trade') throw new Error('buyTradeCard only in trade phase');
         applyBuyTradeCard(s, actor, action.count);
         break; // stays this player's turn; may propose/pass next
+      case 'placeTokens':
+        if (s.phase !== 'populationExpansion') throw new Error('placeTokens only in population expansion');
+        applyPlaceTokens(s, actor, action.placements);
+        break;
       case 'move':
         if (s.phase !== 'movement') throw new Error('move only in movement phase');
         applyMovement(s, actor, action.moves);
@@ -1270,6 +1305,15 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
     const p = player(state, actor);
     const out: Action[] = [{ type: 'pass' }];
     switch (state.phase) {
+      case 'populationExpansion': {
+        // Constrained growth: offer placing one token into each area that can
+        // still grow (the UI/AI repeat as desired). 'pass' forfeits the rest.
+        const caps = state.expansion?.caps[actor] ?? {};
+        if ((state.expansion?.remaining[actor] ?? 0) > 0) {
+          for (const [aid, cap] of Object.entries(caps)) if (cap > 0) out.push({ type: 'placeTokens', placements: { [aid]: 1 } });
+        }
+        break;
+      }
       case 'shipConstruction': {
         const inPlay = shipCount(state, actor);
         if (p.shipsAvailable > 0 && inPlay < 4) {

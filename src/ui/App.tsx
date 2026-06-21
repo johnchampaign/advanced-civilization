@@ -4,7 +4,7 @@ import { adapter, createGame } from '../engine/index.js';
 import type { Action, GameState, PlayerId } from '../engine/index.js';
 import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, civById, commodityById, epochs } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
-import { handValue } from '../engine/helpers.js';
+import { handValue, creditTowards } from '../engine/helpers.js';
 import { submitStandaloneReport } from '../client/api.js';
 import { anchors, MAIN_VIEWBOX } from './anchors.js';
 
@@ -511,7 +511,7 @@ export function useMovementPlanner(
   const onBoardClick = useCallback((area: string | null) => {
     if (!active || !area) return;
     if (!origin) {
-      if (origins.has(area)) { setOrigin(area); setCountRaw(available(area)); }
+      if (origins.has(area)) { setOrigin(area); setCountRaw(1); }
       return;
     }
     if (area === origin) { setOrigin(null); return; }
@@ -523,7 +523,7 @@ export function useMovementPlanner(
       setOrigin(null); setCountRaw(1);
       return;
     }
-    if (origins.has(area)) { setOrigin(area); setCountRaw(available(area)); } // switch origin
+    if (origins.has(area)) { setOrigin(area); setCountRaw(1); } // switch origin
   }, [active, origin, origins, dests, count, available]);
 
   const removeQueued = useCallback((i: number) => setQueued((q) => q.filter((_, j) => j !== i)), []);
@@ -611,6 +611,19 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
   legal: Action[]; selectedArea: string | null; phase: string; onApply: (a: Action) => void; state: GameState; actor: PlayerId;
 }) {
   const pass = legal.find((a) => a.type === 'pass');
+  if (phase === 'populationExpansion') {
+    const places = legal.filter((a) => a.type === 'placeTokens') as Extract<Action, { type: 'placeTokens' }>[];
+    const rem = state.expansion?.remaining[actor] ?? 0;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span className="civ-lbl">Not enough tokens in stock for full growth — place your <b>{rem}</b> remaining token{rem === 1 ? '' : 's'} (§13): click an area to add one.</span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {places.map((b, i) => { const aid = Object.keys(b.placements)[0]!; return <button className="civ-btn" key={i} onClick={() => onApply(b)}>+1 {areaById.get(aid)?.name}</button>; })}
+        </div>
+        {pass && <button className="civ-btn" onClick={() => onApply(pass)}>Done placing (forfeit rest)</button>}
+      </div>
+    );
+  }
   if (phase === 'shipConstruction') {
     const builds = legal.filter((a) => a.type === 'buildShips') as Extract<Action, { type: 'buildShips' }>[];
     return (
@@ -653,18 +666,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
       </div>
     );
   }
-  if (phase === 'acquireAdvances') {
-    const buys = legal.filter((a) => a.type === 'buyAdvance') as Extract<Action, { type: 'buyAdvance' }>[];
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {buys.length === 0 && <span className="civ-lbl">No advance affordable yet.</span>}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {buys.map((b, i) => { const adv = advanceById.get(b.advance)!; return <button className="civ-btn" key={i} onClick={() => onApply(b)}>Buy {adv.name} ({adv.cost})</button>; })}
-        </div>
-        {pass && <button className="civ-btn" onClick={() => onApply(pass)}>Done buying (pass)</button>}
-      </div>
-    );
-  }
+  if (phase === 'acquireAdvances') return <AdvancePicker state={state} actor={actor} onApply={onApply} />;
   if (phase === 'trade') return <TradeControls state={state} actor={actor} onApply={onApply} />;
   return <button className="civ-btn" onClick={() => pass && onApply(pass)}>Continue</button>;
 }
@@ -673,6 +675,65 @@ const isCal = (c: string) => c.startsWith('calamity:');
 const cardLabel = (c: string) => (isCal(c) ? `⚠ ${c.slice(9)}` : c);
 
 const COMMODITY_ORDER = ['ochre', 'hides', 'iron', 'papyrus', 'salt', 'timber', 'grain', 'oil', 'cloth', 'wine', 'bronze', 'silver', 'resin', 'spices', 'dye', 'gems', 'gold', 'ivory'];
+
+/** Acquire-advances panel (§31): pick an advance, then choose exactly which
+ *  commodity cards to spend and how much treasury — instead of auto-paying. */
+function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: PlayerId; onApply: (a: Action) => void }) {
+  const p = state.players[actor]!;
+  const mining = p.advances.includes('mining');
+  const [sel, setSel] = useState<string>('');
+  const [spend, setSpend] = useState<Record<string, number>>({});
+  const [treasury, setTreasury] = useState(0);
+  const cName = (c: string) => commodityById.get(c)?.name ?? c;
+  const owned = new Set(p.advances);
+  // Advances whose prerequisites are met and not yet owned.
+  const available = ALL_ADVANCES.filter((a) => !owned.has(a.id) && (a.prerequisites ?? []).every((pre) => owned.has(pre)));
+  const adv = sel ? advanceById.get(sel) : null;
+  const commHand = Object.entries(p.hand).filter(([c, n]) => !isCal(c) && n > 0);
+  const cardVal = handValue(spend, { mining });
+  const credit = adv ? creditTowards(p.advances, adv.id) : 0;
+  const paid = cardVal + treasury + credit;
+  const canBuy = !!adv && paid >= adv.cost;
+  const addSpend = (c: string) => setSpend((s) => ((s[c] ?? 0) >= (p.hand[c] ?? 0) ? s : { ...s, [c]: (s[c] ?? 0) + 1 }));
+  const rmSpend = (c: string) => setSpend((s) => { const n = (s[c] ?? 0) - 1; const o = { ...s }; if (n <= 0) delete o[c]; else o[c] = n; return o; });
+  const buy = () => { onApply({ type: 'buyAdvance', advance: sel, spendCommodities: spend, spendTreasury: treasury }); setSel(''); setSpend({}); setTreasury(0); };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span className="civ-lbl">Acquire an advance — pick one, then choose how to pay (cards + treasury). Treasury available: {p.treasury}.</span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+        {available.length === 0 && <span className="civ-lbl">No advance available (prerequisites unmet).</span>}
+        {available.map((a) => (
+          <button key={a.id} className={`civ-btn ${sel === a.id ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => { setSel(a.id); setSpend({}); setTreasury(0); }}>
+            {a.name} ({a.cost}{creditTowards(p.advances, a.id) ? `, −${creditTowards(p.advances, a.id)} credit` : ''})
+          </button>
+        ))}
+      </div>
+      {adv && (
+        <div style={{ border: '1px solid #7a4a18', borderRadius: 4, padding: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div className="civ-lbl">Pay for <b>{adv.name}</b> — cost {adv.cost}{credit ? `, ${credit} free from cards you own` : ''}. Click cards to spend:</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+            {commHand.length === 0 && <span className="civ-lbl">(no commodity cards)</span>}
+            {commHand.map(([c, n]) => (
+              <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, border: '1px solid #7a4a18', borderRadius: 4, padding: '0 3px', background: (spend[c] ?? 0) ? 'rgba(90,140,106,0.35)' : undefined }}>
+                <button className="civ-btn" style={{ padding: '0 5px' }} onClick={() => addSpend(c)}>{cName(c)} {spend[c] ? `${spend[c]}/${n}` : `×${n}`}</button>
+                {(spend[c] ?? 0) > 0 && <button className="civ-btn" style={{ padding: '0 4px' }} onClick={() => rmSpend(c)}>−</button>}
+              </span>
+            ))}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span className="civ-lbl">Treasury</span>
+            <input type="range" min={0} max={p.treasury} value={treasury} onChange={(e) => setTreasury(+e.target.value)} style={{ width: 110 }} />
+            <b>{treasury}</b>
+            <span className="civ-lbl">· paid <b style={{ color: canBuy ? '#2e6b3a' : '#8a3b12' }}>{paid}</b> / {adv.cost} (cards {cardVal}{credit ? ` + ${credit} credit` : ''} + {treasury} treasury)</span>
+          </div>
+          <button className="civ-btn" disabled={!canBuy} onClick={buy}>{canBuy ? `Buy ${adv.name}` : `Need ${adv.cost - paid} more`}</button>
+        </div>
+      )}
+      <button className="civ-btn" onClick={() => onApply({ type: 'pass' })}>Done buying (pass)</button>
+    </div>
+  );
+}
 
 /** Build a give bundle: pick cards from your hand (the real `actual`), choose an
  *  announced name for each (truthful or a bluff), and submit. Used both to post
@@ -752,8 +813,11 @@ function TradeControls({ state, actor, onApply }: { state: GameState; actor: Pla
   const cName = (c: string) => (isCal(c) ? `⚠ ${c.slice(9)}` : commodityById.get(c)?.name ?? c);
   const chips = (m: Record<string, number>) => Object.entries(m).map(([c, k]) => `${k}× ${cName(c)}`).join(', ') || '—';
 
+  const handCards = Object.entries(me.hand).filter(([c, k]) => !isCal(c) && k > 0);
+  const handTotal = handCards.reduce((a, [, k]) => a + k, 0);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="civ-lbl">Your hand: <b>{handTotal}</b> commodity card{handTotal === 1 ? '' : 's'} · rough value <b>{handValue(me.hand)}</b> (sets count more — value grows with the square of a set).</div>
       {/* Completed deals (Trade Details — private to you). */}
       {(n.completed ?? []).map((d, i) => {
         const youAreA = d.a === actor;

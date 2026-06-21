@@ -160,6 +160,15 @@ export interface GameState {
     /** Deals executed this phase (for the Trade Details review). */
     completed?: CompletedTrade[];
   };
+  /** Population-expansion placement when stock can't cover all growth (§13): the
+   *  player distributes their remaining stock among eligible areas. Absent when
+   *  growth was fully auto-applied (enough stock). */
+  expansion?: {
+    /** Stock tokens each constrained player still has to place. */
+    remaining: Record<PlayerId, number>;
+    /** Per-player remaining growth capacity per area (area -> tokens it may still gain). */
+    caps: Record<PlayerId, Record<string, number>>;
+  };
   /** Who handed each calamity to its current holder (calamityId -> giver). The
    *  giver may not be named a secondary victim (§29.61). */
   calamityTradedFrom: Record<string, PlayerId>;

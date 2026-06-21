@@ -102,6 +102,15 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
       }
       case 'trade':
         return planTradeTurn(state, actor, ctx.rng) ?? { type: 'pass' };
+      case 'populationExpansion': {
+        // Place limited growth biggest-area-first (highest cap), one at a time.
+        const caps = state.expansion?.caps[actor] ?? {};
+        if ((state.expansion?.remaining[actor] ?? 0) > 0) {
+          const best = Object.entries(caps).filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1])[0];
+          if (best) return { type: 'placeTokens', placements: { [best[0]]: 1 } };
+        }
+        return { type: 'pass' };
+      }
       default:
         return { type: 'pass' };
     }

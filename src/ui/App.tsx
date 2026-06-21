@@ -411,7 +411,7 @@ function ToolsView({ state, focus }: { state: GameState; focus: PlayerId }) {
 function GoodsView({ state, focus }: { state: GameState; focus: PlayerId }) {
   const hand = state.players[focus]!.hand;
   const mining = state.players[focus]!.advances.includes('mining');
-  const entries = Object.entries(hand).filter(([, n]) => n > 0);
+  const entries = Object.entries(hand).filter(([, n]) => n > 0).sort(([a], [b]) => byCardValue(a, b));
   const commCount = entries.filter(([c]) => !isCal(c)).reduce((a, [, n]) => a + n, 0);
   return (
     <div style={{ padding: 16, color: '#eee' }}>
@@ -680,6 +680,8 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
 
 const isCal = (c: string) => c.startsWith('calamity:');
 const cardLabel = (c: string) => (isCal(c) ? `⚠ ${c.slice(9)}` : c);
+/** Sort card ids: commodities ascending by value, calamities last. */
+const byCardValue = (a: string, b: string) => (isCal(a) ? 1000 : commodityById.get(a)?.value ?? 0) - (isCal(b) ? 1000 : commodityById.get(b)?.value ?? 0);
 
 const COMMODITY_ORDER = ['ochre', 'hides', 'iron', 'papyrus', 'salt', 'timber', 'grain', 'oil', 'cloth', 'wine', 'bronze', 'silver', 'resin', 'spices', 'dye', 'gems', 'gold', 'ivory'];
 
@@ -696,7 +698,7 @@ function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: Pla
   // Advances whose prerequisites are met and not yet owned.
   const available = ALL_ADVANCES.filter((a) => !owned.has(a.id) && (a.prerequisites ?? []).every((pre) => owned.has(pre)));
   const adv = sel ? advanceById.get(sel) : null;
-  const commHand = Object.entries(p.hand).filter(([c, n]) => !isCal(c) && n > 0);
+  const commHand = Object.entries(p.hand).filter(([c, n]) => !isCal(c) && n > 0).sort((a, b) => byCardValue(a[0], b[0]));
   const cardVal = handValue(spend, { mining });
   const credit = adv ? creditTowards(p.advances, adv.id) : 0;
   const paid = cardVal + treasury + credit;
@@ -771,7 +773,7 @@ function OfferBuilder({ me, submitLabel, onSubmit, wantPicker }: {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, border: '1px solid #7a4a18', borderRadius: 4, padding: 6 }}>
       <span className="civ-lbl">Your hand — click to add to the offer:</span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-        {Object.entries(me.hand).filter(([, n]) => n > 0).map(([c, n]) => (
+        {Object.entries(me.hand).filter(([, n]) => n > 0).sort((a, b) => byCardValue(a[0], b[0])).map(([c, n]) => (
           <button className="civ-btn" key={c} disabled={(give[c] ?? 0) >= n} onClick={() => add(c)}>{cName(c)} ×{n - (give[c] ?? 0)}</button>
         ))}
         {Object.keys(me.hand).length === 0 && <span className="civ-lbl">(no cards)</span>}

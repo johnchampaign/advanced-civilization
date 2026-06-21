@@ -456,6 +456,8 @@ export interface MovementPlanner {
   highlight: Set<string>;
   /** Tokens still available to move out of `area` (start count minus queued). */
   available: (area: string) => number;
+  /** Reachable destinations from the current origin (for off-screen fallback buttons). */
+  destinations: { to: string; byShip?: boolean }[];
   onBoardClick: (area: string | null) => void;
   setCount: (n: number) => void;
   removeQueued: (i: number) => void;
@@ -565,7 +567,8 @@ export function useMovementPlanner(
 
   const moved = useMemo(() => new Set(queued.map((q) => q.to)), [queued]);
 
-  return { active, origin, count, queued, highlight, available, onBoardClick, setCount, removeQueued, undoLast, commit, pass, previewState, moved };
+  const destinations = origin && dests ? [...dests.entries()].map(([to, o]) => ({ to, ...(o.byShip ? { byShip: true as const } : {}) })) : [];
+  return { active, origin, count, queued, highlight, available, destinations, onBoardClick, setCount, removeQueued, undoLast, commit, pass, previewState, moved };
 }
 
 export function MovementControls({ planner }: { planner: MovementPlanner }) {
@@ -578,7 +581,7 @@ export function MovementControls({ planner }: { planner: MovementPlanner }) {
         <span className="civ-lbl">Click an area with your tokens to move <b>from</b>. Planned moves show on the map right away (dashed marker) and aren't final until you finish.</span>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className="civ-lbl">From <b>{name(origin)}</b> — choose how many, then click a highlighted destination:</span>
+          <span className="civ-lbl">From <b>{name(origin)}</b> — choose how many, then click a highlighted destination on the map <i>or a button below</i>:</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <button className="civ-btn" onClick={() => setCount(count - 1)} disabled={count <= 1}>−</button>
             <input type="range" min={1} max={Math.max(1, cap)} value={count} onChange={(e) => setCount(+e.target.value)} style={{ width: 120 }} />
@@ -586,6 +589,11 @@ export function MovementControls({ planner }: { planner: MovementPlanner }) {
             <b>{count}</b> <span className="civ-lbl">of {cap}</span>
             <button className="civ-btn" onClick={() => setCount(cap)}>All</button>
             <button className="civ-btn" onClick={() => planner.onBoardClick(origin)}>Cancel</button>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {planner.destinations.map((d) => (
+              <button className="civ-btn" key={d.to} onClick={() => planner.onBoardClick(d.to)}>{d.byShip ? '⛵ ' : '→ '}{name(d.to)}</button>
+            ))}
           </div>
         </div>
       )}

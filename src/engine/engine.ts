@@ -81,10 +81,18 @@ function isSubMultiset(sub: Record<string, number>, set: Record<string, number>)
   return Object.entries(sub).every(([k, n]) => n <= 0 || (set[k] ?? 0) >= n);
 }
 
+/** How many announced cards are truthful (present in actual), counting multiplicity. */
+function truthfulCount(declared: Record<string, number>, actual: Record<string, number>): number {
+  let t = 0;
+  for (const [c, n] of Object.entries(declared)) t += Math.min(n, actual[c] ?? 0);
+  return t;
+}
+
 /** Validate one side's bundle against the §28.3 truth rules. `owner` must hold
- *  the actual cards; the bundle must have >=`minCards`, declare >=2 cards
- *  truthfully (declared is a real sub-multiset of actual), and contain no
- *  non-tradable calamity. Returns an error string or null. */
+ *  the actual cards; the bundle must have >=`minCards`, announce a name for every
+ *  card (honest count), name >=2 of them truthfully, and never give (or announce)
+ *  a non-tradable calamity. Bluffs — announced names not actually given — are
+ *  legal for the remaining cards. Returns an error string or null. */
 function validateBundle(s: GameState, owner: PlayerId, b: { actual: Record<string, number>; declared: Record<string, number> }, minCards: number): string | null {
   const hand = player(s, owner).hand;
   if (bundleSize(b.actual) < minCards) return `bundle must have at least ${minCards} cards`;
@@ -92,8 +100,12 @@ function validateBundle(s: GameState, owner: PlayerId, b: { actual: Record<strin
   for (const card of Object.keys(b.actual)) {
     if ((b.actual[card] ?? 0) > 0 && !isGivable(card)) return `${card} is a non-tradable calamity and may not be traded`;
   }
-  if (!isSubMultiset(b.declared, b.actual)) return 'declared cards must truthfully be in the bundle';
-  if (bundleSize(b.declared) < 2) return 'must honestly declare at least two cards (§28.3)';
+  // Announced names must be real tradable card ids (commodities or tradable calamities).
+  for (const card of Object.keys(b.declared)) {
+    if ((b.declared[card] ?? 0) > 0 && !commodityById.get(card) && !isGivable(card)) return `cannot announce ${card}`;
+  }
+  if (bundleSize(b.declared) !== bundleSize(b.actual)) return 'must announce a name for every card you give (honest count, §28.3)';
+  if (truthfulCount(b.declared, b.actual) < 2) return 'at least two announced cards must be truthful (§28.3)';
   return null;
 }
 
@@ -937,7 +949,7 @@ function enterPhase(s: GameState, phase: Phase): void {
     s.activeOrder = s.activeOrder.length ? s.activeOrder : censusOrder(s);
     s.actedThisPhase = [];
     if (phase === 'trade') {
-      s.negotiation = { turnPointer: 0, passStreak: 0, proposals: 0, pendingOffer: null };
+      s.negotiation = { turnPointer: 0, passStreak: 0, actions: 0, nextOfferId: 0, offers: [], completed: [] };
     }
     if (phase === 'shipConstruction') runShipMaintenance(s); // §22.3, before building
   }
@@ -1084,51 +1096,65 @@ function applyBuyAdvance(s: GameState, actor: PlayerId, advanceId: string, spend
  *  or the generous per-phase proposal cap is hit (bounds an eager AI). */
 function tradePhaseEnded(s: GameState): boolean {
   const n = s.negotiation;
-  if (n.pendingOffer) return false;
-  const cap = 8 * Math.max(1, s.activeOrder.length);
-  return n.passStreak >= s.activeOrder.length || (n.proposals ?? 0) >= cap;
+  const cap = 12 * Math.max(1, s.activeOrder.length);
+  return n.passStreak >= s.activeOrder.length || (n.actions ?? 0) >= cap;
 }
 
-function applyProposeTrade(s: GameState, actor: PlayerId, a: { to: PlayerId; offer: { actual: Record<string, number>; declared: Record<string, number> }; request: { count: number; declared: Record<string, number> } }): void {
-  if (s.negotiation.pendingOffer) throw new Error('an offer is already pending');
-  if (a.to === actor) throw new Error('cannot trade with yourself');
-  if (!s.players[a.to]) throw new Error(`unknown trade partner ${a.to}`);
-  // Proposer's offered bundle must satisfy the truth rules (>=3 cards, >=2 declared).
-  const err = validateBundle(s, actor, a.offer, 3);
-  if (err) throw new Error(`proposeTrade: ${err}`);
-  // The request must be honest about count (>=3) and declare >=2 cards.
-  if (a.request.count < 3) throw new Error('each side must trade at least 3 cards (§28.3)');
-  if (bundleSize(a.request.declared) < 2) throw new Error('must request at least two declared cards (§28.3)');
-  if (bundleSize(a.request.declared) > a.request.count) throw new Error('declared exceeds requested count');
-  s.negotiation.proposals = (s.negotiation.proposals ?? 0) + 1;
-  s.negotiation.pendingOffer = { from: actor, to: a.to, offer: a.offer, request: a.request };
-  s.log.push(`${actor} proposes a trade to ${a.to} (${bundleSize(a.offer.actual)} cards for ${a.request.count}).`);
+const commodityName = (c: string) => (isCalamityCard(c) ? calamityById.get(calamityIdOf(c))?.name ?? c : commodityById.get(c)?.name ?? c);
+
+/** Post or replace the actor's standing open offer (§28). Bluffs allowed; the
+ *  announced count and ≥2 announced cards must be truthful. */
+function applyPostOffer(s: GameState, actor: PlayerId, a: { give: { actual: Record<string, number>; declared: Record<string, number> }; wants: string[] }): void {
+  const err = validateBundle(s, actor, a.give, 3);
+  if (err) throw new Error(`postOffer: ${err}`);
+  const wants = [...new Set((a.wants ?? []).filter((w) => commodityById.get(w)))];
+  if (wants.length < 1 || wants.length > 5) throw new Error('name 1–5 commodities you want in return (§28)');
+  const n = s.negotiation;
+  n.offers = n.offers.filter((o) => o.from !== actor); // one standing offer per player
+  n.nextOfferId = (n.nextOfferId ?? 0) + 1;
+  n.offers.push({ id: n.nextOfferId, from: actor, give: a.give, wants, responses: [] });
+  n.actions = (n.actions ?? 0) + 1;
+  n.passStreak = 0;
+  s.log.push(`${actor} posts a trade offer (gives ${bundleSize(a.give.actual)}, wants ${wants.map(commodityName).join(' or ')}).`);
 }
 
-function applyRespondTrade(s: GameState, actor: PlayerId, a: { accept: boolean; give?: { actual: Record<string, number>; declared: Record<string, number> } }): void {
-  const offer = s.negotiation.pendingOffer;
-  if (!offer || offer.to !== actor) throw new Error('no offer to respond to');
-  // Either outcome ends the proposer's turn; advance the pointer past them.
-  const advance = () => { s.negotiation.pendingOffer = null; s.negotiation.turnPointer += 1; };
-  if (!a.accept) {
-    advance();
-    s.negotiation.passStreak += 1;
-    s.log.push(`${actor} declines ${offer.from}'s trade.`);
-    return;
-  }
-  const give = a.give;
-  if (!give) throw new Error('accept requires a give bundle');
-  // Responder's bundle must be valid and honor the requested count + declared cards.
-  const err = validateBundle(s, actor, give, 3);
-  if (err) throw new Error(`respondTrade: ${err}`);
-  if (bundleSize(give.actual) !== offer.request.count) throw new Error(`must give exactly ${offer.request.count} cards`);
-  if (!isSubMultiset(offer.request.declared, give.actual)) throw new Error('give must include the requested declared cards');
-  // Execute the swap (cards only; never treasury/civ cards, §28.2).
-  transferCards(s, offer.from, actor, offer.offer.actual);
-  transferCards(s, actor, offer.from, give.actual);
-  advance();
-  s.negotiation.passStreak = 0; // a deal was made — keep trading
-  s.log.push(`${offer.from} and ${actor} completed a trade.`);
+/** Attach or replace the actor's counter-give to another player's open offer. */
+function applyRespondOffer(s: GameState, actor: PlayerId, a: { offerId: number; give: { actual: Record<string, number>; declared: Record<string, number> } }): void {
+  const o = s.negotiation.offers.find((x) => x.id === a.offerId);
+  if (!o) throw new Error('that offer is no longer on the board');
+  if (o.from === actor) throw new Error('cannot respond to your own offer');
+  const err = validateBundle(s, actor, a.give, 3);
+  if (err) throw new Error(`respondOffer: ${err}`);
+  o.responses = o.responses.filter((r) => r.from !== actor);
+  o.responses.push({ from: actor, give: a.give });
+  s.negotiation.actions = (s.negotiation.actions ?? 0) + 1;
+  s.negotiation.passStreak = 0;
+  s.log.push(`${actor} responds to ${o.from}'s offer.`);
+}
+
+/** The offer's owner accepts one responder's counter — executes the §28.2 deal. */
+function applyAcceptResponse(s: GameState, actor: PlayerId, a: { offerId: number; responder: PlayerId }): void {
+  const o = s.negotiation.offers.find((x) => x.id === a.offerId);
+  if (!o) throw new Error('that offer is no longer on the board');
+  if (o.from !== actor) throw new Error('only the offer owner may accept a response');
+  const r = o.responses.find((x) => x.from === a.responder);
+  if (!r) throw new Error('no such response');
+  // Both must still hold what they pledged (they may have traded since).
+  if (!isSubMultiset(o.give.actual, player(s, actor).hand)) throw new Error('you no longer hold your offered cards');
+  if (!isSubMultiset(r.give.actual, player(s, r.from).hand)) throw new Error(`${r.from} no longer holds the responded cards`);
+  transferCards(s, actor, r.from, o.give.actual);
+  transferCards(s, r.from, actor, r.give.actual);
+  (s.negotiation.completed ??= []).push({ a: actor, b: r.from, aGave: o.give, bGave: r.give });
+  // Both players' standing offers are consumed by the deal.
+  s.negotiation.offers = s.negotiation.offers.filter((x) => x.from !== actor && x.from !== r.from);
+  s.negotiation.actions = (s.negotiation.actions ?? 0) + 1;
+  s.negotiation.passStreak = 0;
+  // §28 keeps the actual cards/bluffs private to the two traders — log only the counts.
+  s.log.push(`${actor} and ${r.from} completed a trade (${bundleSize(o.give.actual)}↔${bundleSize(r.give.actual)} cards).`);
+}
+
+function applyWithdrawOffer(s: GameState, actor: PlayerId): void {
+  s.negotiation.offers = s.negotiation.offers.filter((o) => o.from !== actor);
 }
 
 function applyBuyTradeCard(s: GameState, actor: PlayerId, count: number): void {
@@ -1160,7 +1186,6 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
     if (AUTO_PHASES.has(state.phase)) return null;
     if (state.phase === 'trade') {
       const n = state.negotiation;
-      if (n.pendingOffer) return n.pendingOffer.to; // target must respond
       if (tradePhaseEnded(state)) return null;
       return state.activeOrder[n.turnPointer % state.activeOrder.length] ?? null;
     }
@@ -1186,24 +1211,28 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
     switch (action.type) {
       case 'pass':
         if (s.phase === 'trade') {
-          // A pass while an offer is pending means the target declines it.
-          if (s.negotiation.pendingOffer && s.negotiation.pendingOffer.to === actor) {
-            applyRespondTrade(s, actor, { accept: false });
-          } else {
-            s.negotiation.passStreak += 1;
-            s.negotiation.turnPointer += 1;
-          }
+          // Yield your negotiation turn; a full pass round ends the phase.
+          s.negotiation.passStreak += 1;
+          s.negotiation.turnPointer += 1;
         } else if (!s.actedThisPhase.includes(actor)) {
           s.actedThisPhase.push(actor);
         }
         break;
-      case 'proposeTrade':
-        if (s.phase !== 'trade') throw new Error('proposeTrade only in trade phase');
-        applyProposeTrade(s, actor, action);
-        break; // target now responds
-      case 'respondTrade':
-        if (s.phase !== 'trade') throw new Error('respondTrade only in trade phase');
-        applyRespondTrade(s, actor, action);
+      case 'postOffer':
+        if (s.phase !== 'trade') throw new Error('postOffer only in trade phase');
+        applyPostOffer(s, actor, action);
+        break; // turn stays with you — respond/accept/pass next
+      case 'respondOffer':
+        if (s.phase !== 'trade') throw new Error('respondOffer only in trade phase');
+        applyRespondOffer(s, actor, action);
+        break;
+      case 'acceptResponse':
+        if (s.phase !== 'trade') throw new Error('acceptResponse only in trade phase');
+        applyAcceptResponse(s, actor, action);
+        break;
+      case 'withdrawOffer':
+        if (s.phase !== 'trade') throw new Error('withdrawOffer only in trade phase');
+        applyWithdrawOffer(s, actor);
         break;
       case 'buyTradeCard':
         if (s.phase !== 'trade') throw new Error('buyTradeCard only in trade phase');
@@ -1306,16 +1335,10 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         break;
       }
       case 'trade': {
-        // Trade proposals are parameterized (choose partner, cards, declarations)
-        // and are not enumerated here — the UI/AI construct proposeTrade /
-        // respondTrade / buyTradeCard explicitly. We always offer the safe exits
-        // so legalActions consumers (and random play) can progress: a responder
-        // may accept-less decline, a proposer may pass. Buying a ninth-stack card
-        // is offered when affordable.
-        if (state.negotiation.pendingOffer) {
-          // The acting player is the responder; declining is always legal.
-          return [{ type: 'respondTrade', accept: false }];
-        }
+        // Trade actions are parameterized (postOffer / respondOffer /
+        // acceptResponse) and are constructed by the UI/AI, not enumerated. We
+        // expose the safe exits so legalActions consumers (and random play) can
+        // always progress: pass (already added) and buying a ninth-stack card.
         if (p.treasury >= 18 && (state.trade.stacks[9]?.length ?? 0) > 0) {
           out.push({ type: 'buyTradeCard', count: 1 });
         }
@@ -1335,14 +1358,14 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         p.calamities = [];
       }
     }
-    // A pending offer's ACTUAL cards are secret (§28.3 — only the declared count
-    // and >=2 declared cards are public); the responder accepts on the
-    // declaration and learns the rest only once cards change hands. Keep the
-    // actual cards visible only to the proposer.
-    const offer = v.negotiation.pendingOffer;
-    if (offer && offer.from !== _viewer) {
-      offer.offer = { actual: {}, declared: offer.offer.declared };
+    // Open offers & responses: ACTUAL cards are secret (§28.3) — everyone sees
+    // the announced `declared` (incl. bluffs) but not the real cards until a deal
+    // executes. Completed deals are private to the two traders (§28).
+    for (const o of v.negotiation.offers) {
+      if (o.from !== _viewer) o.give = { actual: {}, declared: o.give.declared };
+      for (const r of o.responses) if (r.from !== _viewer) r.give = { actual: {}, declared: r.give.declared };
     }
+    v.negotiation.completed = (v.negotiation.completed ?? []).filter((d) => d.a === _viewer || d.b === _viewer);
     return v;
   }
 

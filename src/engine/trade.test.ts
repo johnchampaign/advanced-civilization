@@ -26,116 +26,99 @@ function endTrade(s: GameState): GameState {
   return s;
 }
 
-describe('trade negotiation', () => {
-  it('reaches the trade phase with an actor to propose', () => {
+describe('trade negotiation (open-offer board)', () => {
+  it('reaches the trade phase with an actor to act', () => {
     const s = toTradePhase(createGame({ players: ['egypt', 'babylon', 'crete'], seed: 7, maxTurns: 60 }));
     expect(s.phase).toBe('trade');
     expect(adapter.currentActor(s)).not.toBeNull();
   });
 
-  it('executes a valid 3-for-3 trade, swapping the actual cards', () => {
+  it('posts an offer, a partner responds, and the owner accepts — swapping the actual cards', () => {
     let s = toTradePhase(createGame({ players: ['egypt', 'babylon'], seed: 3, maxTurns: 60 }));
     const from = adapter.currentActor(s)!;
     const to = s.seating.find((p) => p !== from)!;
-    // Give both players known hands.
     s.players[from]!.hand = { salt: 2, ochre: 2 };
     s.players[to]!.hand = { iron: 2, hides: 2 };
-    s = adapter.applyAction(s, {
-      type: 'proposeTrade', to,
-      offer: { actual: { salt: 2, ochre: 1 }, declared: { salt: 2 } },
-      request: { count: 3, declared: { iron: 2 } },
-    }, from);
-    // Now the target must respond.
-    expect(adapter.currentActor(s)).toBe(to);
-    s = adapter.applyAction(s, {
-      type: 'respondTrade', accept: true,
-      give: { actual: { iron: 2, hides: 1 }, declared: { iron: 2 } },
-    }, to);
-    // Cards swapped: from gave salt2+ochre1, received iron2+hides1.
+    // from posts an offer (gives salt2+ochre1, wants iron).
+    s = adapter.applyAction(s, { type: 'postOffer', give: { actual: { salt: 2, ochre: 1 }, declared: { salt: 2, ochre: 1 } }, wants: ['iron'] }, from);
+    expect(adapter.currentActor(s)).toBe(from); // turn stays until you pass
+    const offerId = s.negotiation.offers[0]!.id;
+    s = adapter.applyAction(s, { type: 'pass' }, from); // yield to babylon
+    // to responds with iron2+hides1.
+    s = adapter.applyAction(s, { type: 'respondOffer', offerId, give: { actual: { iron: 2, hides: 1 }, declared: { iron: 2, hides: 1 } } }, to);
+    s = adapter.applyAction(s, { type: 'pass' }, to);
+    // from accepts the response → deal executes.
+    s = adapter.applyAction(s, { type: 'acceptResponse', offerId, responder: to }, from);
     expect(s.players[from]!.hand).toEqual({ ochre: 1, iron: 2, hides: 1 });
     expect(s.players[to]!.hand).toEqual({ hides: 1, salt: 2, ochre: 1 });
+    expect((s.negotiation.completed ?? []).length).toBe(1);
+    expect(s.negotiation.offers.length).toBe(0); // both offers consumed
   });
 
-  it('passes a tradable calamity hidden among undeclared cards; recipient becomes victim', () => {
+  it('allows a bluff — announcing a false card name while secretly giving another (incl. a calamity)', () => {
     let s = toTradePhase(createGame({ players: ['egypt', 'babylon'], seed: 5, maxTurns: 60 }));
     const from = adapter.currentActor(s)!;
     const to = s.seating.find((p) => p !== from)!;
-    // Clean, controlled hands: proposer hides Epidemic (a tradable calamity)
-    // as the undeclared third card.
     for (const id of s.seating) s.players[id]!.hand = {};
     s.players[from]!.hand = { salt: 2, 'calamity:epidemic': 1 };
     s.players[to]!.hand = { iron: 3 };
     s.calamityTradedFrom = {};
-    s = adapter.applyAction(s, {
-      type: 'proposeTrade', to,
-      offer: { actual: { salt: 2, 'calamity:epidemic': 1 }, declared: { salt: 2 } },
-      request: { count: 3, declared: { iron: 2 } },
-    }, from);
-    s = adapter.applyAction(s, {
-      type: 'respondTrade', accept: true,
-      give: { actual: { iron: 3 }, declared: { iron: 2 } },
-    }, to);
-    // The calamity is now held by `to`, and provenance recorded.
+    // from announces "salt, salt, wine" but actually gives salt,salt + Epidemic (the bluff).
+    s = adapter.applyAction(s, { type: 'postOffer', give: { actual: { salt: 2, 'calamity:epidemic': 1 }, declared: { salt: 2, wine: 1 } }, wants: ['iron'] }, from);
+    const offerId = s.negotiation.offers[0]!.id;
+    // Others see the bluffed declaration, not the calamity.
+    const toView = adapter.viewFor(s, to);
+    expect(toView.negotiation.offers[0]!.give.declared).toEqual({ salt: 2, wine: 1 });
+    expect(toView.negotiation.offers[0]!.give.actual).toEqual({});
+    s = adapter.applyAction(s, { type: 'pass' }, from);
+    s = adapter.applyAction(s, { type: 'respondOffer', offerId, give: { actual: { iron: 3 }, declared: { iron: 3 } } }, to);
+    s = adapter.applyAction(s, { type: 'pass' }, to);
+    s = adapter.applyAction(s, { type: 'acceptResponse', offerId, responder: to }, from);
+    // The calamity crossed to `to`; provenance recorded; resolves against the recipient.
     expect(s.players[to]!.hand['calamity:epidemic']).toBe(1);
     expect(s.players[from]!.hand['calamity:epidemic']).toBeUndefined();
     expect(s.calamityTradedFrom['epidemic']).toBe(from);
-    // Resolve: end trading -> calamity phase runs.
     s = endTrade(s);
-    // Card discarded after resolution; the recipient took the hit, not the giver.
-    expect(s.players[to]!.hand['calamity:epidemic']).toBeUndefined();
     expect(s.log.some((l) => l.includes(to) && l.includes('Epidemic'))).toBe(true);
     expect(s.log.some((l) => l.includes(from) && l.includes('suffers Epidemic'))).toBe(false);
   });
 
-  it('rejects illegal proposals', () => {
+  it('rejects illegal offers (too few cards, <2 truthful, dishonest count, non-tradable calamity)', () => {
     let s = toTradePhase(createGame({ players: ['egypt', 'babylon'], seed: 9, maxTurns: 60 }));
     const from = adapter.currentActor(s)!;
-    const to = s.seating.find((p) => p !== from)!;
     s.players[from]!.hand = { salt: 2, ochre: 2, 'calamity:volcano': 1 };
-    const bad = (a: Action) => expect(() => adapter.applyAction(s, a, from)).toThrow();
-    // fewer than 3 cards
-    bad({ type: 'proposeTrade', to, offer: { actual: { salt: 2 }, declared: { salt: 2 } }, request: { count: 3, declared: { iron: 2 } } });
-    // fewer than 2 declared
-    bad({ type: 'proposeTrade', to, offer: { actual: { salt: 2, ochre: 1 }, declared: { salt: 1 } }, request: { count: 3, declared: { iron: 2 } } });
-    // declared not truthfully in actual
-    bad({ type: 'proposeTrade', to, offer: { actual: { salt: 2, ochre: 1 }, declared: { iron: 2 } }, request: { count: 3, declared: { iron: 2 } } });
-    // includes a NON-tradable calamity (Volcano)
-    bad({ type: 'proposeTrade', to, offer: { actual: { salt: 2, 'calamity:volcano': 1 }, declared: { salt: 2 } }, request: { count: 3, declared: { iron: 2 } } });
-    // request fewer than 3
-    bad({ type: 'proposeTrade', to, offer: { actual: { salt: 2, ochre: 1 }, declared: { salt: 2 } }, request: { count: 2, declared: { iron: 2 } } });
+    const bad = (give: { actual: Record<string, number>; declared: Record<string, number> }, wants: string[] = ['iron']) =>
+      expect(() => adapter.applyAction(s, { type: 'postOffer', give, wants }, from)).toThrow();
+    bad({ actual: { salt: 2 }, declared: { salt: 2 } }); // fewer than 3 cards
+    bad({ actual: { salt: 2, ochre: 1 }, declared: { salt: 1, ochre: 1 } }); // dishonest count (declared 2 ≠ actual 3)
+    bad({ actual: { salt: 2, ochre: 1 }, declared: { iron: 2, wine: 1 } }); // <2 truthful (all bluffed)
+    bad({ actual: { salt: 2, 'calamity:volcano': 1 }, declared: { salt: 2, ochre: 1 } }); // non-tradable calamity given
+    bad({ actual: { salt: 2, ochre: 1 }, declared: { salt: 2, ochre: 1 } }, []); // no wanted commodity
   });
 
   it('buying a ninth-stack card converts treasury to a card + stock (conserved)', () => {
     let s = toTradePhase(createGame({ players: ['egypt', 'babylon'], seed: 11, maxTurns: 60 }));
     const actor = adapter.currentActor(s)!;
-    // Move tokens stock -> treasury (don't invent pieces) so conservation holds.
     s.players[actor]!.stock -= 40;
     s.players[actor]!.treasury += 40;
-    const before = pieceConservationProblems(s, pieceCounts);
-    expect(before).toEqual([]);
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
     const handBefore = Object.values(s.players[actor]!.hand).reduce((a, b) => a + b, 0);
     s = adapter.applyAction(s, { type: 'buyTradeCard', count: 1 }, actor);
-    expect(s.players[actor]!.treasury).toBe(22); // 40 - 18
+    expect(s.players[actor]!.treasury).toBe(22);
     const handAfter = Object.values(s.players[actor]!.hand).reduce((a, b) => a + b, 0);
     expect(handAfter).toBe(handBefore + 1);
-    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]); // tokens conserved
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
   });
 
-  it('hides opponent hands and the actual cards of a pending offer', () => {
-    let s = toTradePhase(createGame({ players: ['egypt', 'babylon'], seed: 13, maxTurns: 60 }));
+  it('redacts open offers/responses and completed deals per seat', () => {
+    let s = toTradePhase(createGame({ players: ['egypt', 'babylon', 'crete'], seed: 13, maxTurns: 60 }));
     const from = adapter.currentActor(s)!;
-    const to = s.seating.find((p) => p !== from)!;
+    const other = s.seating.find((p) => p !== from)!;
     s.players[from]!.hand = { salt: 2, ochre: 1 };
-    s = adapter.applyAction(s, {
-      type: 'proposeTrade', to,
-      offer: { actual: { salt: 2, ochre: 1 }, declared: { salt: 2 } },
-      request: { count: 3, declared: { iron: 2 } },
-    }, from);
-    const toView = adapter.viewFor(s, to);
-    // Responder sees the declaration but not the proposer's actual cards.
-    expect(toView.negotiation.pendingOffer!.offer.declared).toEqual({ salt: 2 });
-    expect(toView.negotiation.pendingOffer!.offer.actual).toEqual({});
-    // And cannot see the proposer's hand.
-    expect(toView.players[from]!.hand).toEqual({});
+    s = adapter.applyAction(s, { type: 'postOffer', give: { actual: { salt: 2, ochre: 1 }, declared: { salt: 2, ochre: 1 } }, wants: ['iron'] }, from);
+    const otherView = adapter.viewFor(s, other);
+    expect(otherView.negotiation.offers[0]!.give.declared).toEqual({ salt: 2, ochre: 1 });
+    expect(otherView.negotiation.offers[0]!.give.actual).toEqual({}); // actual hidden
+    expect(otherView.players[from]!.hand).toEqual({}); // hand hidden
   });
 });

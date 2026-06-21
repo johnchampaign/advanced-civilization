@@ -92,7 +92,7 @@ export function createInitialState(opts: NewGameOptions): GameState {
     areas,
     trade,
     pendingCalamities: [],
-    negotiation: { turnPointer: 0, passStreak: 0, pendingOffer: null },
+    negotiation: { turnPointer: 0, passStreak: 0, actions: 0, nextOfferId: 0, offers: [], completed: [] },
     calamityTradedFrom: {},
     rngState: rng.serialize(),
     log: [`Game started with ${seating.length} players (seed ${seed}).`],

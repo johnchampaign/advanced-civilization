@@ -27,7 +27,7 @@ function scenario(o: Opts): GameState {
   s.phase = 'trade';
   s.activeOrder = [...s.seating];
   s.actedThisPhase = [];
-  s.negotiation = { turnPointer: 0, passStreak: 0, pendingOffer: null };
+  s.negotiation = { turnPointer: 0, passStreak: 0, actions: 0, nextOfferId: 0, offers: [], completed: [] };
   return s;
 }
 

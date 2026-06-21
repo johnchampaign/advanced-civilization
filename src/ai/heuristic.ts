@@ -16,7 +16,7 @@
 import type { PlayerController, ControllerContext } from 'digital-boardgame-framework';
 import { advanceById, areaById, calamityById, commodityById } from '../data/index.js';
 import { cardGroupsHeld, cityCount, handValue, navalDestinations, neighbors, netAdvanceCost, populationCount } from '../engine/helpers.js';
-import type { Action, GameState, PlayerId } from '../engine/types.js';
+import type { Action, GameState, PlayerId, TradeBundle } from '../engine/types.js';
 
 export class HeuristicAI implements PlayerController<GameState, Action, PlayerId> {
   async selectAction(ctx: ControllerContext<GameState, Action, PlayerId>): Promise<Action> {
@@ -100,11 +100,8 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
         scored.sort((x, y) => y.score - x.score);
         return scored[0]!.score >= 3 ? scored[0]!.m : { type: 'pass' };
       }
-      case 'trade': {
-        const offer = state.negotiation.pendingOffer;
-        if (offer && offer.to === actor) return respondToOffer(state, actor);
-        return planTrade(state, actor, ctx.rng) ?? { type: 'pass' };
-      }
+      case 'trade':
+        return planTradeTurn(state, actor, ctx.rng) ?? { type: 'pass' };
       default:
         return { type: 'pass' };
     }
@@ -205,80 +202,70 @@ function cheapCommodities(hand: Record<string, number>, except: Set<string>): st
   return out.sort((a, b) => commValue(a) - commValue(b));
 }
 
-/** Propose a set-building swap WITHOUT peeking at opponents' hands (multiplayer-
- *  fair — the AI only ever sees its own cards). We offer spare cards we aren't
- *  collecting (two distinct types, declared, for variety so they're more likely
- *  to grow *someone's* set), slip in a tradable calamity if we hold one, and ask
- *  for two of the commodity we are collecting. The partner is chosen at random
- *  (we have no information to choose better); they accept only if it suits them. */
-function planTrade(state: GameState, actor: PlayerId, rng: { pick<T>(a: readonly T[]): T }): Action | null {
-  const me = state.players[actor]!;
-  if (totalGivable(me.hand) < 3) return null;
-  const myWant = topCommodity(me.hand);
-  if (!myWant) return null;
-  const myCal = givable(me.hand).map(([c]) => c).find(isTradableCal);
-
-  // Distinct spare commodity types (not the one we collect), cheapest first.
-  const spareTypes = Object.entries(me.hand)
-    .filter(([c, n]) => !isCal(c) && c !== myWant && n > 0)
-    .map(([c]) => c)
-    .sort((a, b) => commValue(a) - commValue(b));
-
-  const declared: Record<string, number> = {};
+/** Build a {actual, declared} bundle from a list of card ids. Calamities are
+ *  bluffed as 'ochre' so opponents don't see them; commodities are announced
+ *  truthfully. Honest count is preserved (declared total == actual total). */
+function buildBundle(cards: string[]): TradeBundle {
   const actual: Record<string, number> = {};
-  for (const c of spareTypes) { if (Object.keys(declared).length >= 2) break; declared[c] = 1; actual[c] = 1; }
-  if (Object.values(declared).reduce((s, n) => s + n, 0) < 2) {
-    // Not enough distinct spares — declare two of the cheapest spare if we can.
-    const c0 = spareTypes[0];
-    if (c0 && (me.hand[c0] ?? 0) >= 2) { declared[c0] = 2; actual[c0] = 2; } else return null;
+  const declared: Record<string, number> = {};
+  for (const c of cards) {
+    actual[c] = (actual[c] ?? 0) + 1;
+    const name = isCal(c) ? 'ochre' : c;
+    declared[name] = (declared[name] ?? 0) + 1;
   }
-  // Third card: a tradable calamity to offload, else one more spare we hold.
-  if (myCal) actual[myCal] = (actual[myCal] ?? 0) + 1;
-  else {
-    const extra = spareTypes.find((c) => (me.hand[c] ?? 0) > (actual[c] ?? 0));
-    if (!extra) return null;
-    actual[extra] = (actual[extra] ?? 0) + 1;
-  }
-  if (Object.values(actual).reduce((s, n) => s + n, 0) < 3) return null;
-
-  const others = state.seating.filter((o) => o !== actor);
-  if (others.length === 0) return null;
-  const to = rng.pick(others);
-  return { type: 'proposeTrade', to, offer: { actual, declared }, request: { count: 3, declared: { [myWant]: 2 } } };
+  return { actual, declared };
 }
 
-/** Accept an offer when it grows one of our sets or lets us offload a calamity,
- *  and we can honestly fulfil the request; otherwise decline. */
-function respondToOffer(state: GameState, actor: PlayerId): Action {
-  const decline = { type: 'respondTrade' as const, accept: false };
-  const offer = state.negotiation.pendingOffer;
-  if (!offer || offer.to !== actor) return decline;
-  const me = state.players[actor]!;
-  const need = offer.request.count;
-  const reqDeclared = offer.request.declared;
-  // Must hold the requested declared cards truthfully.
-  for (const [c, n] of Object.entries(reqDeclared)) if ((me.hand[c] ?? 0) < n) return decline;
-  if (totalGivable(me.hand) < need) return decline;
-
-  const incomingGrowsSet = Object.keys(offer.offer.declared).some((c) => !isCal(c) && (me.hand[c] ?? 0) >= 1);
-  const myCal = givable(me.hand).map(([c]) => c).find(isTradableCal);
-  if (!incomingGrowsSet && !myCal) return decline; // no benefit
-
-  // Build the give: the requested declared cards, then fill — our calamity first
-  // (offload it), then cheapest spare commodities — up to the requested count.
-  const actual: Record<string, number> = { ...reqDeclared };
-  let remaining = need - Object.values(reqDeclared).reduce((s, n) => s + n, 0);
-  const used = new Set(Object.keys(reqDeclared));
-  if (remaining > 0 && myCal && !used.has(myCal)) { actual[myCal] = 1; used.add(myCal); remaining--; }
-  for (const c of cheapCommodities(me.hand, used)) {
-    if (remaining <= 0) break;
-    // don't over-spend a card we don't have enough of after reqDeclared
-    const already = actual[c] ?? 0;
-    if ((me.hand[c] ?? 0) <= already) continue;
-    actual[c] = already + 1; remaining--;
+/** Three+ cards to give away: a tradable calamity to offload (if held) plus the
+ *  cheapest spares we aren't collecting, and optionally a wanted commodity. */
+function buildGive(me: { hand: Record<string, number> }, collect: string, wantToInclude?: string): TradeBundle | null {
+  const cards: string[] = [];
+  const committed: Record<string, number> = {};
+  const take = (c: string) => { committed[c] = (committed[c] ?? 0) + 1; cards.push(c); };
+  const cal = givable(me.hand).map(([c]) => c).find(isTradableCal);
+  if (cal) take(cal);
+  if (wantToInclude && !isCal(wantToInclude) && wantToInclude !== collect && (me.hand[wantToInclude] ?? 0) > (committed[wantToInclude] ?? 0)) take(wantToInclude);
+  for (const c of cheapCommodities(me.hand, new Set([collect]))) {
+    if (cards.length >= 3) break;
+    if ((me.hand[c] ?? 0) <= (committed[c] ?? 0)) continue;
+    take(c);
   }
-  if (remaining > 0) return decline; // couldn't fulfil
-  return { type: 'respondTrade', accept: true, give: { actual, declared: reqDeclared } };
+  if (cards.length < 3 || cards.filter((c) => !isCal(c)).length < 2) return null; // need ≥3 & ≥2 truthful
+  return buildBundle(cards);
+}
+
+/** One trade action per turn (multiplayer-fair — only our own hand is read):
+ *  accept a good response to our offer, else post one offer, else respond to an
+ *  offer that grows our set / lets us offload a calamity, else pass. */
+function planTradeTurn(state: GameState, actor: PlayerId, _rng: { pick<T>(a: readonly T[]): T }): Action | null {
+  const me = state.players[actor]!;
+  const n = state.negotiation;
+  const myWant = topCommodity(me.hand);
+
+  // (a) Accept a response to our own offer (judged on its declared cards).
+  const mine = n.offers.find((o) => o.from === actor);
+  if (mine && mine.responses.length) {
+    const good = mine.responses.find((r) => Object.keys(r.give.declared).some((c) => !isCal(c) && (myWant === c || (me.hand[c] ?? 0) >= 1))) ?? mine.responses[0];
+    if (good) return { type: 'acceptResponse', offerId: mine.id, responder: good.from };
+  }
+
+  // (b) Post one standing offer if we have none.
+  if (!mine && totalGivable(me.hand) >= 3 && myWant) {
+    const give = buildGive(me, myWant);
+    if (give) return { type: 'postOffer', give, wants: [myWant] };
+  }
+
+  // (c) Respond to another player's offer that benefits us and we haven't answered.
+  for (const o of n.offers) {
+    if (o.from === actor || o.responses.some((r) => r.from === actor)) continue;
+    const grows = Object.keys(o.give.declared).some((c) => !isCal(c) && (me.hand[c] ?? 0) >= 1);
+    const haveCal = givable(me.hand).some(([c]) => isTradableCal(c));
+    if (!grows && !haveCal) continue;
+    const give = buildGive(me, myWant ?? '', o.wants.find((w) => (me.hand[w] ?? 0) >= 1));
+    if (give) return { type: 'respondOffer', offerId: o.id, give };
+  }
+
+  return { type: 'pass' };
 }
 
 // ---- Ships ----------------------------------------------------------------

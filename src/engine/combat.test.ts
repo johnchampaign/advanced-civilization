@@ -28,7 +28,7 @@ function scenario(tokens: Record<PlayerId, Record<string, number>>, cities: Reco
   s.phase = 'movement';
   s.activeOrder = ['egypt', 'babylon'];
   s.actedThisPhase = [];
-  s.negotiation = { turnPointer: 0, passStreak: 0, pendingOffer: null };
+  s.negotiation = { turnPointer: 0, passStreak: 0, actions: 0, nextOfferId: 0, offers: [], completed: [] };
   return s;
 }
 

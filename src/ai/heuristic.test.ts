@@ -15,42 +15,63 @@ function tradeState(hands: Record<PlayerId, Record<string, number>>): GameState 
   s.phase = 'trade';
   s.activeOrder = ['egypt', 'babylon'];
   s.actedThisPhase = [];
-  s.negotiation = { turnPointer: 0, passStreak: 0, pendingOffer: null };
+  s.negotiation = { turnPointer: 0, passStreak: 0, actions: 0, nextOfferId: 0, offers: [], completed: [] };
   return s;
 }
 
-describe('AI trade negotiation', () => {
-  it('proposes and completes a mutually-beneficial set-building swap', async () => {
-    // egypt collects salt, babylon collects iron; each holds spares of the other's
-    // commodity plus a junk card.
-    let s = tradeState({
+/** Drive the AI through the trade phase (each actor in turn) until it ends or a
+ *  cap. Returns the final state. */
+async function runTradePhase(s0: GameState, seed = 1): Promise<GameState> {
+  let s = s0; let guard = 0;
+  while (guard++ < 60) {
+    const actor = adapter.currentActor(s);
+    if (!actor || s.phase !== 'trade') break;
+    const action = await ai.selectAction({ state: s, actor, adapter, rng: new Rng(seed + guard) });
+    s = adapter.applyAction(s, action, actor);
+  }
+  return s;
+}
+
+describe('AI trade negotiation (open-offer board)', () => {
+  it('posts, responds to, and completes a set-building swap', async () => {
+    // egypt collects salt, babylon collects iron; each holds spares of the other's.
+    const s = await runTradePhase(tradeState({
       egypt: { salt: 3, iron: 2, ochre: 1 },
       babylon: { iron: 3, salt: 2, hides: 1 },
-    });
-    const propose = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
-    expect(propose.type).toBe('proposeTrade');
-    s = adapter.applyAction(s, propose, 'egypt');
-    expect(adapter.currentActor(s)).toBe('babylon');
-    const respond = await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) });
-    expect(respond.type).toBe('respondTrade');
-    expect((respond as { accept: boolean }).accept).toBe(true);
-    s = adapter.applyAction(s, respond, 'babylon');
-    // Both grew their collections.
-    expect(s.players['egypt']!.hand['salt']).toBe(5);
-    expect(s.players['babylon']!.hand['iron']).toBe(5);
+    }));
+    // A deal was struck and both grew their collections.
+    expect((s.negotiation.completed ?? []).length).toBeGreaterThan(0);
+    expect(s.players['egypt']!.hand['salt']! + s.players['babylon']!.hand['iron']!).toBeGreaterThan(6);
   });
 
-  it('dumps a tradable calamity onto the trade partner', async () => {
-    let s = tradeState({
+  it('posts an offer even with no visible willing partner (multiplayer-fair, blind)', async () => {
+    const s = tradeState({ egypt: { salt: 3, iron: 2, ochre: 1 }, babylon: {} });
+    const action = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+    expect(action.type).toBe('postOffer'); // blind — it doesn't peek at babylon's empty hand
+  });
+
+  it('dumps a tradable calamity onto a trade partner (bluffed, then passed on the deal)', async () => {
+    const s = await runTradePhase(tradeState({
       egypt: { salt: 3, iron: 2, 'calamity:epidemic': 1 },
       babylon: { iron: 3, salt: 2, hides: 1 },
-    });
-    s = adapter.applyAction(s, await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) }), 'egypt');
-    s = adapter.applyAction(s, await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) }), 'babylon');
-    // The calamity slipped across with the undeclared card.
+    }));
+    // The calamity left egypt via a completed trade; egypt recorded as the giver,
+    // so egypt is immune as a secondary victim (§29.61) and isn't the primary one.
     expect(s.players['egypt']!.hand['calamity:epidemic']).toBeUndefined();
-    expect(s.players['babylon']!.hand['calamity:epidemic']).toBe(1);
-    expect(s.calamityTradedFrom['epidemic']).toBe('egypt');
+    expect((s.negotiation.completed ?? []).length).toBeGreaterThan(0);
+    expect(s.log.some((l) => l.includes('egypt') && l.includes('suffers Epidemic'))).toBe(false);
+  });
+
+  it('passes rather than respond to an offer it cannot benefit from', async () => {
+    // egypt offers iron/ochre wanting salt; babylon holds only wine and gains nothing.
+    const s = tradeState({ egypt: { iron: 5, ochre: 1 }, babylon: { wine: 3 } });
+    s.negotiation.offers = [{
+      id: 1, from: 'egypt', wants: ['salt'], responses: [],
+      give: { actual: { iron: 2, ochre: 1 }, declared: { iron: 2, ochre: 1 } },
+    }];
+    s.negotiation.turnPointer = 1; // babylon's turn
+    const respond = await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) });
+    expect(respond.type).toBe('pass');
   });
 
   it('builds a ship from a coastal foothold with spare tokens', async () => {
@@ -62,28 +83,6 @@ describe('AI trade negotiation', () => {
     s.phase = 'shipConstruction'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
     const action = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
     expect(action.type).toBe('buildShips');
-  });
-
-  it('proposes blind — it never inspects the opponent\'s hand', async () => {
-    // The partner's hand is empty: a hand-peeking planner would find no willing
-    // partner and pass. A multiplayer-fair (blind) planner still proposes.
-    const s = tradeState({ egypt: { salt: 3, iron: 2, ochre: 1 }, babylon: {} });
-    const action = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
-    expect(action.type).toBe('proposeTrade');
-    expect((action as { to: string }).to).toBe('babylon');
-  });
-
-  it('declines a trade it cannot fulfil or gain from', async () => {
-    // babylon is asked for salt it does not have, and gains nothing.
-    let s = tradeState({ egypt: { iron: 5, ochre: 1 }, babylon: { wine: 3 } });
-    // Force a pending offer egypt->babylon requesting salt.
-    s.negotiation.pendingOffer = {
-      from: 'egypt', to: 'babylon',
-      offer: { actual: { iron: 2, ochre: 1 }, declared: { iron: 2 } },
-      request: { count: 3, declared: { salt: 2 } },
-    };
-    const respond = await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) });
-    expect((respond as { accept: boolean }).accept).toBe(false);
   });
 });
 

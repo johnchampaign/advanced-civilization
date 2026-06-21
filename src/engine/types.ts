@@ -42,25 +42,42 @@ export const PHASE_ORDER: Phase[] = [
   'astAdjustment',
 ];
 
-/** A card bundle in a trade: the cards actually handed over, plus the subset the
- *  player openly declares. Rules §28.3: the count and at least two declared cards
- *  must be truthful; any remaining cards may be other commodities or *tradable*
- *  calamities, regardless of what was said. Card ids are commodity ids or
- *  `calamity:<id>`. */
+/** A card bundle in a trade: the cards actually handed over (`actual`, secret),
+ *  plus the names the player publicly *announces* (`declared`). Per §28.3 the
+ *  announced count must be honest (so `declared` has the same total as `actual`)
+ *  and at least two announced cards must be truthful; the rest may be bluffs —
+ *  any commodity or *tradable* calamity, "regardless of what was said". Card ids
+ *  are commodity ids or `calamity:<id>`. */
 export interface TradeBundle {
   actual: Record<string, number>;
   declared: Record<string, number>;
 }
 
-/** An outstanding trade offer awaiting the target's response. */
-export interface TradeOffer {
+/** One player's response to a standing open offer (their counter-give). */
+export interface TradeResponse {
   from: PlayerId;
-  to: PlayerId;
-  /** Cards the proposer is giving. */
-  offer: TradeBundle;
-  /** What the proposer asks the target to give: an honest total count and the
-   *  declared (truthful, >=2) cards the proposer insists on. */
-  request: { count: number; declared: Record<string, number> };
+  give: TradeBundle;
+}
+
+/** A standing open offer on the trade board (§28 open negotiation). Everyone
+ *  sees `declared` + `wants`; `actual` is hidden until a deal executes. */
+export interface OpenOffer {
+  id: number;
+  from: PlayerId;
+  /** Cards the offerer will hand over (announced via declared, bluffs allowed). */
+  give: TradeBundle;
+  /** Commodities the offerer will accept in return — 1..5 alternatives. */
+  wants: string[];
+  responses: TradeResponse[];
+}
+
+/** A completed two-player deal this trade phase (kept so each trader can review
+ *  the "Trade Details"; viewFor redacts it to deals involving the viewer). */
+export interface CompletedTrade {
+  a: PlayerId;
+  b: PlayerId;
+  aGave: TradeBundle;
+  bGave: TradeBundle;
 }
 
 /** Per-player mutable state. */
@@ -127,17 +144,21 @@ export interface GameState {
   trade: TradeStacks;
   /** Calamities drawn this turn awaiting resolution: { calamityId, holder }. */
   pendingCalamities: { calamityId: string; holder: PlayerId }[];
-  /** Trade-phase negotiation sub-state. */
+  /** Trade-phase negotiation sub-state (open-offer board, §28). */
   negotiation: {
-    /** Index into activeOrder of whose turn it is to propose. */
+    /** Index into activeOrder of whose turn it is to act. */
     turnPointer: number;
-    /** Consecutive pass/decline count; phase ends when it reaches player count. */
+    /** Consecutive pass count; phase ends when it reaches player count. */
     passStreak: number;
-    /** Proposals made this trade phase; a generous cap bounds the phase so an
-     *  eager AI (whose accepted trades reset passStreak) can't loop forever. */
-    proposals?: number;
-    /** Outstanding offer awaiting the target's response, if any. */
-    pendingOffer: TradeOffer | null;
+    /** Trade actions taken this phase; a generous cap bounds the phase so eager
+     *  AIs (whose deals reset passStreak) can't loop forever. */
+    actions?: number;
+    /** Monotonic id source for offers. */
+    nextOfferId?: number;
+    /** Standing open offers anyone may respond to. */
+    offers: OpenOffer[];
+    /** Deals executed this phase (for the Trade Details review). */
+    completed?: CompletedTrade[];
   };
   /** Who handed each calamity to its current holder (calamityId -> giver). The
    *  giver may not be named a secondary victim (§29.61). */
@@ -186,22 +207,32 @@ export interface TradeAcquisitionAction {
   type: 'drawTradeCards';
 }
 
-/** Propose a bilateral trade to another player (rules §28). The proposer gives
- *  `offer` and asks the target to give `request.count` cards including the
- *  `request.declared` cards. Validated against §28.3 truth rules. */
-export interface ProposeTradeAction {
-  type: 'proposeTrade';
-  to: PlayerId;
-  offer: TradeBundle;
-  request: { count: number; declared: Record<string, number> };
+/** Post (or replace) your standing open offer on the trade board (§28): the
+ *  cards you'll give (announced via `give.declared`, bluffs allowed) and 1..5
+ *  commodities you'll accept in return. */
+export interface PostOfferAction {
+  type: 'postOffer';
+  give: TradeBundle;
+  wants: string[];
 }
 
-/** Respond to the outstanding offer. Accepting requires `give` (the target's
- *  actual + declared cards) to satisfy the proposer's request. */
-export interface RespondTradeAction {
-  type: 'respondTrade';
-  accept: boolean;
-  give?: TradeBundle;
+/** Attach (or replace) your counter-give to another player's open offer. */
+export interface RespondOfferAction {
+  type: 'respondOffer';
+  offerId: number;
+  give: TradeBundle;
+}
+
+/** As the offer's owner, accept one responder's counter — executes the deal. */
+export interface AcceptResponseAction {
+  type: 'acceptResponse';
+  offerId: number;
+  responder: PlayerId;
+}
+
+/** Withdraw your own standing open offer. */
+export interface WithdrawOfferAction {
+  type: 'withdrawOffer';
 }
 
 /** Buy a Gold/Ivory card from stack 9 at 18 treasury tokens (§27.5). */
@@ -246,8 +277,10 @@ export type Action =
   | ResolveConflictAction
   | BuildCityAction
   | TradeAcquisitionAction
-  | ProposeTradeAction
-  | RespondTradeAction
+  | PostOfferAction
+  | RespondOfferAction
+  | AcceptResponseAction
+  | WithdrawOfferAction
   | BuyTradeCardAction
   | ResolveCalamityAction
   | BuyAdvanceAction

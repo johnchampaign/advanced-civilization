@@ -202,16 +202,11 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
   moved?: Set<string>;
 }) {
   const [hovered, setHovered] = useState<string | null>(null);
-  const zoomAnchor = zoomTo ? anchors[zoomTo] : null;
-  const zoomStyle = zoomAnchor
-    ? {
-        transform: 'scale(1.8)',
-        transformOrigin: `${(zoomAnchor.x / MAIN_VIEWBOX.w) * 100}% ${(zoomAnchor.y / MAIN_VIEWBOX.h) * 100}%`,
-        transition: 'transform 0.25s ease',
-      }
-    : { transform: 'scale(1)', transition: 'transform 0.25s ease' };
+  void zoomTo; // (was a CSS scale-zoom; removed — it created overflow that the
+  // scroll container couldn't pan, hiding edge territories. We scroll-center on
+  // the origin instead, which keeps the whole map reachable.)
   return (
-    <div style={{ position: 'relative', width: MAIN_VIEWBOX.w, maxWidth: '100%', margin: '0 auto', ...zoomStyle }}>
+    <div style={{ position: 'relative', width: MAIN_VIEWBOX.w, maxWidth: '100%', margin: '0 auto' }}>
       <img src="/assets/map-main.svg" alt="map" style={{ width: '100%', display: 'block' }} />
       <svg viewBox={`0 0 ${MAIN_VIEWBOX.w} ${MAIN_VIEWBOX.h}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
         {/* Render every anchored area (not just occupied ones) so empty
@@ -252,9 +247,11 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
                 <text key={'s' + owner} x={an.x - an.r + i * 7} y={an.y - an.r - 2} fontSize={an.r * 0.9} fill={civById.get(owner)?.color ?? '#888'}>⛵</text>
               ))}
               {showCap && (
+                // Carrying-capacity hint, shown as "≤N" so it reads as a limit,
+                // not a token/city. (Hover the area for the full breakdown.)
                 <g pointerEvents="none">
-                  <rect x={an.x + an.r - 1} y={an.y - an.r - 9} width={13} height={12} rx={2} fill="#1a1410" stroke="#ffd23f" strokeWidth={0.6} opacity={0.92} />
-                  <text x={an.x + an.r + 5.5} y={an.y - an.r + 0.5} textAnchor="middle" fontSize={9} fontWeight="bold" fill="#ffd23f">{meta!.sustains}</text>
+                  <rect x={an.x + an.r - 2} y={an.y - an.r - 9} width={17} height={11} rx={5} fill="#0d3a4a" stroke="#cfe8ff" strokeWidth={0.5} opacity={0.85} />
+                  <text x={an.x + an.r + 6.5} y={an.y - an.r - 0.5} textAnchor="middle" fontSize={8} fontWeight="bold" fill="#cfe8ff">≤{meta!.sustains}</text>
                 </g>
               )}
             </g>
@@ -863,6 +860,16 @@ function TradeControls({ state, actor, onApply }: { state: GameState; actor: Pla
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div className="civ-lbl">Your hand: <b>{handTotal}</b> commodity card{handTotal === 1 ? '' : 's'} · rough value <b>{handValue(me.hand)}</b> (sets count more — value grows with the square of a set).</div>
+      {(() => {
+        const cals = Object.keys(me.hand).filter((c) => isCal(c) && (me.hand[c] ?? 0) > 0);
+        if (cals.length === 0) return null;
+        const tradable = cals.filter((c) => !c.startsWith('calamity:volcano') && !c.startsWith('calamity:famine') && !c.startsWith('calamity:civilwar') && !c.startsWith('calamity:flood'));
+        return (
+          <div className="civ-msg" style={{ padding: 6, fontSize: 12, background: 'rgba(120,42,42,0.5)' }}>
+            ⚠ You hold {cals.length} calamity card{cals.length === 1 ? '' : 's'}: {cals.map((c) => c.slice(9)).join(', ')}. Whatever you still hold when trading ends <b>strikes you</b>. You can slip a <i>tradable</i> calamity into an offer to pass it on{tradable.length < cals.length ? '; the non-tradable ones (Volcano/Famine/Civil War/Flood) can’t be passed and will hit you' : ''}.
+          </div>
+        );
+      })()}
       {/* Completed deals (Trade Details — private to you). */}
       {(n.completed ?? []).map((d, i) => {
         const youAreA = d.a === actor;

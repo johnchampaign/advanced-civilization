@@ -618,11 +618,28 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
   // Movement is handled by <MovementControls> (click origin → count → destination).
   if (phase === 'cityConstruction') {
     const builds = legal.filter((a) => a.type === 'buildCity') as Extract<Action, { type: 'buildCity' }>[];
+    // §26.31: each city needs 2 supporting tokens elsewhere on the board (a city
+    // area holds none; over-limit tokens are culled). Warn if a build would lose
+    // the city for lack of support, so it isn't an instant, silent loss.
+    const cities = Object.values(state.areas).filter((a) => a.city === actor).length;
+    const supportAfter = (buildArea: string) => Object.entries(state.areas)
+      .filter(([aid]) => aid !== buildArea)
+      .reduce((sum, [aid, a]) => sum + Math.min(a.tokens[actor] ?? 0, areaById.get(aid)?.sustains ?? 0), 0);
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {builds.length === 0 && <span className="civ-lbl">No city can be built (need 6 tokens on a city site).</span>}
+        <span className="civ-lbl">A city needs <b>2 supporting tokens elsewhere</b> on the board (§26.31) — tokens left in the city's own area are returned to stock.</span>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {builds.map((b, i) => <button className="civ-btn" key={i} onClick={() => onApply(b)}>Build city in {areaById.get(b.area)?.name}</button>)}
+          {builds.map((b, i) => {
+            const unsupported = supportAfter(b.area) < 2 * (cities + 1);
+            return (
+              <button className="civ-btn" key={i} style={unsupported ? { borderColor: '#c0392b' } : undefined}
+                title={unsupported ? 'You lack 2 supporting tokens elsewhere — this city would be reduced immediately (§26.31).' : ''}
+                onClick={() => { if (!unsupported || confirm(`You don't have 2 supporting tokens elsewhere, so the city in ${areaById.get(b.area)?.name} will be lost immediately (§26.31). Build anyway?`)) onApply(b); }}>
+                Build city in {areaById.get(b.area)?.name}{unsupported ? ' ⚠' : ''}
+              </button>
+            );
+          })}
         </div>
         {pass && <button className="civ-btn" onClick={() => onApply(pass)}>Done building (pass)</button>}
       </div>

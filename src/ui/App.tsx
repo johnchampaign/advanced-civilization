@@ -5,7 +5,7 @@ import type { Action, GameState, PlayerId } from '../engine/index.js';
 import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, civById, commodityById, epochs } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
 import { handValue, creditTowards } from '../engine/helpers.js';
-import { submitStandaloneReport } from '../client/api.js';
+import { submitStandaloneReport, fetchMyReports, type MyReport } from '../client/api.js';
 import { anchors, MAIN_VIEWBOX } from './anchors.js';
 
 const DEFAULT_PLAYERS: PlayerId[] = ['egypt', 'babylon', 'crete', 'assyria'];
@@ -899,6 +899,12 @@ function HotseatReport({ state, focus }: { state: GameState; focus: PlayerId }) 
   const [message, setMessage] = useState('');
   const [severity, setSeverity] = useState<'bug' | 'rules-question' | 'feedback'>('bug');
   const [status, setStatus] = useState<string | null>(null);
+  const [mine, setMine] = useState<MyReport[]>([]);
+  const [showMine, setShowMine] = useState(false);
+
+  const refreshMine = useCallback(() => { fetchMyReports('').then(setMine).catch(() => {}); }, []);
+  useEffect(() => { refreshMine(); }, [refreshMine]);
+  const answered = mine.filter((r) => r.resolution);
 
   const download = () => {
     const text = `Advanced Civilization — hotseat, turn ${state.turn}\n\n${state.log.join('\n')}\n\n--- state ---\n${JSON.stringify(state)}`;
@@ -916,24 +922,47 @@ function HotseatReport({ state, focus }: { state: GameState; focus: PlayerId }) 
         clientBuild: 'web-ui-hotseat', userAgent: navigator.userAgent,
       });
       setStatus(`Thanks! Report ${reportId.slice(0, 8)} received.`); setMessage('');
+      setTimeout(refreshMine, 500);
     } catch (e) {
       setStatus(`Couldn't send (${(e as Error).message}). Use “Download report” and email it.`);
     }
   };
 
-  if (!open) return <button className="civ-btn" onClick={() => setOpen(true)}>Report a problem</button>;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <select value={severity} onChange={(e) => setSeverity(e.target.value as typeof severity)} style={{ fontSize: 11 }}>
-        <option value="bug">Bug</option><option value="rules-question">Rules question</option><option value="feedback">Feedback</option>
-      </select>
-      <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="What happened?" rows={3} style={{ fontSize: 12 }} />
       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-        <button className="civ-btn" disabled={!message.trim()} onClick={send}>Send</button>
-        <button className="civ-btn" onClick={download}>Download report</button>
-        <button className="civ-btn" onClick={() => { setOpen(false); setStatus(null); }}>Close</button>
+        {!open && <button className="civ-btn" onClick={() => setOpen(true)}>Report a problem</button>}
+        {mine.length > 0 && <button className="civ-btn" onClick={() => { setShowMine((v) => !v); refreshMine(); }}>My reports{answered.length ? ` (${answered.length} ✓)` : ''}</button>}
       </div>
-      {status && <span className="civ-lbl" style={{ color: '#5a2d0a' }}>{status}</span>}
+
+      {showMine && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 160, overflowY: 'auto', border: '1px solid #7a4a18', borderRadius: 4, padding: 5 }}>
+          {mine.length === 0 && <span className="civ-lbl">No reports yet.</span>}
+          {mine.map((r, i) => (
+            <div key={i} style={{ fontSize: 11, borderBottom: '1px solid #7a4a1855', paddingBottom: 3 }}>
+              <div><b>{r.severity}</b>: {r.message}</div>
+              {r.resolution
+                ? <div style={{ color: '#2e6b3a' }}>✓ <b>Response:</b> {r.resolution.note}</div>
+                : <div className="civ-lbl">⏳ awaiting response</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {open && (
+        <>
+          <select value={severity} onChange={(e) => setSeverity(e.target.value as typeof severity)} style={{ fontSize: 11 }}>
+            <option value="bug">Bug</option><option value="rules-question">Rules question</option><option value="feedback">Feedback</option>
+          </select>
+          <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="What happened?" rows={3} style={{ fontSize: 12 }} />
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            <button className="civ-btn" disabled={!message.trim()} onClick={send}>Send</button>
+            <button className="civ-btn" onClick={download}>Download report</button>
+            <button className="civ-btn" onClick={() => { setOpen(false); setStatus(null); }}>Close</button>
+          </div>
+          {status && <span className="civ-lbl" style={{ color: '#5a2d0a' }}>{status}</span>}
+        </>
+      )}
     </div>
   );
 }

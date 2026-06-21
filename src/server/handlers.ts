@@ -41,6 +41,36 @@ export async function handleApi(
   const segs = pathname.replace(/\/+$/, '').split('/').filter(Boolean);
   if (segs[0] !== 'api') return { status: 404, body: { error: 'not found' } };
 
+  // ---- a reporter's own reports + resolutions (responses inbox) ----
+  if (segs[1] === 'report' && segs.length === 2 && method === 'GET') {
+    const reporter = query.get('reporter');
+    if (!reporter) return { status: 422, body: { error: 'reporter required' } };
+    const marker = `reporter:${reporter}`;
+    try {
+      const all = await server.listReports();
+      const mine = all
+        .filter((r) => {
+          const msg = r.message ?? '';
+          if (msg.includes(marker)) return true;
+          // Legacy reports submitted before reporter-tagging existed: in the
+          // single-reporter hotseat context, surface untagged hotseat reports too.
+          const untagged = !/<!--\s*reporter:/.test(msg);
+          return untagged && r.gameId === 'hotseat' && (r.clientBuild ?? '').includes('web-ui-hotseat');
+        })
+        .map((r) => ({
+          message: (r.message ?? '').replace(/\s*<!--\s*reporter:[^>]*-->\s*/g, '').trim(),
+          severity: r.severity,
+          category: r.category,
+          createdAt: r.createdAt,
+          resolution: r.resolution ?? null,
+        }))
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+      return { status: 200, body: { reports: mine } };
+    } catch (e) {
+      return { status: 500, body: { error: (e as Error).message } };
+    }
+  }
+
   // ---- standalone bug report (hotseat — no game) ----
   if (segs[1] === 'report' && segs.length === 2 && method === 'POST') {
     if (!putReport) return { status: 501, body: { error: 'reporting is not configured on this host' } };

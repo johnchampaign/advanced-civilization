@@ -38,19 +38,43 @@ export async function createNetworkGame(baseUrl: string, body: { players: string
   return fetch(`${baseUrl}/api/games`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => json<{ gameId: string; invites: Record<string, string> }>(r));
 }
 
-/** Submit a standalone bug report (hotseat — no game/token). Resolves only on a
- *  server-confirmed reportId (never a silent success). */
+/** A stable per-browser reporter id (localStorage), so a reporter can later see
+ *  resolutions of their own reports. */
+export function reporterId(): string {
+  const key = 'civ-reporter-id';
+  try {
+    let v = localStorage.getItem(key);
+    if (!v) { v = `r-${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`; localStorage.setItem(key, v); }
+    return v;
+  } catch { return 'r-anon'; }
+}
+
+/** Submit a standalone bug report (hotseat — no game/token). Tags the message
+ *  with the reporter id so the reply is findable. Resolves only on a server-
+ *  confirmed reportId (never a silent success). */
 export async function submitStandaloneReport(baseUrl: string, body: {
   message: string; severity?: string; category?: string;
   serverSnapshot?: string; reporterSide?: string; turnNumber?: number;
   clientLog?: { turn: number; kind: string; payload: string; ts: number }[];
   clientBuild?: string; userAgent?: string;
 }): Promise<{ reportId: string }> {
-  const res = await fetch(`${baseUrl}/api/report`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const tagged = { ...body, message: `${body.message}\n\n<!-- reporter:${reporterId()} -->` };
+  const res = await fetch(`${baseUrl}/api/report`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(tagged) });
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
   const j = (await res.json()) as { reportId?: string };
   if (!j.reportId) throw new Error('server did not confirm the report');
   return { reportId: j.reportId };
+}
+
+export interface MyReport { message: string; severity: string; category?: string; createdAt: string; resolution?: { at: string; note: string } | null }
+
+/** Fetch this browser's own reports (with any resolutions). */
+export async function fetchMyReports(baseUrl: string): Promise<MyReport[]> {
+  try {
+    const res = await fetch(`${baseUrl}/api/report?reporter=${encodeURIComponent(reporterId())}`);
+    if (!res.ok) return [];
+    return ((await res.json()) as { reports?: MyReport[] }).reports ?? [];
+  } catch { return []; }
 }
 
 /** Extract a seat's secret token from its invite URL. */

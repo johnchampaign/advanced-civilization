@@ -169,6 +169,24 @@ export interface PendingCityChoice {
   overviewBefore: string;
 }
 
+/** A pending "choose which of your own units to give up" decision (§29.63): the
+ *  primary victim of Famine/Epidemic/Flood picks which units to lose, and the
+ *  Civil War victim picks which to cede to the beneficiary. */
+export interface PendingUnitLoss {
+  calamityId: string;
+  holder: PlayerId;
+  /** Unit points to shed (a token = 1, a city = cityWorth). */
+  points: number;
+  cityWorth: number;
+  /** 'remove' → back to stock (reduced/substituted); 'cede' → to the beneficiary. */
+  mode: 'remove' | 'cede';
+  beneficiary?: PlayerId;
+  /** If set, the loss is confined to these areas (Flood plain). */
+  areas?: string[];
+  before: Record<string, { city?: PlayerId; tokens: Record<PlayerId, number> }>;
+  overviewBefore: string;
+}
+
 /** A force present in an area, for the combat step-through display. */
 export interface CombatForce { id: PlayerId; tokens: number; city: boolean }
 
@@ -259,6 +277,9 @@ export interface GameState {
   /** Set when the current calamity's primary victim must choose which of their
    *  cities to reduce (§30.321/.711/.811); resolved by a `chooseCities` action. */
   pendingCityChoice?: PendingCityChoice;
+  /** Set when the current calamity's primary victim must choose which of their
+   *  units to lose/cede (§29.63 / §30.41); resolved by a `chooseUnits` action. */
+  pendingUnitLoss?: PendingUnitLoss;
   /** The most recent conflict phase's combats, one per area, for a step-through
    *  modal. Overwritten each conflict phase; empty if none. */
   lastCombats?: CombatEvent[];
@@ -379,6 +400,14 @@ export interface ChooseCitiesAction {
   areas: string[];
 }
 
+/** §29.63: choose which of your own units to give up (Famine/Epidemic/Flood loss,
+ *  or the Civil War faction you cede) — tokens per area + whole cities. */
+export interface ChooseUnitsAction {
+  type: 'chooseUnits';
+  tokens: Record<string, number>;
+  cities: string[];
+}
+
 export interface ResolveCalamityAction {
   type: 'resolveCalamity';
   calamityId: string;
@@ -397,6 +426,7 @@ export type Action =
   | ConvertAreaAction
   | AllocateLossAction
   | ChooseCitiesAction
+  | ChooseUnitsAction
   | PlaceTokensAction
   | MoveAction
   | BuildShipsAction

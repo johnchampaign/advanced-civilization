@@ -733,6 +733,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
     );
   }
   if (phase === 'calamity' && state.pendingCityChoice?.holder === actor) return <CityChoiceControls state={state} legal={legal} onApply={onApply} />;
+  if (phase === 'calamity' && state.pendingUnitLoss?.holder === actor) return <UnitLossControls state={state} legal={legal} onApply={onApply} />;
   if (phase === 'calamity' && state.pendingAllocation?.holder === actor) return <AllocationControls state={state} legal={legal} onApply={onApply} />;
   if (phase === 'calamity') return <ConversionControls state={state} legal={legal} onApply={onApply} />;
   if (phase === 'acquireAdvances') return <AdvancePicker state={state} actor={actor} onApply={onApply} />;
@@ -750,6 +751,47 @@ const COMMODITY_ORDER = ['ochre', 'hides', 'iron', 'papyrus', 'salt', 'timber', 
 /** Acquire-advances panel (§31): pick an advance, then choose exactly which
  *  commodity cards to spend and how much treasury — instead of auto-paying. */
 /** §29/§32.94 Monotheism conversion picker, shown during the calamity phase. */
+/** §29.63 / §30.41: choose which of your own units to lose (Famine/Epidemic/Flood)
+ *  or cede (Civil War) — tokens per area + whole cities, covering the required loss. */
+function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: Action[]; onApply: (a: Action) => void }) {
+  const u = state.pendingUnitLoss!;
+  const scope = u.areas ?? Object.keys(state.areas);
+  const inv = scope.map((aid) => ({ aid, tokens: state.areas[aid]?.tokens[u.holder] ?? 0, city: state.areas[aid]?.city === u.holder }))
+    .filter((x) => x.tokens > 0 || x.city);
+  const sugg = (legal.find((x) => x.type === 'chooseUnits') as Extract<Action, { type: 'chooseUnits' }> | undefined);
+  const [tok, setTok] = useState<Record<string, number>>(sugg?.tokens ?? {});
+  const [cities, setCities] = useState<string[]>(sugg?.cities ?? []);
+  const avail = inv.reduce((t, x) => t + x.tokens + (x.city ? u.cityWorth : 0), 0);
+  const required = Math.min(u.points, avail);
+  const total = Object.values(tok).reduce((t, n) => t + n, 0) + cities.length * u.cityWorth;
+  const ok = total >= required && total - required < u.cityWorth;
+  const verb = u.mode === 'cede' ? `cede to ${nationName(u.beneficiary!)}` : 'lose';
+  const setT = (aid: string, max: number, d: number) => setTok((s) => ({ ...s, [aid]: Math.max(0, Math.min(max, (s[aid] ?? 0) + d)) }));
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span className="civ-lbl"><b>{(state.lastCalamities ?? []).find((e) => e.calamityId === u.calamityId)?.calamity ?? u.calamityId}</b> (§29.63) — choose units to <b>{verb}</b> totalling <b>{required}</b> point{required === 1 ? '' : 's'}{u.areas ? ' (on the flood plain)' : ''}:</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: '30vh', overflowY: 'auto' }}>
+        {inv.map((x) => (
+          <div key={x.aid} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 110, color: nationColor(u.holder) }}>{areaById.get(x.aid)?.name ?? x.aid}</span>
+            {x.tokens > 0 && <>
+              <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setT(x.aid, x.tokens, -1)}>−</button>
+              <b style={{ width: 36, textAlign: 'center' }}>{tok[x.aid] ?? 0}/{x.tokens}</b>
+              <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setT(x.aid, x.tokens, +1)}>+</button>
+              <span className="civ-lbl" style={{ color: '#9a8d6a' }}>tokens</span>
+            </>}
+            {x.city && <button className={`civ-btn ${cities.includes(x.aid) ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => setCities((c) => c.includes(x.aid) ? c.filter((y) => y !== x.aid) : [...c, x.aid])}>{cities.includes(x.aid) ? '✗ ' : ''}city ({u.cityWorth})</button>}
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <span className="civ-lbl" style={{ color: ok ? '#7caa6a' : '#caa05a' }}>{total} / {required} points</span>
+        <button className="civ-btn" disabled={!ok} onClick={() => onApply({ type: 'chooseUnits', tokens: tok, cities })}>{u.mode === 'cede' ? 'Cede these' : 'Lose these'}</button>
+      </div>
+    </div>
+  );
+}
+
 /** §30.321/.711/.811: as the primary victim of Superstition/Civil Disorder/
  *  Iconoclasm, choose which of your cities to reduce. */
 function CityChoiceControls({ state, legal, onApply }: { state: GameState; legal: Action[]; onApply: (a: Action) => void }) {

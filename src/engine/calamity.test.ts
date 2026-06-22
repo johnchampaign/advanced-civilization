@@ -40,8 +40,8 @@ function resolve(s: GameState): GameState {
     const actor = adapter.currentActor(s);
     if (!actor) break;
     if (s.phase === 'trade') { s = adapter.applyAction(s, { type: 'pass' }, actor); continue; }
-    if (s.pendingCityChoice || s.pendingAllocation) {
-      const suggested = adapter.legalActions(s, actor).find((a) => a.type === 'chooseCities' || a.type === 'allocateLoss');
+    if (s.pendingCityChoice || s.pendingUnitLoss || s.pendingAllocation) {
+      const suggested = adapter.legalActions(s, actor).find((a) => a.type === 'chooseCities' || a.type === 'chooseUnits' || a.type === 'allocateLoss');
       s = adapter.applyAction(s, suggested ?? { type: 'pass' }, actor); continue;
     }
     break; // stop at a conversion choice or any later interactive phase
@@ -182,6 +182,8 @@ describe('interactive secondary-victim allocation (§29.64)', () => {
       hands: { egypt: { 'calamity:epidemic': 1 } },
     });
     while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    // Epidemic's primary loss is itself an interactive unit choice — resolve it first.
+    while (s.pendingUnitLoss) s = adapter.applyAction(s, adapter.legalActions(s, 'egypt').find((a) => a.type === 'chooseUnits')!, 'egypt');
     expect(s.pendingAllocation?.calamityId).toBe('epidemic');
     expect(adapter.currentActor(s)).toBe('egypt'); // the primary victim directs
     // Caps are 10 each (§30.611); pool 25 > total capacity 20, so egypt must order 20.
@@ -202,10 +204,53 @@ describe('interactive secondary-victim allocation (§29.64)', () => {
     s.players['crete']!.advances = ['pottery', 'clothmaking', 'metalworking']; // crete leads, asia trails
     s.players['babylon']!.advances = ['pottery'];
     while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    while (s.pendingUnitLoss) s = adapter.applyAction(s, adapter.legalActions(s, 'egypt').find((a) => a.type === 'chooseUnits')!, 'egypt'); // resolve egypt's own loss first
     const suggested = (adapter.legalActions(s, 'egypt')[0] as Extract<Action, { type: 'allocateLoss' }>).allocation;
     // Pool 25, caps 10 each: leader and runner-up maxed at 10, the laggard takes the rest.
     expect(suggested['crete']).toBe(10); // leader hit first, to its cap
     expect(suggested['asia']).toBeLessThan(10); // the trailing nation absorbs the remainder
+  });
+});
+
+describe('interactive unit loss & Civil War cede (§29.63 / §30.41)', () => {
+  it('lets the Famine victim choose which tokens to lose', () => {
+    let s = scenario({
+      tokens: { egypt: { [land[0]!.id]: 8, [land[1]!.id]: 8 } },
+      hands: { egypt: { 'calamity:famine': 1 } },
+    });
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    expect(s.pendingUnitLoss?.calamityId).toBe('famine');
+    expect(s.pendingUnitLoss?.points).toBe(10);
+    expect(() => adapter.applyAction(s, { type: 'chooseUnits', tokens: { [land[0]!.id]: 8 }, cities: [] }, 'egypt')).toThrow(); // only 8 < required 10
+    // Egypt concentrates the loss: abandon area 0 entirely (8), shed 2 from area 1.
+    s = adapter.applyAction(s, { type: 'chooseUnits', tokens: { [land[0]!.id]: 8, [land[1]!.id]: 2 }, cities: [] }, 'egypt');
+    expect(s.pendingUnitLoss).toBeUndefined();
+    expect(s.areas[land[0]!.id]?.tokens['egypt'] ?? 0).toBe(0);
+    expect(s.areas[land[1]!.id]?.tokens['egypt']).toBe(6);
+  });
+
+  it('Civil War: the victim keeps its cities, ceding tokens by default (fixes give-best bug)', () => {
+    let s = scenario({
+      tokens: { egypt: { [land[0]!.id]: 30 } },
+      cities: { egypt: [land[1]!.id] },
+      hands: { egypt: { 'calamity:civilwar': 1 } },
+    });
+    s = resolve(s); // AI/default cedes the cheapest units (tokens) first
+    expect(s.areas[land[1]!.id]?.city).toBe('egypt'); // city KEPT, not handed to the enemy
+    expect(populationCount(s, 'babylon')).toBeGreaterThan(0); // the ceded faction went to the rival
+  });
+
+  it('lets the Civil War victim choose to cede a city instead', () => {
+    let s = scenario({
+      tokens: { egypt: { [land[0]!.id]: 30 } },
+      cities: { egypt: [land[1]!.id] },
+      hands: { egypt: { 'calamity:civilwar': 1 } },
+    });
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    expect(s.pendingUnitLoss?.mode).toBe('cede');
+    const loss = s.pendingUnitLoss!.points;
+    s = adapter.applyAction(s, { type: 'chooseUnits', tokens: { [land[0]!.id]: loss - 5 }, cities: [land[1]!.id] }, 'egypt');
+    expect(s.areas[land[1]!.id]?.city).toBe('babylon'); // the chosen city defected to the beneficiary
   });
 });
 

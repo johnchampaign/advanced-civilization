@@ -52,6 +52,7 @@ import {
   type GameState,
   type PendingAllocation,
   type PendingCityChoice,
+  type PendingUnitLoss,
   type Phase,
   type PlayerId,
 } from './types.js';
@@ -688,6 +689,65 @@ function pushCalamityEvent(s: GameState, calamityId: string, holder: PlayerId, b
  *  applies immediately; if it then needs the primary victim to direct secondary
  *  losses (§29.64), resolution PAUSES with a pendingAllocation for an
  *  `allocateLoss` action and resumes afterwards. Re-entrant. */
+/** Resolve a calamity's PRIMARY effect. Returns true if it paused for a player
+ *  choice (city reduction §30.321 or unit loss/cede §29.63), false if it applied
+ *  immediately (fully-auto calamities, or no effect). */
+function startPrimary(s: GameState, calId: string, holder: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string, rng: Rng): boolean {
+  // City-reduction calamities — the victim picks which cities (§30.321/.711/.811).
+  const cityCut = primaryCityCount(s, calId, holder);
+  if (cityCut !== null) {
+    const n = Math.min(cityCut, cityCount(s, holder));
+    if (n > 0) { s.pendingCityChoice = { calamityId: calId, holder, count: n, before, overviewBefore }; return true; }
+    return false;
+  }
+  const p = player(s, holder);
+  // Unit-loss calamities — the victim picks which units (§29.63).
+  if (calId === 'famine' || calId === 'epidemic') {
+    const points = calId === 'famine'
+      ? Math.max(0, 10 - (has(p, 'pottery') ? 4 * grainCards(p) : 0))
+      : Math.max(0, 16 - (has(p, 'medicine') ? 8 : 0) + (has(p, 'roadbuilding') ? 5 : 0));
+    if (points > 0 && boardUnitPoints(s, holder) > 0) {
+      s.pendingUnitLoss = { calamityId: calId, holder, points: Math.min(points, boardUnitPoints(s, holder)), cityWorth: calId === 'epidemic' ? 4 : 5, mode: 'remove', before, overviewBefore };
+      return true;
+    }
+    return false;
+  }
+  if (calId === 'flood') {
+    const region = bestFloodRegion(s, holder);
+    if (region) {
+      const pts = Math.min(has(p, 'engineering') ? 7 : 17, unitPointsInAreas(s, holder, region));
+      if (pts > 0) { s.pendingUnitLoss = { calamityId: 'flood', holder, points: pts, cityWorth: 5, mode: 'remove', areas: region, before, overviewBefore }; return true; }
+      return false;
+    }
+    applyFloodNoFloodplain(s, holder);
+    return false;
+  }
+  if (calId === 'civilwar') {
+    const war = computeCivilWar(s, holder);
+    if (war) { s.pendingUnitLoss = { calamityId: 'civilwar', holder, points: war.loss, cityWorth: 5, mode: 'cede', beneficiary: war.beneficiary, before, overviewBefore }; return true; }
+    return false;
+  }
+  applyCalamity(s, calId, holder, rng); // fully-auto calamities
+  return false;
+}
+
+/** After a calamity's primary effect is settled, either pause for the secondary
+ *  allocation (§29.64) or finalize the event and move on. Returns true if paused. */
+function finishPrimary(s: GameState, calId: string, holder: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string): boolean {
+  const alloc = secondaryAllocationFor(s, calId, holder);
+  if (alloc) { s.pendingAllocation = { ...alloc, before, overviewBefore }; return true; }
+  pushCalamityEvent(s, calId, holder, before, overviewBefore);
+  return false;
+}
+
+/** After an interactive primary choice (city or unit), continue the calamity
+ *  phase: pause for any secondary allocation, else resolve the rest. */
+function resumeAfterChoice(s: GameState, calId: string, holder: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string): void {
+  if (finishPrimary(s, calId, holder, before, overviewBefore)) return; // paused for allocation
+  runCalamity(s);
+  if (!s.calamityActive) setupCalamityConversion(s);
+}
+
 function runCalamity(s: GameState): void {
   const rng = Rng.fromState(s.rngState);
   if (!s.calamityActive) { s.calamityActive = true; s.lastCalamities = []; }
@@ -700,27 +760,8 @@ function runCalamity(s: GameState): void {
     delete player(s, holder).hand[`calamity:${calamityId}`];
     const lvl = calamityById.get(calamityId)?.level;
     if (lvl && s.trade.stacks[lvl]) s.trade.stacks[lvl]!.unshift(`calamity:${calamityId}`);
-    // §30.321/.711/.811: Superstition/Civil Disorder/Iconoclasm let the victim
-    // choose WHICH cities to reduce — pause for that choice if they have any.
-    const cityCut = primaryCityCount(s, calamityId, holder);
-    if (cityCut !== null) {
-      const n = Math.min(cityCut, cityCount(s, holder));
-      if (n > 0) {
-        s.pendingCityChoice = { calamityId, holder, count: n, before, overviewBefore };
-        s.rngState = rng.serialize();
-        return;
-      }
-      // Nothing to reduce (no cities / nullified) — fall through to any secondary.
-    } else {
-      applyCalamity(s, calamityId, holder, rng); // primary effect for the rest
-    }
-    const alloc = secondaryAllocationFor(s, calamityId, holder);
-    if (alloc) { // pause for the primary victim to direct the secondary losses
-      s.pendingAllocation = { ...alloc, before, overviewBefore };
-      s.rngState = rng.serialize();
-      return;
-    }
-    pushCalamityEvent(s, calamityId, holder, before, overviewBefore);
+    if (startPrimary(s, calamityId, holder, before, overviewBefore, rng)) { s.rngState = rng.serialize(); return; }
+    if (finishPrimary(s, calamityId, holder, before, overviewBefore)) { s.rngState = rng.serialize(); return; }
   }
   // All calamities resolved.
   s.calamityActive = false;
@@ -858,13 +899,79 @@ const grainCards = (p: { hand: Record<string, number> }) => p.hand['grain'] ?? 0
 
 /** Famine (§30.31): primary loses 10 unit points (Pottery −4 per Grain card held,
  *  §30.312), then orders 20 among rivals, ≤8 each (§30.311). */
-function applyFamine(s: GameState, holder: PlayerId): void {
-  const p = player(s, holder);
-  const soften = has(p, 'pottery') ? 4 * grainCards(p) : 0;
-  const loss = Math.max(0, 10 - soften);
-  const removed = removeUnitPoints(s, holder, loss);
-  s.log.push(`${holder} suffers Famine (-${removed}${soften ? `; Pottery + ${grainCards(p)} Grain softened it by ${soften}` : ''}).`);
-  // Secondary (order 20 among rivals) is the interactive allocation step (§29.64).
+/** A player's units available to give up, optionally confined to `areas`. */
+function unitInventory(s: GameState, holder: PlayerId, areas?: string[]): { tokens: Record<string, number>; cities: string[] } {
+  const ids = areas ?? Object.keys(s.areas);
+  const tokens: Record<string, number> = {};
+  const cities: string[] = [];
+  for (const aid of ids) { const a = s.areas[aid]; if (!a) continue; if ((a.tokens[holder] ?? 0) > 0) tokens[aid] = a.tokens[holder]!; if (a.city === holder) cities.push(aid); }
+  return { tokens, cities };
+}
+
+/** Max unit points a player can shed (capped by what they have in scope). */
+function maxUnitLoss(s: GameState, u: PendingUnitLoss): number {
+  const inv = unitInventory(s, u.holder, u.areas);
+  const tok = Object.values(inv.tokens).reduce((t, n) => t + n, 0);
+  return Math.min(u.points, tok + inv.cities.length * u.cityWorth);
+}
+
+/** Default unit sacrifice (AI & suggestion): give up the cheapest units first —
+ *  tokens before cities — so cities are preserved. (This also fixes Civil War: the
+ *  victim keeps its cities and cedes tokens, instead of handing over its best.) */
+function suggestUnits(s: GameState, u: PendingUnitLoss): { tokens: Record<string, number>; cities: string[] } {
+  const inv = unitInventory(s, u.holder, u.areas);
+  let need = maxUnitLoss(s, u);
+  const tokens: Record<string, number> = {};
+  for (const [aid, n] of Object.entries(inv.tokens).sort((a, b) => a[1] - b[1])) { if (need <= 0) break; const take = Math.min(n, need); tokens[aid] = take; need -= take; }
+  const cities: string[] = [];
+  for (const aid of inv.cities) { if (need <= 0) break; cities.push(aid); need -= u.cityWorth; }
+  return { tokens, cities };
+}
+
+/** §29.63: the chosen sacrifice must cover the required loss with no needless
+ *  excess (overshoot smaller than a city's worth) and stay within what's owned. */
+function validateUnits(s: GameState, u: PendingUnitLoss, choice: { tokens: Record<string, number>; cities: string[] }): void {
+  const inv = unitInventory(s, u.holder, u.areas);
+  let sum = 0;
+  for (const [aid, n] of Object.entries(choice.tokens)) {
+    if (n <= 0) continue;
+    if (!(aid in inv.tokens)) throw new Error(`no tokens of yours in ${areaName(aid)}`);
+    if (n > inv.tokens[aid]!) throw new Error(`only ${inv.tokens[aid]} tokens in ${areaName(aid)}`);
+    sum += n;
+  }
+  for (const aid of choice.cities) { if (!inv.cities.includes(aid)) throw new Error(`no city of yours in ${areaName(aid)}`); sum += u.cityWorth; }
+  const need = maxUnitLoss(s, u);
+  if (sum < need) throw new Error(`give up ${need} unit points (got ${sum}) — §29.63`);
+  if (sum - need >= u.cityWorth) throw new Error(`giving up more than required — §29.63`);
+}
+
+/** Apply the chosen sacrifice: remove (→ stock, cities reduced/substituted) or
+ *  cede (→ beneficiary), then the per-calamity follow-up (Flood secondary,
+ *  Military Civil-War bloodshed). */
+function applyChosenUnits(s: GameState, u: PendingUnitLoss, choice: { tokens: Record<string, number>; cities: string[] }): void {
+  if (u.mode === 'remove') {
+    for (const [aid, n] of Object.entries(choice.tokens)) { if (n > 0) { setTokens(s, aid, u.holder, (s.areas[aid]!.tokens[u.holder] ?? 0) - n); player(s, u.holder).stock += n; } }
+    for (const aid of choice.cities) reduceSpecificCity(s, u.holder, aid);
+    s.log.push(`${u.holder} suffers ${calamityById.get(u.calamityId)?.name ?? u.calamityId} (-${u.points} unit point${u.points === 1 ? '' : 's'}).`);
+    if (u.calamityId === 'flood' && u.areas) floodSecondary(s, u.holder, u.areas);
+  } else {
+    const ben = u.beneficiary!;
+    for (const [aid, n] of Object.entries(choice.tokens)) {
+      for (let i = 0; i < n; i++) {
+        setTokens(s, aid, u.holder, (s.areas[aid]!.tokens[u.holder] ?? 0) - 1); player(s, u.holder).stock += 1;
+        if (player(s, ben).stock > 0) { s.areas[aid]!.tokens[ben] = (s.areas[aid]!.tokens[ben] ?? 0) + 1; player(s, ben).stock -= 1; }
+      }
+    }
+    for (const aid of choice.cities) {
+      delete s.areas[aid]!.city; player(s, u.holder).citiesAvailable += 1;
+      if (player(s, ben).citiesAvailable > 0) { s.areas[aid]!.city = ben; player(s, ben).citiesAvailable -= 1; }
+    }
+    s.log.push(`${u.holder} suffers Civil War: a faction worth ${u.points} defects to ${ben}.`);
+    if (has(player(s, u.holder), 'military')) {
+      removeTokensFromBoard(s, u.holder, 5); removeTokensFromBoard(s, ben, 5);
+      s.log.push(`Military makes the Civil War bloodier — both factions lose 5 (§30.414).`);
+    }
+  }
 }
 
 /** Superstition (§30.32): 3 cities reduced — but the highest Religion card held
@@ -1020,33 +1127,38 @@ function applyVolcanoEarthquake(s: GameState, holder: PlayerId): void {
   if (victimArea) { const o = s.areas[victimArea]!.city!; reduceSpecificCity(s, o, victimArea); s.log.push(`${o}'s city in ${areaName(victimArea)} is reduced by the Earthquake (§30.212).`); }
 }
 
-/** Flood (§30.51): on the flood plain where the victim has the most units, he
- *  loses ≤17 unit points (Engineering caps it at 7, §30.515) and orders 10 among
- *  secondaries on the SAME plain. A victim with no flood-plain units instead loses
- *  one coastal city (Engineering reduces it rather than eliminating it, §30.514). */
-function applyFlood(s: GameState, holder: PlayerId): void {
-  const eng = has(player(s, holder), 'engineering');
+/** The flood plain (§30.51) where the victim has the most unit points, or null. */
+function bestFloodRegion(s: GameState, holder: PlayerId): string[] | null {
   let best: string[] | null = null, bestPts = 0;
   for (const region of floodRegions()) { const pts = unitPointsInAreas(s, holder, region); if (pts > bestPts) { bestPts = pts; best = region; } }
-  if (best && bestPts > 0) {
-    const removed = removeUnitPointsInAreas(s, holder, best, eng ? 7 : 17);
-    s.log.push(`${holder} suffers Flood on ${best.map(areaName)[0]} (-${removed}${eng ? ', capped by Engineering' : ''}).`);
-    const trader = s.calamityTradedFrom['flood'];
-    let pool = 10;
-    const others = s.seating
-      .filter((o) => o !== holder && o !== trader && unitPointsInAreas(s, o, best!) > 0)
-      .sort((x, y) => unitPointsInAreas(s, y, best!) - unitPointsInAreas(s, x, best!));
-    for (const v of others) {
-      if (pool <= 0) break;
-      const cap = has(player(s, v), 'engineering') ? 7 : pool; // §30.515
-      const take = Math.min(pool, cap, unitPointsInAreas(s, v, best!));
-      const r = removeUnitPointsInAreas(s, v, best!, take);
-      pool -= take;
-      if (r > 0) s.log.push(`${v} is a secondary victim of Flood (-${r}).`);
-    }
-  } else if (eng) {
-    reduceCities(s, holder, 1, true); // §30.515: reduce a coastal city rather than eliminate
-    s.log.push(`${holder}'s Flood reduces one coastal city (Engineering, §30.515).`);
+  return best;
+}
+
+/** §30.512: after the primary's flood loss, order 10 unit points among rivals on
+ *  the SAME flood plain (Engineering caps each at 7, §30.515; trader exempt). */
+function floodSecondary(s: GameState, holder: PlayerId, region: string[]): void {
+  const trader = s.calamityTradedFrom['flood'];
+  let pool = 10;
+  const others = s.seating
+    .filter((o) => o !== holder && o !== trader && unitPointsInAreas(s, o, region) > 0)
+    .sort((x, y) => unitPointsInAreas(s, y, region) - unitPointsInAreas(s, x, region));
+  for (const v of others) {
+    if (pool <= 0) break;
+    const cap = has(player(s, v), 'engineering') ? 7 : pool;
+    const take = Math.min(pool, cap, unitPointsInAreas(s, v, region));
+    const r = removeUnitPointsInAreas(s, v, region, take);
+    pool -= take;
+    if (r > 0) s.log.push(`${v} is a secondary victim of Flood (-${r}).`);
+  }
+}
+
+/** §30.514: a victim with no flood-plain units loses one coastal city (Engineering
+ *  reduces it rather than eliminating, §30.515). */
+function applyFloodNoFloodplain(s: GameState, holder: PlayerId): void {
+  if (has(player(s, holder), 'engineering')) {
+    const before = cityCount(s, holder);
+    reduceCities(s, holder, 1, true);
+    s.log.push(cityCount(s, holder) < before ? `${holder}'s Flood reduces one coastal city (Engineering, §30.515).` : `${holder} is unaffected by Flood.`);
   } else {
     const did = eliminateOneCoastalCity(s, holder);
     s.log.push(did ? `${holder} loses a coastal city to Flood (§30.514).` : `${holder} is unaffected by Flood (no units on a flood plain).`);
@@ -1079,16 +1191,14 @@ function applySlaveRevolt(s: GameState, holder: PlayerId): void {
 function applyCalamity(s: GameState, calId: string, holder: PlayerId, rng: Rng): void {
   const cal = calamityById.get(calId);
   if (!cal) return;
-  // Superstition / Civil Disorder / Iconoclasm primary city reductions are handled
-  // interactively in runCalamity (the victim chooses which cities), not here.
+  // City-reduction (Superstition/Civil Disorder/Iconoclasm) and unit-loss
+  // (Famine/Epidemic/Flood/Civil War) primaries are handled interactively in
+  // runCalamity (the victim chooses which to lose). Only the fully-auto calamities
+  // are applied here.
   switch (calId) {
-    case 'famine': return applyFamine(s, holder);
     case 'volcano': return applyVolcanoEarthquake(s, holder);
-    case 'flood': return applyFlood(s, holder);
     case 'slaverevolt': return applySlaveRevolt(s, holder);
-    case 'civilwar': return applyCivilWar(s, holder);
     case 'barbarianhordes': return applyBarbarians(s, holder, rng);
-    case 'epidemic': return applyEpidemic(s, holder);
     case 'piracy': return applyPiracy(s, holder);
     case 'treachery': return applyTreachery(s, holder);
     default: s.log.push(`${holder} suffers ${cal.name} (effect not modeled).`);
@@ -1123,36 +1233,6 @@ function boardUnitPoints(s: GameState, id: PlayerId): number {
   return pts;
 }
 
-/** Transfer up to `points` unit points of `from`'s on-board units to `to`,
- *  swapping piece ownership in place (the loser's piece returns to its stock,
- *  the gainer deploys one of its own — conserving each nation's fixed supply).
- *  `preferCities` picks high-value units first. Returns points actually moved. */
-function transferUnits(s: GameState, from: PlayerId, to: PlayerId, points: number, preferCities: boolean): number {
-  const pf = player(s, from), pt = player(s, to);
-  const units: { aid: string; kind: 'token' | 'city'; pts: number }[] = [];
-  for (const [aid, a] of Object.entries(s.areas)) {
-    if (a.city === from) units.push({ aid, kind: 'city', pts: 5 });
-    for (let i = 0; i < (a.tokens[from] ?? 0); i++) units.push({ aid, kind: 'token', pts: 1 });
-  }
-  units.sort((x, y) => (preferCities ? y.pts - x.pts : x.pts - y.pts));
-  let moved = 0;
-  for (const u of units) {
-    if (moved >= points) break;
-    const a = s.areas[u.aid]!;
-    if (u.kind === 'token') {
-      if ((a.tokens[from] ?? 0) <= 0) continue;
-      setTokens(s, u.aid, from, (a.tokens[from] ?? 0) - 1); pf.stock += 1;
-      if (pt.stock > 0) { a.tokens[to] = (a.tokens[to] ?? 0) + 1; pt.stock -= 1; }
-      moved += 1;
-    } else {
-      if (a.city !== from) continue;
-      delete a.city; pf.citiesAvailable += 1;
-      if (pt.citiesAvailable > 0) { a.city = to; pt.citiesAvailable -= 1; }
-      moved += 5;
-    }
-  }
-  return moved;
-}
 
 /** Civil War (§30.41): the primary victim's nation splits; the first faction
  *  defects to the player with the most reserve unit points (stock token = 1,
@@ -1161,41 +1241,26 @@ function transferUnits(s: GameState, from: PlayerId, to: PlayerId, points: numbe
  *  15 + Music/Drama (5 each) + Democracy (10) + the beneficiary's 20, or 15 if
  *  the victim holds Philosophy (§30.4121-4124). Military removes 5 from each
  *  faction (§30.414). */
-function applyCivilWar(s: GameState, primary: PlayerId): void {
+/** Compute a Civil War (§30.41): who the defecting faction goes to and how many
+ *  unit points the primary must cede. Returns null (and logs) if it fizzles
+ *  (§30.411) or the nation is too small to split (§30.413). The primary KEEPS a
+ *  first faction of 15 (+5 Music, +5 Drama, +10 Democracy), so those advances
+ *  shrink the loss; Philosophy fixes the ceded faction at 15 (§30.4124). */
+function computeCivilWar(s: GameState, primary: PlayerId): { beneficiary: PlayerId; loss: number } | null {
   const pp = player(s, primary);
   const reserves = (id: PlayerId) => player(s, id).stock + 5 * player(s, id).citiesAvailable;
   let beneficiary: PlayerId | null = null, best = -1;
-  for (const o of s.seating) {
-    if (o === primary) continue;
-    const v = reserves(o);
-    if (v > best) { best = v; beneficiary = o; }
-  }
+  for (const o of s.seating) { if (o === primary) continue; const v = reserves(o); if (v > best) { best = v; beneficiary = o; } }
   if (beneficiary == null || reserves(primary) >= best) {
     s.log.push(`${primary}'s Civil War fizzles — it holds the most reserves (§30.411).`);
-    return;
+    return null;
   }
-  // The primary composes a first faction it KEEPS (§30.4121-.4122): 15 unit
-  // points, +5 Music, +5 Drama, +10 Democracy (cumulative). Those advances
-  // therefore REDUCE the loss — the bigger the kept faction, the smaller the
-  // faction that defects. With Philosophy the beneficiary instead picks a fixed
-  // 15-point faction that defects (§30.4124 — "not necessarily for the better").
   const board = boardUnitPoints(s, primary);
   const philosophy = has(pp, 'philosophy');
-  const firstFaction = philosophy
-    ? 15
-    : Math.min(board, 15 + (has(pp, 'music') ? 5 : 0) + (has(pp, 'drama') ? 5 : 0) + (has(pp, 'democracy') ? 10 : 0));
+  const firstFaction = philosophy ? 15 : Math.min(board, 15 + (has(pp, 'music') ? 5 : 0) + (has(pp, 'drama') ? 5 : 0) + (has(pp, 'democracy') ? 10 : 0));
   const loss = philosophy ? Math.min(15, board) : board - firstFaction;
-  if (loss <= 0) {
-    s.log.push(`${primary}'s Civil War: nation too small to split — no effect (§30.413).`);
-    return;
-  }
-  const moved = transferUnits(s, primary, beneficiary, loss, true);
-  s.log.push(`${primary} suffers Civil War: a faction worth ${moved} defects to ${beneficiary}.`);
-  if (has(pp, 'military')) {
-    removeTokensFromBoard(s, primary, 5);
-    removeTokensFromBoard(s, beneficiary, 5);
-    s.log.push(`Military makes the Civil War bloodier — both factions lose 5 (§30.414).`);
-  }
+  if (loss <= 0) { s.log.push(`${primary}'s Civil War: nation too small to split — no effect (§30.413).`); return null; }
+  return { beneficiary, loss };
 }
 
 /** Damage a horde could inflict on `primary` by entering `aid` (§30.5231 — tokens
@@ -1266,15 +1331,6 @@ function removeUnitPoints(s: GameState, id: PlayerId, points: number, cityWorth 
  *  25 unit points of loss among the other players (Medicine -5, Roadbuilding +5;
  *  the trader is exempt). The primary concentrates the order on its strongest
  *  rivals. */
-function applyEpidemic(s: GameState, primary: PlayerId): void {
-  const pp = player(s, primary);
-  let loss = 16;
-  if (has(pp, 'medicine')) loss -= 8;
-  if (has(pp, 'roadbuilding')) loss += 5;
-  removeUnitPoints(s, primary, Math.max(0, loss), 4);
-  s.log.push(`${primary} suffers Epidemic (-${Math.max(0, loss)} unit points).`);
-  // Secondary (order 25 among rivals, ≤10 each §30.611) is the interactive step.
-}
 
 /** Iconoclasm & Heresy (§30.81): primary reduces 4 cities (Law/Philosophy -1,
  *  Theology -3, Monotheism/Roadbuilding +1, cumulative), then orders 2 cities
@@ -1791,8 +1847,9 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
   currentActor(state: GameState): PlayerId | null {
     if (state.finished && state.phase === 'taxation') return null;
     if (AUTO_PHASES.has(state.phase)) return null;
-    // A pending city-choice / secondary allocation is the primary victim's to resolve.
+    // A pending city-choice / unit-loss / secondary allocation is the victim's.
     if (state.pendingCityChoice) return state.pendingCityChoice.holder;
+    if (state.pendingUnitLoss) return state.pendingUnitLoss.holder;
     if (state.pendingAllocation) return state.pendingAllocation.holder;
     if (state.phase === 'trade') {
       const n = state.negotiation;
@@ -1921,15 +1978,18 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         if (areas.some((aid) => s.areas[aid]?.city !== actor)) throw new Error('you may only reduce your own cities');
         reduceChosenCities(s, actor, areas);
         s.log.push(`${actor} reduces ${areas.map(areaName).join(', ')} (${calamityById.get(c.calamityId)?.name ?? c.calamityId}).`);
-        const alloc = secondaryAllocationFor(s, c.calamityId, c.holder); // Iconoclasm orders 2 more
         s.pendingCityChoice = undefined;
-        if (alloc) {
-          s.pendingAllocation = { ...alloc, before: c.before, overviewBefore: c.overviewBefore };
-        } else {
-          pushCalamityEvent(s, c.calamityId, c.holder, c.before, c.overviewBefore);
-          runCalamity(s);
-          if (!s.calamityActive) setupCalamityConversion(s);
-        }
+        resumeAfterChoice(s, c.calamityId, c.holder, c.before, c.overviewBefore);
+        break;
+      }
+      case 'chooseUnits': {
+        const u = s.pendingUnitLoss;
+        if (!u) throw new Error('no unit loss is pending');
+        if (actor !== u.holder) throw new Error('only the affected player chooses which units to give up (§29.63)');
+        validateUnits(s, u, action);
+        applyChosenUnits(s, u, action);
+        s.pendingUnitLoss = undefined;
+        resumeAfterChoice(s, u.calamityId, u.holder, u.before, u.overviewBefore);
         break;
       }
       default:
@@ -2029,6 +2089,10 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         // a sensible default (sacrifice city-site cities first). UI may pick others.
         if (state.pendingCityChoice && state.pendingCityChoice.holder === actor) {
           return [{ type: 'chooseCities', areas: suggestCities(state, actor, state.pendingCityChoice.count) }];
+        }
+        // §29.63: a pending unit loss/cede is the victim's; offer the cheapest-first default.
+        if (state.pendingUnitLoss && state.pendingUnitLoss.holder === actor) {
+          return [{ type: 'chooseUnits', ...suggestUnits(state, state.pendingUnitLoss) }];
         }
         // §29.64: a pending secondary allocation is the primary victim's to direct.
         // Offer the leader-targeting default; the UI may submit a custom split.

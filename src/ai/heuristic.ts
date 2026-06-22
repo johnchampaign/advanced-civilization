@@ -44,6 +44,9 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
         // suggestion (sacrifice the cheapest-to-rebuild city-site cities first).
         const cityChoice = actions.find((a) => a.type === 'chooseCities');
         if (cityChoice) return cityChoice;
+        // §29.63: choosing which units to lose/cede — take the cheapest-first default.
+        const unitChoice = actions.find((a) => a.type === 'chooseUnits');
+        if (unitChoice) return unitChoice;
         // §29.64: directing secondary losses — take the engine's leader-targeting
         // suggestion (the strategic choice: hit the current front-runner).
         const alloc = actions.find((a) => a.type === 'allocateLoss');

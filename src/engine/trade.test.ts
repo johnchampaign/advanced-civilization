@@ -18,10 +18,16 @@ function toTradePhase(s: GameState): GameState {
 /** End the trade phase by having everyone pass until it's over. */
 function endTrade(s: GameState): GameState {
   let guard = 0;
-  while (s.phase === 'trade' && guard++ < 500) {
+  while (guard++ < 500) {
     const actor = adapter.currentActor(s);
     if (actor == null) break;
-    s = adapter.applyAction(s, { type: 'pass' }, actor);
+    if (s.phase === 'trade') { s = adapter.applyAction(s, { type: 'pass' }, actor); continue; }
+    // Drive interactive calamity choices (the affected player takes the default).
+    if (s.pendingCityChoice || s.pendingUnitLoss || s.pendingAllocation) {
+      const suggested = adapter.legalActions(s, actor).find((a) => a.type === 'chooseCities' || a.type === 'chooseUnits' || a.type === 'allocateLoss');
+      if (suggested) { s = adapter.applyAction(s, suggested, actor); continue; }
+    }
+    break;
   }
   return s;
 }

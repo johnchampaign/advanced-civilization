@@ -490,9 +490,43 @@ function runTradeAcquisition(s: GameState): void {
  *  `calamity:<id>` card at the end of trading is its primary victim; resolution
  *  is in ascending severity (non-tradable before tradable of the same level,
  *  §29.6 — encoded in the severity ranks). */
+/** Snapshot each area's city owner + token counts, for diffing calamity effects. */
+function snapAreas(s: GameState): Record<string, { city?: PlayerId; tokens: Record<string, number> }> {
+  const o: Record<string, { city?: PlayerId; tokens: Record<string, number> }> = {};
+  for (const [aid, a] of Object.entries(s.areas)) o[aid] = { city: a.city, tokens: { ...a.tokens } };
+  return o;
+}
+/** Human-readable, area-by-area account of what a calamity did to `holder`
+ *  (cities lost/seized, tokens removed, defections, barbarians/pirates). */
+function calamityDetails(s: GameState, before: ReturnType<typeof snapAreas>, holder: PlayerId): string[] {
+  const out: string[] = [];
+  const nm = (aid: string) => areaById.get(aid)?.name ?? aid;
+  const who = (id: string) => (id === BARBARIAN ? 'Barbarians' : id === PIRATE ? 'Pirates' : civById.get(id)?.name ?? id);
+  for (const aid of new Set([...Object.keys(before), ...Object.keys(s.areas)])) {
+    const b = before[aid] ?? { tokens: {} as Record<string, number> };
+    const a = s.areas[aid] ?? { tokens: {} as Record<string, number> };
+    if (b.city === holder && a.city !== holder) {
+      if (a.city && a.city !== BARBARIAN && a.city !== PIRATE) out.push(`City in ${nm(aid)} seized by ${who(a.city)}`);
+      else if (a.city === PIRATE) out.push(`City in ${nm(aid)} fell to pirates`);
+      else out.push(`Lost the city in ${nm(aid)}`);
+    }
+    const tb = b.tokens[holder] ?? 0, ta = a.tokens[holder] ?? 0;
+    if (ta < tb) {
+      out.push(`Lost ${tb - ta} token${tb - ta === 1 ? '' : 's'} in ${nm(aid)}`);
+      for (const o2 of Object.keys(a.tokens)) {
+        if (o2 === holder) continue;
+        const g = (a.tokens[o2] ?? 0) - (b.tokens[o2] ?? 0);
+        if (g > 0) out.push(`  → ${g} went to ${who(o2)}`);
+      }
+    }
+    const barbA = (a.tokens[BARBARIAN] ?? 0) - (b.tokens[BARBARIAN] ?? 0);
+    if (barbA > 0 && b.city !== holder) out.push(`Barbarians (${barbA}) appear in ${nm(aid)}`);
+  }
+  return out.slice(0, 20);
+}
+
 function runCalamity(s: GameState): void {
   const rng = Rng.fromState(s.rngState);
-  const logBefore = s.log.length;
   const held: { calamityId: string; holder: PlayerId }[] = [];
   for (const id of s.seating) {
     for (const card of Object.keys(player(s, id).hand)) {
@@ -502,12 +536,19 @@ function runCalamity(s: GameState): void {
     }
   }
   held.sort((a, b) => (calamityById.get(a.calamityId)?.severity ?? 0) - (calamityById.get(b.calamityId)?.severity ?? 0));
+  const events: { calamity: string; holder: PlayerId; summary: string; details: string[] }[] = [];
   for (const { calamityId, holder } of held) {
-    // Reveal and remove the card from the holder's hand, then resolve.
     const key = `calamity:${calamityId}`;
-    const h = player(s, holder).hand;
-    delete h[key];
+    delete player(s, holder).hand[key];
+    const before = snapAreas(s);
+    const logLen = s.log.length;
     applyCalamity(s, calamityId, holder, rng);
+    events.push({
+      calamity: calamityById.get(calamityId)?.name ?? calamityId,
+      holder,
+      summary: s.log.slice(logLen).join(' '),
+      details: calamityDetails(s, before, holder),
+    });
     // §29.7: calamities are never removed from the game — return the card to the
     // bottom of the stack of its value so it circulates back into play.
     const lvl = calamityById.get(calamityId)?.level;
@@ -516,9 +557,9 @@ function runCalamity(s: GameState): void {
   s.rngState = rng.serialize();
   s.pendingCalamities = [];
   s.calamityTradedFrom = {};
-  // Surface this turn's calamity outcomes so the UI can show them prominently
+  // Surface this turn's calamity outcomes so the UI can show a step-by-step modal
   // (otherwise they're buried in the log and players think nothing happened).
-  s.lastCalamities = s.log.slice(logBefore).filter((l) => /suffers|defect|barbarian|pirate|lost/i.test(l));
+  s.lastCalamities = events;
   // §26.5: city support is re-checked after all calamities are resolved.
   checkCitySupport(s);
 }

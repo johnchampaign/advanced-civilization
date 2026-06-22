@@ -175,9 +175,9 @@ export interface GameState {
     /** Per-player remaining growth capacity per area (area -> tokens it may still gain). */
     caps: Record<PlayerId, Record<string, number>>;
   };
-  /** The most recent calamity phase's outcome lines (so the UI can show them in a
-   *  banner). Overwritten each calamity phase; empty when none struck. */
-  lastCalamities?: string[];
+  /** The most recent calamity phase's outcomes, one per calamity, so the UI can
+   *  show a step-by-step modal. Overwritten each calamity phase; empty if none. */
+  lastCalamities?: { calamity: string; holder: PlayerId; summary: string; details: string[] }[];
   /** Who handed each calamity to its current holder (calamityId -> giver). The
    *  giver may not be named a secondary victim (§29.61). */
   calamityTradedFrom: Record<string, PlayerId>;

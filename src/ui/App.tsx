@@ -68,7 +68,7 @@ export default function App() {
   return (
     <>
       <div ref={boardRef} style={{ flex: 1, position: 'relative', overflow: 'auto', background: '#0d3a4a' }}>
-        <CalamityBanner lines={state.lastCalamities ?? []} />
+        <CalamityModal events={state.lastCalamities ?? []} you={focus} />
         {view === 'map'
           ? <Board
               state={inMovement ? planner.previewState : state}
@@ -1020,17 +1020,37 @@ function HotseatReport({ state, focus }: { state: GameState; focus: PlayerId }) 
   );
 }
 
-/** Prominent, dismissible banner of the latest calamity outcomes, so a calamity
- *  striking you isn't silently buried in the log. */
-export function CalamityBanner({ lines }: { lines: string[] }) {
-  const [dismissed, setDismissed] = useState('');
-  const key = lines.join('|');
-  if (!lines.length || dismissed === key) return null;
+export interface CalamityEvent { calamity: string; holder: PlayerId; summary: string; details: string[] }
+
+/** Step-through modal of the latest calamity outcomes — names each calamity, who
+ *  it struck, and the specific cities/units affected, one calamity at a time. */
+export function CalamityModal({ events, you }: { events: CalamityEvent[]; you?: PlayerId }) {
+  const key = JSON.stringify(events);
+  const [seen, setSeen] = useState('');
+  const [i, setI] = useState(0);
+  useEffect(() => { setI(0); }, [key]);
+  if (!events.length || seen === key) return null;
+  const e = events[Math.min(i, events.length - 1)]!;
+  const mine = e.holder === you;
+  const color = civById.get(e.holder)?.color ?? '#ffd23f';
+  const last = i >= events.length - 1;
   return (
-    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 30, background: 'rgba(150,40,40,0.96)', color: '#fff', padding: '8px 12px', display: 'flex', alignItems: 'flex-start', gap: 10, boxShadow: '0 2px 10px #000' }}>
-      <b style={{ whiteSpace: 'nowrap' }}>⚠ Calamities this turn:</b>
-      <span style={{ flex: 1 }}>{lines.map((l, i) => <div key={i}>{l}</div>)}</span>
-      <button className="civ-btn" onClick={() => setDismissed(key)}>Dismiss</button>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(8,6,3,0.8)', display: 'grid', placeItems: 'center', zIndex: 120 }}>
+      <div style={{ background: '#211c14', color: '#eee', padding: 22, borderRadius: 12, border: `2px solid ${mine ? '#c0392b' : '#7a5f24'}`, width: 480, maxWidth: '92vw', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 8px 40px #000' }}>
+        <div style={{ fontSize: 12, color: '#e6b85a', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Calamity {events.length > 1 ? `${i + 1} of ${events.length}` : ''}</div>
+        <h2 style={{ margin: '4px 0 6px', color: mine ? '#ff6b5a' : '#fff' }}>⚠ {e.calamity}</h2>
+        <div style={{ marginBottom: 10 }}>strikes <b style={{ color }}>{civById.get(e.holder)?.name ?? e.holder}</b>{mine ? ' — that’s you!' : ''}</div>
+        {e.summary && <div style={{ fontSize: 13, color: '#ccc', marginBottom: 10 }}>{e.summary}</div>}
+        {e.details.length > 0 ? (
+          <ul style={{ margin: '0 0 14px', paddingLeft: 18, fontSize: 14, lineHeight: 1.5 }}>
+            {e.details.map((d, k) => <li key={k} style={{ color: d.startsWith('  →') ? '#aa9' : '#ece4d2', listStyle: d.startsWith('  →') ? 'none' : 'disc' }}>{d.trim()}</li>)}
+          </ul>
+        ) : <div style={{ fontSize: 13, color: '#9a9', marginBottom: 14 }}>No effect (nothing for it to take).</div>}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          {!last && <button className="civ-btn" onClick={() => setI((x) => x + 1)}>Next calamity →</button>}
+          {last && <button className="civ-btn" onClick={() => setSeen(key)}>Continue</button>}
+        </div>
+      </div>
     </div>
   );
 }

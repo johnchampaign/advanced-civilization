@@ -124,7 +124,7 @@
         "cisalpina-2",
         "pannonia-2"
       ],
-      "astOrder": 2
+      "astOrder": 1
     },
     {
       "id": "iberia",
@@ -136,7 +136,7 @@
         "corduba",
         "lusitania"
       ],
-      "astOrder": 1
+      "astOrder": 2
     },
     {
       "id": "persia",

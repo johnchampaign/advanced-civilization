@@ -1261,7 +1261,7 @@ export function normalize(s: GameState): void {
         s.turn += 1;
         s.censusOrder = s.activeOrder = censusOrder(s);
         s.actedThisPhase = [];
-        for (const id of s.seating) player(s, id).convertedThisTurn = false; // §32.941 once-per-turn
+        for (const id of s.seating) { player(s, id).convertedThisTurn = false; player(s, id).builtWithTreasuryThisTurn = false; } // §32.941/.631 once-per-turn
       }
       enterPhase(s, np);
       continue;
@@ -1308,9 +1308,12 @@ function applyMovement(s: GameState, actor: PlayerId, moves: { from: string; to:
     const adjacent = neighbors(m.from).includes(m.to);
     const via = m.via;
     const viaArea = via ? s.areas[via] : undefined;
+    // §32.251: the pass-through area must be land and may not contain another
+    // player's units (tokens OR a city) or a Pirate city.
     const roadReachable = !!(road && via && neighbors(m.from).includes(via) && neighbors(via).includes(m.to)
       && !areaById.get(via)?.isWater
-      && (!viaArea || Object.keys(viaArea.tokens).every((o) => o === actor || (viaArea.tokens[o] ?? 0) === 0)));
+      && (!viaArea || (Object.keys(viaArea.tokens).every((o) => o === actor || (viaArea.tokens[o] ?? 0) === 0)
+        && (!viaArea.city || viaArea.city === actor))));
     if (!adjacent && !roadReachable) throw new Error(`illegal move ${m.from}->${m.to}: not reachable`);
     setTokens(s, m.from, actor, (from.tokens[actor] ?? 0) - m.count);
     const to = (s.areas[m.to] ??= { tokens: {} });
@@ -1328,7 +1331,9 @@ function applyBuildCity(s: GameState, actor: PlayerId, area: string, useTreasury
   const onBoard = a.tokens[actor] ?? 0;
   // 6 tokens build a city on a printed city site; 12 elsewhere (§25.2).
   const required = areaById.get(area)?.isCitySite ? 6 : 12;
-  const architecture = has(p, 'architecture');
+  // §32.631: Architecture may assist the building of only ONE city per turn, and
+  // at least half the tokens must be on-board (so treasury covers at most half).
+  const architecture = has(p, 'architecture') && !p.builtWithTreasuryThisTurn;
   const treasuryUsed = architecture ? Math.min(useTreasury, Math.floor(required / 2), p.treasury) : 0;
   if (onBoard + treasuryUsed < required) throw new Error(`build city: need ${required} tokens in ${area}`);
   // Consume tokens: prefer on-board, then treasury (architecture). All 6 tokens
@@ -1339,9 +1344,10 @@ function applyBuildCity(s: GameState, actor: PlayerId, area: string, useTreasury
   p.stock += fromBoard;
   p.treasury -= treasuryUsed;
   p.stock += treasuryUsed;
+  if (treasuryUsed > 0) p.builtWithTreasuryThisTurn = true; // §32.631 one per turn
   a.city = actor;
   p.citiesAvailable -= 1;
-  s.log.push(`${actor} built a city in ${areaName(area)}.`);
+  s.log.push(`${actor} built a city in ${areaName(area)}${treasuryUsed > 0 ? ` (Architecture: ${treasuryUsed} from treasury)` : ''}.`);
 }
 
 function applyBuyAdvance(s: GameState, actor: PlayerId, advanceId: string, spendCommodities: Record<string, number> = {}, spendTreasury = 0): void {
@@ -1749,9 +1755,9 @@ export function victoryScore(state: GameState, id: PlayerId): number {
   let score = 0;
   if (victoryScoring) {
     score += advancesFaceValue(p.advances);
-    let comm = 0;
-    for (const [cid, n] of Object.entries(p.hand)) comm += commoditySetValue(cid, n);
-    score += comm;
+    // §32.261: Mining lets the holder value one mineable set as one card larger
+    // "for Victory condition purposes" too (handValue treats calamity cards as 0).
+    score += handValue(p.hand, { mining: has(p, 'mining') });
     score += p.treasury;
     score += p.astSpace * victoryScoring.pointsPerAstSpace;
     score += cityCount(state, id) * victoryScoring.pointsPerCity;

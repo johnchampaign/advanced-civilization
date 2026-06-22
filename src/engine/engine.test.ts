@@ -333,6 +333,68 @@ describe('taxation (§19 / §32.421 Coinage)', () => {
   });
 });
 
+describe('advance refinements (§32.261/.631/.251)', () => {
+  it('Mining boosts commodity value in the victory score (§32.261)', () => {
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 7 });
+    const e = s.players['egypt']!;
+    e.treasury = 0; e.astSpace = 0;
+    const vs = (adv: string[], hand: Record<string, number>) => { e.advances = adv; e.hand = hand; return victoryScore(s, 'egypt'); };
+    const miningBase = vs(['mining'], {});
+    const miningIron = vs(['mining'], { iron: 3 }); // set valued as 4 cards: 32
+    const plainBase = vs([], {});
+    const plainIron = vs([], { iron: 3 }); // set of 3: 18
+    expect(miningIron - miningBase).toBe(32); // §32.261 one card larger
+    expect(plainIron - plainBase).toBe(18);
+  });
+
+  it('Architecture assists only one city per turn (§32.631)', async () => {
+    const { areas } = await import('../data/index.js');
+    const sites = areas.filter((a) => !a.isWater && a.isCitySite).slice(0, 2).map((a) => a.id);
+    let s = createGame({ players: ['egypt', 'babylon'], seed: 7 });
+    s.areas = {} as typeof s.areas;
+    for (const aid of sites) s.areas[aid] = { tokens: { egypt: 3 } }; // 3 on-board (city site needs 6)
+    s.players['egypt']!.advances = ['architecture'];
+    s.players['egypt']!.treasury = 20; s.players['egypt']!.citiesAvailable = 9;
+    s.phase = 'cityConstruction'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    s = adapter.applyAction(s, { type: 'buildCity', area: sites[0]!, useTreasury: 3 }, 'egypt'); // ok: 3+3
+    expect(s.areas[sites[0]!]!.city).toBe('egypt');
+    // Second city the same turn can't draw on treasury → 3 on-board < 6 → illegal.
+    expect(() => adapter.applyAction(s, { type: 'buildCity', area: sites[1]!, useTreasury: 3 }, 'egypt')).toThrow();
+  });
+
+  it('Roadbuilding cannot pass through an area holding an enemy city (§32.251)', async () => {
+    const { adjacency, areaById } = await import('../data/index.js');
+    const isLand = (id: string) => !areaById.get(id)?.isWater;
+    let chain: [string, string, string] | null = null;
+    for (const b of Object.keys(adjacency)) {
+      if (!isLand(b)) continue;
+      const nb = (adjacency[b] ?? []).filter(isLand);
+      for (const a of nb) for (const c of nb) {
+        if (a !== c && !(adjacency[a] ?? []).includes(c)) { chain = [a, b, c]; break; }
+      }
+      if (chain) break;
+    }
+    expect(chain).not.toBeNull();
+    const [a, b, c] = chain!;
+    const base = () => {
+      const s = createGame({ players: ['egypt', 'babylon'], seed: 7 });
+      s.areas = {} as typeof s.areas;
+      s.areas[a] = { tokens: { egypt: 3 } };
+      s.players['egypt']!.advances = ['roadbuilding', 'engineering'];
+      s.phase = 'movement'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+      return s;
+    };
+    // Clear pass-through: the road move is legal.
+    let ok = base();
+    ok = adapter.applyAction(ok, { type: 'move', moves: [{ from: a, to: c, count: 2, via: b }] }, 'egypt');
+    expect(ok.areas[c]!.tokens['egypt']).toBe(2);
+    // Enemy city in the pass-through area blocks it.
+    const blocked = base();
+    blocked.areas[b] = { tokens: {}, city: 'babylon' };
+    expect(() => adapter.applyAction(blocked, { type: 'move', moves: [{ from: a, to: c, count: 2, via: b }] }, 'egypt')).toThrow();
+  });
+});
+
 describe('Military move order (§32.831)', () => {
   it('puts Military holders after non-Military, preserving census order within each group', () => {
     const s = createGame({ players: ['egypt', 'babylon', 'crete'], seed: 7 });

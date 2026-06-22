@@ -113,6 +113,8 @@ export interface PlayerState {
   eliminatedFromBoard?: boolean;
   /** Set once this player has used Monotheism's one conversion this turn (§32.941). */
   convertedThisTurn?: boolean;
+  /** Set once this player has used Architecture's treasury assist this turn (§32.631). */
+  builtWithTreasuryThisTurn?: boolean;
 }
 
 /** Contents of a single map area. An area is held by at most one nation's

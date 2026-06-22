@@ -696,7 +696,29 @@ function runCalamity(s: GameState): void {
   checkCitySupport(s);
 }
 
+/** §31.71: after buying advances, each player may keep at most 8 commodity cards;
+ *  the excess is surrendered to the bottom of its stack. (Calamity cards don't
+ *  count.) We auto-keep the most valuable 8 — the only sensible choice. */
+function enforceHandLimit(s: GameState): void {
+  for (const id of s.seating) {
+    const p = player(s, id);
+    const comms = Object.entries(p.hand).filter(([c, n]) => !isCalamityCard(c) && n > 0);
+    const total = comms.reduce((t, [, n]) => t + n, 0);
+    if (total <= 8) continue;
+    const cards = comms.flatMap(([c, n]) => Array(n).fill(c)).sort((a, b) => (commodityById.get(a)?.value ?? 0) - (commodityById.get(b)?.value ?? 0));
+    const surrender = cards.slice(0, total - 8); // lowest-value first
+    for (const c of surrender) {
+      p.hand[c] = (p.hand[c] ?? 0) - 1;
+      if ((p.hand[c] ?? 0) <= 0) delete p.hand[c];
+      const stack = commodityById.get(c)?.stack;
+      if (stack && s.trade.stacks[stack]) s.trade.stacks[stack]!.unshift(c);
+    }
+    s.log.push(`${id} discards ${surrender.length} surplus commodity card${surrender.length === 1 ? '' : 's'}, keeping 8 (§31.71).`);
+  }
+}
+
 function runAstAdjustment(s: GameState): void {
+  enforceHandLimit(s); // §31.71: trim hands to 8 commodity cards before AST movement
   for (const id of s.seating) {
     const p = player(s, id);
     const cities = cityCount(s, id);
@@ -729,9 +751,12 @@ function runAstAdjustment(s: GameState): void {
 function orderUnitLoss(s: GameState, primary: PlayerId, calId: string, label: string, pool: number, perCap: number, cityWorth = 5): void {
   const trader = s.calamityTradedFrom[calId];
   let remaining = pool;
+  // §29.64: the primary victim directs the losses. We aim them at the strongest
+  // rival first — the player currently leading (victory score) — which is what a
+  // self-interested primary (AI or human) would do.
   const victims = s.seating
     .filter((o) => o !== primary && o !== trader && boardUnitPoints(s, o) > 0)
-    .sort((x, y) => boardUnitPoints(s, y) - boardUnitPoints(s, x));
+    .sort((x, y) => victoryScore(s, y) - victoryScore(s, x));
   for (const v of victims) {
     if (remaining <= 0) break;
     const order = Math.min(remaining, perCap, boardUnitPoints(s, v));
@@ -874,8 +899,6 @@ function applyVolcanoEarthquake(s: GameState, holder: PlayerId): void {
   if (victimArea) { const o = s.areas[victimArea]!.city!; reduceSpecificCity(s, o, victimArea); s.log.push(`${o}'s city in ${areaName(victimArea)} is reduced by the Earthquake (§30.212).`); }
 }
 
-/** Flood (§30.51): ~10 unit points lost; Engineering caps the loss at 7 (§30.515).
- *  (Flood-plain geography per §4.42 is not modeled; this is the unit-loss core.) */
 /** Flood (§30.51): on the flood plain where the victim has the most units, he
  *  loses ≤17 unit points (Engineering caps it at 7, §30.515) and orders 10 among
  *  secondaries on the SAME plain. A victim with no flood-plain units instead loses
@@ -1140,15 +1163,16 @@ function applyEpidemic(s: GameState, primary: PlayerId): void {
   if (has(pp, 'roadbuilding')) loss += 5;
   removeUnitPoints(s, primary, Math.max(0, loss), 4);
   s.log.push(`${primary} suffers Epidemic (-${Math.max(0, loss)} unit points).`);
-  // Secondary: order 25 unit points of loss among eligible rivals.
+  // Secondary: order 25 unit points among rivals, ≤10 from any one (§30.611),
+  // aimed at the leader first (the primary victim's strategic choice).
   const trader = s.calamityTradedFrom['epidemic'];
   let pool = 25;
   const victims = s.seating
     .filter((o) => o !== primary && o !== trader && boardUnitPoints(s, o) > 0)
-    .sort((x, y) => boardUnitPoints(s, y) - boardUnitPoints(s, x));
+    .sort((x, y) => victoryScore(s, y) - victoryScore(s, x));
   for (const v of victims) {
     if (pool <= 0) break;
-    const ordered = Math.min(pool, boardUnitPoints(s, v));
+    const ordered = Math.min(pool, 10, boardUnitPoints(s, v)); // §30.611: ≤10 per player
     pool -= ordered;
     const vp = player(s, v);
     let actual = ordered;
@@ -1179,7 +1203,7 @@ function applyIconoclasm(s: GameState, primary: PlayerId): void {
   let remaining = 2;
   const victims = s.seating
     .filter((o) => o !== primary && o !== trader && !has(player(s, o), 'theology') && cityCount(s, o) > 0)
-    .sort((x, y) => cityCount(s, y) - cityCount(s, x));
+    .sort((x, y) => victoryScore(s, y) - victoryScore(s, x)); // target the leader (§29.64)
   for (const v of victims) {
     if (remaining <= 0) break;
     const cap = has(player(s, v), 'philosophy') ? 1 : remaining;
@@ -1215,8 +1239,8 @@ function applyPiracy(s: GameState, primary: PlayerId): void {
   razeCoastalCitiesToPirate(s, primary, 2);
   const trader = s.calamityTradedFrom['piracy'];
   const eligible = s.seating
-    .filter((o) => o !== primary && o !== trader)
-    .sort((x, y) => coastalCityCount(s, y) - coastalCityCount(s, x));
+    .filter((o) => o !== primary && o !== trader && coastalCityCount(s, o) > 0)
+    .sort((x, y) => victoryScore(s, y) - victoryScore(s, x)); // hit the leader's coasts first
   for (const o of eligible.slice(0, 2)) razeCoastalCitiesToPirate(s, o, 1);
   s.log.push(`${primary} suffers Piracy along the coasts.`);
 }
@@ -1329,9 +1353,6 @@ function removeTokensFromBoard(s: GameState, owner: PlayerId, unitPoints: number
   }
 }
 
-/** Reduce `n` of a player's cities (each city -> tokens removed; rules model a
- *  reduced city becoming tokens, but for losses we return the city + its
- *  notional support to stock). `coastalOnly` restricts to coastal areas. */
 /** §26.41: reduce up to `n` of a player's cities. A reduced city is REPLACED by
  *  the maximum tokens its area allows (Agriculture §32.241 gives +1), drawn from
  *  stock — those tokens can then support the player's remaining cities. */

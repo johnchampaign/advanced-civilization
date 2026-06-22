@@ -21,7 +21,7 @@ export type Phase =
   | 'cityConstruction'
   | 'removeSurplus' // §26: remove surplus population, then check city support
   | 'tradeAcquisition' // draw trade cards from stacks
-  | 'trade' // negotiate/exchange (simplified: collect/keep)
+  | 'trade' // §28 open-offer negotiation (declare offers, respond, accept)
   | 'calamity' // resolve calamities in severity order
   | 'acquireAdvances' // buy civilization advances
   | 'astAdjustment'; // advance AST markers, check win

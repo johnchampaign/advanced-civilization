@@ -420,6 +420,21 @@ describe('advance refinements (§32.261/.631/.251)', () => {
   });
 });
 
+describe('commodity-card hand limit (§31.71)', () => {
+  it('trims a hand to 8 commodity cards after the advances phase; calamities are exempt', () => {
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 7 });
+    s.players['egypt']!.hand = { ochre: 5, gold: 5, 'calamity:flood': 1 }; // 10 commodities + 1 calamity
+    s.phase = 'astAdjustment'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    normalize(s); // astAdjustment enforces the limit before AST movement
+    const h = s.players['egypt']!.hand;
+    const commodities = Object.entries(h).filter(([c]) => !c.startsWith('calamity:')).reduce((t, [, n]) => t + n, 0);
+    expect(commodities).toBe(8); // kept 8 of 10
+    expect(h['gold']).toBe(5); // kept the valuable cards
+    expect(h['ochre']).toBe(3); // dropped 2 of the cheapest
+    expect(h['calamity:flood']).toBe(1); // calamity retained, doesn't count toward the 8
+  });
+});
+
 describe('A.S.T. order (§17.4)', () => {
   it('is a fixed nation order — Africa first, Italy second, Egypt last (§17.4)', () => {
     const s = createGame({ players: ['egypt', 'italy', 'africa', 'babylon'], seed: 7 });

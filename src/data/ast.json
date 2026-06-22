@@ -130,8 +130,7 @@
         "lateIron": 14
       },
       "lateIronThresholds": [
-        1400,
-        1700
+        1200
       ]
     },
     "illyria": {

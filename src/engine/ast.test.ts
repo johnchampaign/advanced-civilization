@@ -39,11 +39,11 @@ describe('AST track (read from the board)', () => {
   it('has per-civ Late Iron Age thresholds for all 14 nations (from the VASSAL AST strips)', () => {
     const expected: Record<string, number[]> = {
       africa: [1300, 1600], asia: [1200, 1500, 1800], assyria: [1500, 1800], babylon: [1600, 1900],
-      crete: [1300, 1600], egypt: [1300, 1600, 1900], iberia: [1400, 1700], illyria: [1200, 1500, 1800],
+      crete: [1300, 1600], egypt: [1300, 1600, 1900], iberia: [1200], illyria: [1200, 1500, 1800],
       indus: [1100, 1300], italy: [1400, 1700], persia: [1200, 1400], semites: [1100, 1300],
       sumeria: [1100, 1300], thrace: [1200, 1400, 1700],
     };
-    const gapNations = new Set(['persia', 'sumeria', 'semites', 'indus']); // strips draw EI grey 1 cell short
+    const gapNations = new Set(['iberia', 'persia', 'sumeria', 'semites', 'indus']); // strips draw EI grey 1 cell short
     for (const [civ, thr] of Object.entries(expected)) {
       expect(astTrackFor(civ).lateIronThresholds, civ).toEqual(thr);
       // Late Iron begins at the end of the Early-Iron grey block; printed values
@@ -60,8 +60,9 @@ describe('AST track (read from the board)', () => {
     expect(astTrackFor('africa').lateIronThresholds).toEqual([1300, 1600]);
     expect(astTrackFor('illyria').lateIronThresholds).toEqual([1200, 1500, 1800]);
     expect(astTrackFor('thrace').lateIronThresholds).toEqual([1200, 1400, 1700]);
-    // Iberia replaces Italy on the West map and uses Italy's track (per the game).
-    expect(astTrackFor('iberia')).toEqual(astTrackFor('italy'));
+    // Strip geometry is the ground truth: Iberia uses its OWN strip (lone 1200),
+    // not Italy's track, even though the 1995 computer game gives it Italy's.
+    expect(astTrackFor('iberia').lateIronThresholds).toEqual([1200]);
   });
 
   it('has per-civ earlier-epoch boundaries read from the AST strips', () => {

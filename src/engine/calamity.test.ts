@@ -266,7 +266,9 @@ describe('§30.61 Epidemic secondary victims', () => {
     });
     s = resolve(s);
     expect(populationCount(s, 'egypt')).toBe(20 - 16); // primary -16
-    expect(populationCount(s, 'babylon')).toBe(30 - 25); // strongest rival ordered -25
+    // §30.611: no more than 10 may be ordered from any one player. crete (the
+    // trader) is exempt, so babylon — the only eligible rival — absorbs just 10.
+    expect(populationCount(s, 'babylon')).toBe(30 - 10);
     expect(populationCount(s, 'crete')).toBe(30); // the trader is untouched
     expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
   });

@@ -53,13 +53,9 @@ for (const civ of Object.keys(THRESHOLDS)) {
   };
 }
 
-// Cross-check against the official 1995 computer version (its AST screen): Africa,
-// Illyria and Thrace match the strips exactly, validating the extraction. Iberia
-// is the one disagreement — the computer game gives Iberia Italy's track
-// (1400/1700), consistent with Iberia replacing Italy on the West map, whereas the
-// fan VASSAL `iberia` strip shows a lone 1200 (an outlier). We follow the official
-// game and equate Iberia with Italy. (To use the VASSAL strip instead, delete this.)
-tracks.iberia = JSON.parse(JSON.stringify(tracks.italy));
+// The strip geometry is the ground truth: every nation (Iberia included) uses its
+// own VASSAL ASTstrip. (The 1995 computer version gives Iberia Italy's track, but
+// we follow the strip — Iberia's lone 1200 Late Iron threshold.)
 
 const ast = JSON.parse(readFileSync('src/data/ast.json', 'utf8'));
 const doc = ast.tracksByCiv._doc;

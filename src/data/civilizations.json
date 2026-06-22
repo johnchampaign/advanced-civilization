@@ -65,7 +65,7 @@
         "caucasus",
         "nalchik"
       ],
-      "astOrder": 7
+      "astOrder": 8
     },
     {
       "id": "babylon",
@@ -77,7 +77,7 @@
         "media",
         "parthia"
       ],
-      "astOrder": 8
+      "astOrder": 9
     },
     {
       "id": "sumeria",
@@ -91,7 +91,7 @@
         "susa",
         "portas-persas"
       ],
-      "astOrder": 9
+      "astOrder": 10
     },
     {
       "id": "thrace",
@@ -148,7 +148,7 @@
         "prophtasia",
         "randamar"
       ],
-      "astOrder": 10
+      "astOrder": 7
     },
     {
       "id": "semites",

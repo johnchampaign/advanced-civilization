@@ -136,6 +136,35 @@ export interface TradeStacks {
   stacks: Record<number, string[]>;
 }
 
+/** A force present in an area, for the combat step-through display. */
+export interface CombatForce { id: PlayerId; tokens: number; city: boolean }
+
+/** One area's combat this conflict phase, captured for a replay modal. */
+export interface CombatEvent {
+  area: string;
+  before: CombatForce[];
+  after: CombatForce[];
+  /** Rules that shaped the outcome (Metalworking removal order, Engineering thresholds). */
+  modifiers: string[];
+  /** Human-readable summary of what happened (losses, city taken, pillage). */
+  note: string;
+}
+
+/** One resolution step of a calamity, attributed to the affected player. */
+export interface CalamityStep { text: string; player?: PlayerId; secondary?: boolean }
+
+/** One calamity's full outcome, captured for a step-by-step modal. */
+export interface CalamityEvent {
+  calamity: string;
+  calamityId: string;
+  description: string;
+  holder: PlayerId;
+  steps: CalamityStep[];
+  /** Board overview (per player: cities/tokens) before and after this calamity. */
+  overviewBefore: string;
+  overviewAfter: string;
+}
+
 export interface GameState {
   schemaVersion: number;
   turn: number;
@@ -187,7 +216,10 @@ export interface GameState {
   };
   /** The most recent calamity phase's outcomes, one per calamity, so the UI can
    *  show a step-by-step modal. Overwritten each calamity phase; empty if none. */
-  lastCalamities?: { calamity: string; holder: PlayerId; summary: string; details: string[] }[];
+  lastCalamities?: CalamityEvent[];
+  /** The most recent conflict phase's combats, one per area, for a step-through
+   *  modal. Overwritten each conflict phase; empty if none. */
+  lastCombats?: CombatEvent[];
   /** Who handed each calamity to its current holder (calamityId -> giver). The
    *  giver may not be named a secondary victim (§29.61). */
   calamityTradedFrom: Record<string, PlayerId>;

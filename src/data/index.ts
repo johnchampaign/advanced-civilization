@@ -152,3 +152,47 @@ export function validateData(): string[] {
   ranks.forEach((r, i) => { if (r !== i) problems.push(`civ astOrder not a 0..n-1 permutation (got ${r} at position ${i})`); });
   return problems;
 }
+
+/** One-line special-effect text per Civilization Advance (§32), for tooltips. */
+export const ADVANCE_EFFECTS: Record<string, string> = {
+  pottery: 'Reduces Famine losses by 4 per Grain card you hold (§32.211).',
+  clothmaking: 'Your ships move one extra area — 5 instead of 4 (§32.221).',
+  metalworking: 'In combat you remove your tokens last, after every non-Metalworking foe (§32.231).',
+  agriculture: 'Areas you solely occupy hold +1 token, and reduced cities leave +1 token (§32.241).',
+  engineering: 'Take a city with 6 tokens (8 vs an Engineering city); reduces Earthquake & Flood (§32.31).',
+  roadbuilding: 'Move through one land area into a second. Worsens Epidemic, Civil Disorder & Iconoclasm (§32.25).',
+  mining: 'Treat one Iron/Bronze/Silver/Gems/Gold set as one card larger; worsens Slave Revolt (§32.26).',
+  astronomy: 'Your ships may cross open-sea areas (§32.411).',
+  coinage: 'Set your tax rate to 1, 2 or 3 tokens per city each turn (§32.421).',
+  medicine: 'Reduces Epidemic losses (−8 as primary, −5 as secondary victim) (§32.431).',
+  mathematics: 'No special effect — strong credits toward Sciences, Philosophy & Theology (§32.54).',
+  drama: 'Reduces Civil War & Civil Disorder (§32.611).',
+  music: 'Reduces Civil War & Civil Disorder (§32.621).',
+  architecture: 'Use treasury for up to half of one city’s cost each turn (§32.631).',
+  literacy: 'No special effect — strong credits toward Law, Democracy & Philosophy (§32.71).',
+  law: 'Reduces Civil Disorder & Iconoclasm; required for Democracy & Philosophy (§32.81).',
+  democracy: 'Your cities never revolt from taxes; reduces Civil War & Civil Disorder (§32.82).',
+  military: 'You move & build ships after non-Military players; Civil War costs both sides 5; worsens Civil Disorder (§32.83).',
+  philosophy: 'Alters Civil War (the beneficiary picks your faction); reduces Iconoclasm (§32.84).',
+  mysticism: 'Reduces Superstition to 2 cities (§32.911).',
+  deism: 'Reduces Superstition to 1 city (§32.921).',
+  enlightenment: 'Nullifies Superstition; eases Slave Revolt; required for Monotheism & Theology (§32.93).',
+  monotheism: 'Each turn convert one adjacent enemy area to your own; worsens Iconoclasm (§32.94).',
+  theology: 'Immune to Monotheism conversion; reduces Iconoclasm (§32.95).',
+};
+
+/** Plain-language description of each calamity, for the step-through modal (§30). */
+export const CALAMITY_DESC: Record<string, string> = {
+  volcano: 'A volcano erupts (or an earthquake strikes): if you have a city on a volcano, every unit in its areas is destroyed; otherwise one of your cities is destroyed and a neighbouring enemy city is reduced (§30.21).',
+  treachery: 'One of your cities is taken over by the player who traded you this card — or reduced if you drew it yourself (§30.22).',
+  famine: 'You lose 10 unit points, and order 20 more removed among rivals (≤8 each). Pottery + Grain softens your loss (§30.31).',
+  superstition: 'Three of your cities are reduced — fewer if you hold Mysticism (2), Deism (1) or Enlightenment (none) (§30.32).',
+  civilwar: 'Your nation splits: a faction defects to the rival with the most reserves. Music/Drama/Democracy shrink the loss; Philosophy and Military change it (§30.41).',
+  slaverevolt: '15 of your tokens can’t support cities this turn, forcing city reductions. Mining worsens it, Enlightenment eases it (§30.42).',
+  flood: 'On your most-populated flood plain you lose up to 17 unit points (7 with Engineering); 10 more fall on rivals there (§30.51).',
+  barbarianhordes: '15 barbarians land in your homeland and rampage, razing cities and sweeping tokens until spent (§30.52).',
+  epidemic: 'You lose 16 unit points and order 25 more among rivals. Medicine reduces it; Roadbuilding worsens it (§30.61).',
+  civildisorder: 'All but three of your cities are reduced — fewer with Music/Drama/Law/Democracy, more with Military/Roadbuilding (§30.71).',
+  iconoclasm: 'Four of your cities are reduced and two among rivals. Law/Philosophy/Theology reduce it; Monotheism/Roadbuilding worsen it (§30.81).',
+  piracy: 'You lose two coastal cities to pirates, and two rivals lose one each (§30.91).',
+};

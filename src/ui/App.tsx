@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Rng } from 'digital-boardgame-framework';
 import { adapter, createGame } from '../engine/index.js';
-import type { Action, GameState, PlayerId } from '../engine/index.js';
-import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, civById, commodityById, epochs } from '../data/index.js';
+import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent } from '../engine/index.js';
+import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, civById, commodityById, epochs, ADVANCE_EFFECTS } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
 import { handValue, creditTowards, commoditySetValue } from '../engine/helpers.js';
 import { submitStandaloneReport, fetchMyReports, type MyReport } from '../client/api.js';
@@ -68,6 +68,7 @@ export default function App() {
   return (
     <>
       <div ref={boardRef} style={{ flex: 1, position: 'relative', overflow: 'auto', background: '#0d3a4a' }}>
+        <CombatModal events={state.lastCombats ?? []} you={focus} />
         <CalamityModal events={state.lastCalamities ?? []} you={focus} />
         {view === 'map'
           ? <Board
@@ -397,17 +398,50 @@ function CensusView({ state }: { state: GameState }) {
   );
 }
 
+/** Concise credit summary for an advance (what buying it discounts later). */
+function creditSummary(id: string): string {
+  const a = advanceById.get(id); if (!a) return '';
+  const parts: string[] = [];
+  for (const [g, v] of Object.entries(a.credits.byGroup)) parts.push(`+${v} to other ${g}`);
+  for (const [c, v] of Object.entries(a.credits.byCard)) parts.push(`+${v} to ${advanceById.get(c)?.name ?? c}`);
+  return parts.join(', ');
+}
+
+/** Full-details hover panel for an advance (groups, cost, prereqs, effect, credits). */
+function AdvanceTip({ id }: { id: string }) {
+  const a = advanceById.get(id)!;
+  const credits = creditSummary(id);
+  return (
+    <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 3, zIndex: 60, width: 270, background: '#1a160f', border: '1px solid #c79a3a', borderRadius: 6, padding: 10, boxShadow: '0 6px 24px #000', color: '#eee', fontSize: 12, lineHeight: 1.5, textAlign: 'left', whiteSpace: 'normal' }}>
+      <div style={{ fontWeight: 800, color: '#ffd98a' }}>{a.name}</div>
+      <div style={{ color: '#9a8d6a' }}>{a.groups.join(' / ')} · cost {a.cost}{a.prerequisites?.length ? ` · needs ${a.prerequisites.map((p) => advanceById.get(p)?.name ?? p).join(', ')}` : ''}</div>
+      <div style={{ margin: '6px 0', color: '#ece4d2' }}>{ADVANCE_EFFECTS[id] ?? ''}</div>
+      {credits && <div style={{ color: '#9ab8c8' }}>Credits: {credits}</div>}
+    </div>
+  );
+}
+
+/** An advance cell that reveals full details on hover. */
+function AdvanceChip({ id, owned }: { id: string; owned: boolean }) {
+  const a = advanceById.get(id)!;
+  const [hover, setHover] = useState(false);
+  return (
+    <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      style={{ position: 'relative', padding: 6, borderRadius: 4, border: '1px solid #555', background: owned ? '#2e6b3a' : '#222', opacity: owned ? 1 : 0.6, cursor: 'help' }}>
+      <b>{a.name}</b><br /><small>{a.groups.join('/')} · {a.cost}</small>
+      {hover && <AdvanceTip id={id} />}
+    </div>
+  );
+}
+
 function ToolsView({ state, focus }: { state: GameState; focus: PlayerId }) {
   const owned = new Set(state.players[focus]!.advances);
   return (
     <div style={{ padding: 16, color: '#eee' }}>
       <h2 style={{ marginTop: 0 }}>Civilization Advances — {civById.get(focus)?.name}</h2>
+      <div className="civ-lbl" style={{ color: '#b9ad8e', marginBottom: 8 }}>Hover any advance for its full effect, prerequisites and credits.</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6, maxWidth: 720 }}>
-        {ALL_ADVANCES.map((a) => (
-          <div key={a.id} style={{ padding: 6, borderRadius: 4, border: '1px solid #555', background: owned.has(a.id) ? '#2e6b3a' : '#222', opacity: owned.has(a.id) ? 1 : 0.6 }}>
-            <b>{a.name}</b><br /><small>{a.groups.join('/')} · {a.cost}</small>
-          </div>
-        ))}
+        {ALL_ADVANCES.map((a) => <AdvanceChip key={a.id} id={a.id} owned={owned.has(a.id)} />)}
       </div>
     </div>
   );
@@ -738,6 +772,7 @@ function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: Pla
   const p = state.players[actor]!;
   const mining = p.advances.includes('mining');
   const [sel, setSel] = useState<string>('');
+  const [tip, setTip] = useState<string>('');
   const [spend, setSpend] = useState<Record<string, number>>({});
   const [treasury, setTreasury] = useState(0);
   const cName = (c: string) => commodityById.get(c)?.name ?? c;
@@ -764,9 +799,12 @@ function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: Pla
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
         {available.length === 0 && <span className="civ-lbl">No advance available (prerequisites unmet).</span>}
         {available.map((a) => (
-          <button key={a.id} className={`civ-btn ${sel === a.id ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => { setSel(a.id); setSpend({}); setTreasury(0); }}>
-            {a.name} ({a.cost}{creditTowards(p.advances, a.id) ? `, −${creditTowards(p.advances, a.id)} credit` : ''})
-          </button>
+          <span key={a.id} style={{ position: 'relative', display: 'inline-block' }} onMouseEnter={() => setTip(a.id)} onMouseLeave={() => setTip((t) => (t === a.id ? '' : t))}>
+            <button className={`civ-btn ${sel === a.id ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => { setSel(a.id); setSpend({}); setTreasury(0); }}>
+              {a.name} ({a.cost}{creditTowards(p.advances, a.id) ? `, −${creditTowards(p.advances, a.id)} credit` : ''})
+            </button>
+            {tip === a.id && <AdvanceTip id={a.id} />}
+          </span>
         ))}
       </div>
       {adv && (
@@ -1037,39 +1075,103 @@ function HotseatReport({ state, focus }: { state: GameState; focus: PlayerId }) 
   );
 }
 
-export interface CalamityEvent { calamity: string; holder: PlayerId; summary: string; details: string[] }
+const nationName = (id: string) => id === '__barbarian__' ? 'Barbarians' : id === '__pirate__' ? 'Pirates' : civById.get(id)?.name ?? id;
+const nationColor = (id: string) => id === '__barbarian__' ? '#b08' : id === '__pirate__' ? '#000' : civById.get(id)?.color ?? '#ccc';
 
-/** Step-through modal of the latest calamity outcomes — names each calamity, who
- *  it struck, and the specific cities/units affected, one calamity at a time. */
-export function CalamityModal({ events, you }: { events: CalamityEvent[]; you?: PlayerId }) {
-  const key = JSON.stringify(events);
+/** Generic step-through overlay: pages through `pages` one at a time, each behind
+ *  an Acknowledge button; the final page's Continue dismisses it (tracked by
+ *  `token` so a fresh batch of events re-opens it). */
+function StepModal({ token, pages, accent }: { token: string; pages: ReactNode[]; accent: string }) {
   const [seen, setSeen] = useState('');
   const [i, setI] = useState(0);
-  useEffect(() => { setI(0); }, [key]);
-  if (!events.length || seen === key) return null;
-  const e = events[Math.min(i, events.length - 1)]!;
-  const mine = e.holder === you;
-  const color = civById.get(e.holder)?.color ?? '#ffd23f';
-  const last = i >= events.length - 1;
+  useEffect(() => { setI(0); }, [token]);
+  if (!pages.length || seen === token) return null;
+  const idx = Math.min(i, pages.length - 1);
+  const last = idx >= pages.length - 1;
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(8,6,3,0.8)', display: 'grid', placeItems: 'center', zIndex: 120 }}>
-      <div style={{ background: '#211c14', color: '#eee', padding: 22, borderRadius: 12, border: `2px solid ${mine ? '#c0392b' : '#7a5f24'}`, width: 480, maxWidth: '92vw', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 8px 40px #000' }}>
-        <div style={{ fontSize: 12, color: '#e6b85a', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Calamity {events.length > 1 ? `${i + 1} of ${events.length}` : ''}</div>
-        <h2 style={{ margin: '4px 0 6px', color: mine ? '#ff6b5a' : '#fff' }}>⚠ {e.calamity}</h2>
-        <div style={{ marginBottom: 10 }}>strikes <b style={{ color }}>{civById.get(e.holder)?.name ?? e.holder}</b>{mine ? ' — that’s you!' : ''}</div>
-        {e.summary && <div style={{ fontSize: 13, color: '#ccc', marginBottom: 10 }}>{e.summary}</div>}
-        {e.details.length > 0 ? (
-          <ul style={{ margin: '0 0 14px', paddingLeft: 18, fontSize: 14, lineHeight: 1.5 }}>
-            {e.details.map((d, k) => <li key={k} style={{ color: d.startsWith('  →') ? '#aa9' : '#ece4d2', listStyle: d.startsWith('  →') ? 'none' : 'disc' }}>{d.trim()}</li>)}
-          </ul>
-        ) : <div style={{ fontSize: 13, color: '#9a9', marginBottom: 14 }}>No effect (nothing for it to take).</div>}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          {!last && <button className="civ-btn" onClick={() => setI((x) => x + 1)}>Next calamity →</button>}
-          {last && <button className="civ-btn" onClick={() => setSeen(key)}>Continue</button>}
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(8,6,3,0.82)', display: 'grid', placeItems: 'center', zIndex: 120 }}>
+      <div style={{ background: '#211c14', color: '#eee', padding: 22, borderRadius: 12, border: `2px solid ${accent}`, width: 500, maxWidth: '92vw', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 8px 40px #000' }}>
+        {pages[idx]}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
+          <span className="civ-lbl" style={{ color: '#9a8d6a' }}>{idx + 1} / {pages.length}</span>
+          <button className="civ-btn" onClick={() => (last ? setSeen(token) : setI((x) => x + 1))}>{last ? 'Continue' : 'Acknowledge →'}</button>
         </div>
       </div>
     </div>
   );
+}
+
+const stepHead = (kicker: string, title: string, titleColor: string, sub?: ReactNode) => (
+  <>
+    <div style={{ fontSize: 12, color: '#e6b85a', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>{kicker}</div>
+    <h2 style={{ margin: '4px 0 6px', color: titleColor }}>{title}</h2>
+    {sub}
+  </>
+);
+
+/** Step-through of the latest calamities: for each — what it is + description,
+ *  the effect on the victim, secondary victims (who & what), then a before/after
+ *  overview, each behind an Acknowledge (§29). */
+export function CalamityModal({ events, you }: { events: CalamityEvent[]; you?: PlayerId }) {
+  const pages: ReactNode[] = [];
+  for (const e of events) {
+    const mine = e.holder === you;
+    const nm = nationName(e.holder);
+    const head = (kicker: string) => stepHead(`Calamity · ${kicker}`, `⚠ ${e.calamity}`, mine ? '#ff6b5a' : '#fff',
+      <div style={{ marginBottom: 10 }}>strikes <b style={{ color: nationColor(e.holder) }}>{nm}</b>{mine ? ' — that’s you!' : ''}</div>);
+    const primary = e.steps.filter((st) => !st.secondary);
+    const secondary = e.steps.filter((st) => st.secondary);
+    const list = (steps: typeof e.steps) => (
+      <ul style={{ margin: '0 0 4px', paddingLeft: 18, fontSize: 14, lineHeight: 1.6 }}>
+        {steps.map((st, k) => <li key={k} style={{ color: st.player ? nationColor(st.player) : '#ece4d2' }}>{st.text}</li>)}
+      </ul>
+    );
+    pages.push(<div key={`${e.calamityId}-i`}>{head('what happens')}<p style={{ fontSize: 13, color: '#cfc7b4', lineHeight: 1.5 }}>{e.description}</p></div>);
+    pages.push(<div key={`${e.calamityId}-p`}>{head(`effect on ${nm}`)}{primary.length ? list(primary) : <div style={{ fontSize: 13, color: '#9a9' }}>No effect — nothing for it to take.</div>}</div>);
+    if (secondary.length) pages.push(<div key={`${e.calamityId}-s`}>{head('secondary victims')}<div style={{ fontSize: 12, color: '#caa', marginBottom: 6 }}>{nm} directs these losses onto other nations:</div>{list(secondary)}</div>);
+    pages.push(<div key={`${e.calamityId}-o`}>{head('before & after')}
+      <div style={{ fontSize: 13, lineHeight: 1.6 }}><b style={{ color: '#9a8d6a' }}>Start:</b> {e.overviewBefore}</div>
+      <div style={{ fontSize: 13, lineHeight: 1.6, marginTop: 4 }}><b style={{ color: '#9a8d6a' }}>End:</b> {e.overviewAfter}</div></div>);
+  }
+  return <StepModal token={`cal:${JSON.stringify(events)}`} pages={pages} accent="#c0392b" />;
+}
+
+/** Step-through of the latest conflict phase: each territory's combat in turn —
+ *  the forces at the start, the modifiers that shape it (Metalworking removal
+ *  order, Engineering thresholds), and the losses / outcome (§24). */
+export function CombatModal({ events }: { events: CombatEvent[]; you?: PlayerId }) {
+  const pages: ReactNode[] = events.map((e, n) => {
+    const name = areaById.get(e.area)?.name ?? e.area;
+    const afterById = new Map(e.after.map((f) => [f.id, f]));
+    const forceRow = (f: CombatEvent['before'][number]) => (
+      <li key={f.id} style={{ color: nationColor(f.id) }}>{nationName(f.id)}: {f.tokens} token{f.tokens === 1 ? '' : 's'}{f.city ? ' + city' : ''}</li>
+    );
+    const losses = e.before.map((f) => {
+      const a = afterById.get(f.id);
+      const lost = f.tokens - (a?.tokens ?? 0);
+      const lostCity = f.city && !(a?.city);
+      return { id: f.id, lost, lostCity };
+    }).filter((l) => l.lost > 0 || l.lostCity);
+    return (
+      <div key={e.area}>
+        {stepHead(`Conflict · territory ${n + 1} of ${events.length}`, `⚔ ${name}`, '#ffcf8a')}
+        <div style={{ fontSize: 12, color: '#9a8d6a', marginTop: 4 }}>At the start:</div>
+        <ul style={{ margin: '2px 0 8px', paddingLeft: 18, fontSize: 14 }}>{e.before.map(forceRow)}</ul>
+        {e.modifiers.length > 0 && <>
+          <div style={{ fontSize: 12, color: '#9a8d6a' }}>Modifiers:</div>
+          <ul style={{ margin: '2px 0 8px', paddingLeft: 18, fontSize: 13, color: '#e6b85a' }}>{e.modifiers.map((m, k) => <li key={k}>{m}</li>)}</ul>
+        </>}
+        <div style={{ fontSize: 12, color: '#9a8d6a' }}>Losses:</div>
+        {losses.length ? (
+          <ul style={{ margin: '2px 0 8px', paddingLeft: 18, fontSize: 14 }}>
+            {losses.map((l) => <li key={l.id} style={{ color: nationColor(l.id) }}>{nationName(l.id)}: −{l.lost} token{l.lost === 1 ? '' : 's'}{l.lostCity ? ', lost the city' : ''}</li>)}
+          </ul>
+        ) : <div style={{ fontSize: 13, color: '#9a9', margin: '2px 0 8px' }}>No losses (coexistence).</div>}
+        {e.note && <div style={{ fontSize: 12, color: '#cfc7b4', fontStyle: 'italic' }}>{e.note}</div>}
+      </div>
+    );
+  });
+  return <StepModal token={`cmb:${JSON.stringify(events)}`} pages={pages} accent="#8a4b2a" />;
 }
 
 export function prettyPhase(p: string): string {

@@ -100,3 +100,15 @@ describe('§24.3 city assault', () => {
     expect(seven.areas[cityArea.id]!.city).toBe('babylon'); // 7 < 8, fails
   });
 });
+
+describe('combat step-through capture (lastCombats)', () => {
+  it('records before forces, losses and the Metalworking modifier per area', () => {
+    const s = runConflict(scenario({ egypt: { [sus1.id]: 3 }, babylon: { [sus1.id]: 5 } }, {}, { advances: { babylon: ['metalworking'] } }));
+    const ev = s.lastCombats?.find((c) => c.area === sus1.id);
+    expect(ev).toBeTruthy();
+    expect(ev!.before.map((f) => f.id).sort()).toEqual(['babylon', 'egypt']);
+    expect(ev!.before.find((f) => f.id === 'egypt')!.tokens).toBe(3); // forces at the start
+    expect(ev!.modifiers.some((m) => /Metalworking/.test(m))).toBe(true); // §32.231 surfaced
+    expect(ev!.after.find((f) => f.id === 'egypt')?.tokens ?? 0).toBe(0); // egypt wiped
+  });
+});

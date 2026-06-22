@@ -18,6 +18,7 @@ import {
   advanceById,
   areaById,
   calamityById,
+  CALAMITY_DESC,
   civById,
   commodityById,
   astTrackFor,
@@ -44,6 +45,10 @@ import {
 import {
   PHASE_ORDER,
   type Action,
+  type CalamityEvent,
+  type CalamityStep,
+  type CombatEvent,
+  type CombatForce,
   type GameState,
   type Phase,
   type PlayerId,
@@ -330,12 +335,50 @@ function runConflict(s: GameState): void {
   // — surplus population is removed later, after city construction (§26.1), so a
   // player may temporarily over-stack an area to gather the tokens a city needs.
   const rng = Rng.fromState(s.rngState);
+  const combats: CombatEvent[] = [];
   for (const [aid, a] of Object.entries(s.areas)) {
     const owners = Object.keys(a.tokens).filter((o) => (a.tokens[o] ?? 0) > 0);
     const enemyAtCity = a.city != null && owners.some((o) => o !== a.city);
-    if (owners.length >= 2 || enemyAtCity) resolveAreaCombat(s, aid, rng);
+    if (owners.length >= 2 || enemyAtCity) resolveAreaCombat(s, aid, rng, combats);
   }
+  s.lastCombats = combats; // surfaced for the step-through combat modal
   s.rngState = rng.serialize();
+}
+
+/** Forces present in an area (token owners + the city owner), for combat display. */
+function forcesIn(s: GameState, aid: string): CombatForce[] {
+  const a = s.areas[aid];
+  if (!a) return [];
+  const ids = new Set<string>();
+  for (const [o, n] of Object.entries(a.tokens)) if (n > 0) ids.add(o);
+  if (a.city) ids.add(a.city);
+  return [...ids].map((id) => ({ id, tokens: a.tokens[id] ?? 0, city: a.city === id }));
+}
+
+const pname = (s: GameState, id: PlayerId) => id === BARBARIAN ? 'Barbarians' : id === PIRATE ? 'Pirates' : civById.get(id)?.name ?? id;
+
+/** Rules that shape an area's combat (Metalworking removal order, Engineering
+ *  city-assault thresholds), as human-readable strings. */
+function combatModifiers(s: GameState, aid: string): string[] {
+  const a = s.areas[aid]!;
+  const out: string[] = [];
+  const owners = Object.keys(a.tokens).filter((o) => (a.tokens[o] ?? 0) > 0);
+  const metal = owners.filter((o) => hasMetal(s, o));
+  if (metal.length && metal.length < owners.length) {
+    out.push(`Metalworking — ${metal.map((o) => pname(s, o)).join(', ')} lose tokens last (§32.231)`);
+  }
+  if (a.city) {
+    const attackers = owners.filter((o) => o !== a.city);
+    if (attackers.length === 1) {
+      const atk = attackers[0]!, def = a.city;
+      const ae = hasEng(s, atk), de = hasEng(s, def);
+      const thr = ae && !de ? 6 : de && !ae ? 8 : 7;
+      out.push(`City assault — ${thr} tokens needed to take ${pname(s, def)}’s city${ae ? ', attacker has Engineering' : ''}${de ? ', defender has Engineering' : ''} (§24.35)`);
+    } else if (a.pirateCity) {
+      out.push('Pirate city — 7 tokens needed to storm it (§24.34)');
+    }
+  }
+  return out;
 }
 
 const BARBARIAN = '__barbarian__';
@@ -452,10 +495,13 @@ function stealCardFromVictim(s: GameState, attacker: PlayerId, victim: PlayerId,
 
 /** Resolve all conflict in one area (§24.3): token attrition first, then a city
  *  assault if a single enemy nation's tokens survive beside the defender's city. */
-function resolveAreaCombat(s: GameState, aid: string, rng: Rng): void {
+function resolveAreaCombat(s: GameState, aid: string, rng: Rng, combats?: CombatEvent[]): void {
   const a = s.areas[aid]!;
   const area = areaById.get(aid);
   const limit = a.city ? 0 : (area?.sustains ?? 0);
+  const before = forcesIn(s, aid);
+  const modifiers = combatModifiers(s, aid);
+  const logLen = s.log.length;
   if (Object.keys(a.tokens).filter((o) => (a.tokens[o] ?? 0) > 0).length >= 2) {
     resolveTokenCombat(s, aid, limit);
   }
@@ -463,6 +509,7 @@ function resolveAreaCombat(s: GameState, aid: string, rng: Rng): void {
     const attackers = Object.keys(a.tokens).filter((o) => o !== a.city && (a.tokens[o] ?? 0) > 0);
     if (attackers.length === 1) resolveCityAssault(s, aid, attackers[0]!, rng);
   }
+  combats?.push({ area: aid, before, after: forcesIn(s, aid), modifiers, note: s.log.slice(logLen).join(' ') });
 }
 
 /** The population limit of an area for `owner` (§26.1, §26.11): the printed
@@ -574,31 +621,37 @@ function snapAreas(s: GameState): Record<string, { city?: PlayerId; tokens: Reco
 }
 /** Human-readable, area-by-area account of what a calamity did to `holder`
  *  (cities lost/seized, tokens removed, defections, barbarians/pirates). */
-function calamityDetails(s: GameState, before: ReturnType<typeof snapAreas>, holder: PlayerId): string[] {
-  const out: string[] = [];
+/** Per-player board summary (cities / tokens), for the calamity start/end overview. */
+function boardOverview(s: GameState): string {
+  return s.seating.map((id) => `${pname(s, id)}: ${cityCount(s, id)} cit, ${populationCount(s, id)} tok`).join(' · ');
+}
+
+/** Diff the board before/after a calamity into attributed steps — primary victim
+ *  first, then secondary victims (player !== holder), so the modal can show who
+ *  is affected and why. */
+function calamitySteps(s: GameState, before: ReturnType<typeof snapAreas>, holder: PlayerId): CalamityStep[] {
   const nm = (aid: string) => areaById.get(aid)?.name ?? aid;
-  const who = (id: string) => (id === BARBARIAN ? 'Barbarians' : id === PIRATE ? 'Pirates' : civById.get(id)?.name ?? id);
+  const steps: CalamityStep[] = [];
   for (const aid of new Set([...Object.keys(before), ...Object.keys(s.areas)])) {
     const b = before[aid] ?? { tokens: {} as Record<string, number> };
     const a = s.areas[aid] ?? { tokens: {} as Record<string, number> };
-    if (b.city === holder && a.city !== holder) {
-      if (a.city && a.city !== BARBARIAN && a.city !== PIRATE) out.push(`City in ${nm(aid)} seized by ${who(a.city)}`);
-      else if (a.city === PIRATE) out.push(`City in ${nm(aid)} fell to pirates`);
-      else out.push(`Lost the city in ${nm(aid)}`);
+    if (b.city && isPlayer(s, b.city) && a.city !== b.city) {
+      const owner = b.city;
+      const text = a.city && a.city !== BARBARIAN && a.city !== PIRATE ? `City in ${nm(aid)} seized by ${pname(s, a.city)}`
+        : a.city === PIRATE ? `City in ${nm(aid)} fell to pirates`
+        : `Lost the city in ${nm(aid)}`;
+      steps.push({ text, player: owner, secondary: owner !== holder });
     }
-    const tb = b.tokens[holder] ?? 0, ta = a.tokens[holder] ?? 0;
-    if (ta < tb) {
-      out.push(`Lost ${tb - ta} token${tb - ta === 1 ? '' : 's'} in ${nm(aid)}`);
-      for (const o2 of Object.keys(a.tokens)) {
-        if (o2 === holder) continue;
-        const g = (a.tokens[o2] ?? 0) - (b.tokens[o2] ?? 0);
-        if (g > 0) out.push(`  → ${g} went to ${who(o2)}`);
+    for (const o of new Set([...Object.keys(b.tokens), ...Object.keys(a.tokens)])) {
+      const d = (b.tokens[o] ?? 0) - (a.tokens[o] ?? 0);
+      if (isPlayer(s, o)) {
+        if (d > 0) steps.push({ text: `${pname(s, o)} loses ${d} token${d === 1 ? '' : 's'} in ${nm(aid)}`, player: o, secondary: o !== holder });
+      } else if (o === BARBARIAN && -d > 0 && b.city !== holder) {
+        steps.push({ text: `Barbarians (${-d}) appear in ${nm(aid)}` });
       }
     }
-    const barbA = (a.tokens[BARBARIAN] ?? 0) - (b.tokens[BARBARIAN] ?? 0);
-    if (barbA > 0 && b.city !== holder) out.push(`Barbarians (${barbA}) appear in ${nm(aid)}`);
   }
-  return out.slice(0, 20);
+  return steps.sort((x, y) => Number(x.secondary ?? false) - Number(y.secondary ?? false)).slice(0, 40);
 }
 
 function runCalamity(s: GameState): void {
@@ -612,18 +665,21 @@ function runCalamity(s: GameState): void {
     }
   }
   held.sort((a, b) => (calamityById.get(a.calamityId)?.severity ?? 0) - (calamityById.get(b.calamityId)?.severity ?? 0));
-  const events: { calamity: string; holder: PlayerId; summary: string; details: string[] }[] = [];
+  const events: CalamityEvent[] = [];
   for (const { calamityId, holder } of held) {
     const key = `calamity:${calamityId}`;
     delete player(s, holder).hand[key];
     const before = snapAreas(s);
-    const logLen = s.log.length;
+    const overviewBefore = boardOverview(s);
     applyCalamity(s, calamityId, holder, rng);
     events.push({
       calamity: calamityById.get(calamityId)?.name ?? calamityId,
+      calamityId,
+      description: CALAMITY_DESC[calamityId] ?? '',
       holder,
-      summary: s.log.slice(logLen).join(' '),
-      details: calamityDetails(s, before, holder),
+      steps: calamitySteps(s, before, holder),
+      overviewBefore,
+      overviewAfter: boardOverview(s),
     });
     // §29.7: calamities are never removed from the game — return the card to the
     // bottom of the stack of its value so it circulates back into play.

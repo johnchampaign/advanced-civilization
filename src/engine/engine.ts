@@ -1386,11 +1386,12 @@ function canEnterEpoch(s: GameState, id: PlayerId, epoch: typeof epochs[number],
     // Use this nation's per-space Late Iron Age thresholds when known, else the
     // generic space*100.
     const track = astTrackFor(id);
-    const liaStart = track.epochStart['lateIron'] ?? track.finishSpace;
-    const idx = nextSpace - liaStart;
     const thr = track.lateIronThresholds;
-    // A space beyond the listed thresholds (the finish square) needs no card
-    // value; with no per-civ data, fall back to the generic space*100.
+    // §33.25: printed point values fill the LAST spaces of the Late Iron Age.
+    // Any leading Late Iron space (the 5 extended nations have one) needs only the
+    // age entry of 5 cities — i.e. no extra card value. With no per-civ data, fall
+    // back to the generic space*100.
+    const idx = thr ? nextSpace - (track.finishSpace - thr.length) : 0;
     const need = thr ? (idx >= 0 && idx < thr.length ? thr[idx]! : 0) : nextSpace * track.pointsPerSpace;
     if (advancesFaceValue(p.advances) < need) return false;
   }

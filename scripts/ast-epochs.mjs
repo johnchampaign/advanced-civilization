@@ -42,7 +42,12 @@ for (const civ of Object.keys(THRESHOLDS)) {
       earlyBronze: space(g1.x),
       lateBronze: space(g1.x) + Math.round(g1.w / CW),
       earlyIron: space(g2.x),
-      lateIron: 16 - liaCount, // numbered cells run from here to space 15; finish = 16
+      // Late Iron begins where the Early-Iron grey block ends (same derivation as
+      // lateBronze from grey1). For the 9 base nations this equals 16 - liaCount;
+      // the 5 extended strips draw the grey one cell short, giving a leading Late
+      // Iron space that needs only the age entry (5 cities). The printed
+      // thresholds align to the END of the track (see canEnterEpoch).
+      lateIron: space(g2.x) + Math.round(g2.w / CW),
     },
     lateIronThresholds: THRESHOLDS[civ],
   };

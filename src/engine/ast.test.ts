@@ -9,8 +9,8 @@ const land = areas.filter((a) => !a.isWater);
  *  `astSpace` in `epoch` with `cities` (each given 2 support tokens) and the
  *  given advances. normalize() then runs one AST adjustment (and rolls into the
  *  next turn, stopping at movement). */
-function astScenario(opts: { astSpace: number; epoch: string; cities: number; advances?: string[] }): GameState {
-  const civ = 'egypt';
+function astScenario(opts: { astSpace: number; epoch: string; cities: number; advances?: string[]; civ?: string }): GameState {
+  const civ = opts.civ ?? 'egypt';
   const s = createGame({ players: [civ, 'babylon'], seed: 1, maxTurns: 9999 });
   s.areas = {};
   let li = 0;
@@ -43,10 +43,14 @@ describe('AST track (read from the board)', () => {
       indus: [1100, 1300], italy: [1400, 1700], persia: [1200, 1400], semites: [1100, 1300],
       sumeria: [1100, 1300], thrace: [1200, 1400, 1700],
     };
+    const gapNations = new Set(['persia', 'sumeria', 'semites', 'indus']); // strips draw EI grey 1 cell short
     for (const [civ, thr] of Object.entries(expected)) {
       expect(astTrackFor(civ).lateIronThresholds, civ).toEqual(thr);
-      // Numbered Late Iron Age cells run up to space 15; the finish is space 16.
-      expect(astTrackFor(civ).epochStart['lateIron'], civ).toBe(16 - thr.length);
+      // Late Iron begins at the end of the Early-Iron grey block; printed values
+      // fill the LAST cells (up to space 15, finish = 16). The 5 extended strips
+      // leave one leading entry space (5 cities, no points) — the rest none.
+      const liaSpaces = 16 - astTrackFor(civ).epochStart['lateIron']!;
+      expect(liaSpaces, civ).toBe(thr.length + (gapNations.has(civ) ? 1 : 0));
     }
   });
 
@@ -96,6 +100,19 @@ describe('AST advancement & epoch gating (§33)', () => {
     const moved = astScenario({ astSpace: 12, epoch: 'earlyIron', cities: 5, advances: richValue });
     expect(moved.players['egypt']!.astSpace).toBe(13);
     expect(moved.players['egypt']!.epoch).toBe('lateIron');
+  });
+
+  it('a gap nation (Persia) enters Late Iron on cities alone; later spaces gate on points', () => {
+    // Persia's Early Iron is one space shorter than the base nations; its Late Iron
+    // Age begins at space 13 with a leading entry space needing only 5 cities, then
+    // 1200 at space 14 and 1400 at space 15 (the strip's two printed values).
+    const entry = astScenario({ civ: 'persia', astSpace: 12, epoch: 'earlyIron', cities: 5, advances: ['pottery'] });
+    expect(entry.players['persia']!.astSpace).toBe(13); // entered Late Iron on 5 cities, no card value
+    expect(entry.players['persia']!.epoch).toBe('lateIron');
+    const frozen = astScenario({ civ: 'persia', astSpace: 13, epoch: 'lateIron', cities: 5, advances: ['pottery'] });
+    expect(frozen.players['persia']!.astSpace).toBe(13); // space 14 needs 1200 — frozen
+    const rich = astScenario({ civ: 'persia', astSpace: 13, epoch: 'lateIron', cities: 5, advances: ['theology', 'monotheism', 'philosophy', 'democracy', 'law', 'military', 'enlightenment'] });
+    expect(rich.players['persia']!.astSpace).toBe(14); // 1410 ≥ 1200
   });
 
   it('ends the game at the finish square (space 16), which carries no card threshold', () => {

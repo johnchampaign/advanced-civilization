@@ -160,7 +160,7 @@
         "earlyBronze": 4,
         "lateBronze": 7,
         "earlyIron": 10,
-        "lateIron": 14
+        "lateIron": 13
       },
       "lateIronThresholds": [
         1100,
@@ -192,7 +192,7 @@
         "earlyBronze": 6,
         "lateBronze": 8,
         "earlyIron": 11,
-        "lateIron": 14
+        "lateIron": 13
       },
       "lateIronThresholds": [
         1200,
@@ -208,7 +208,7 @@
         "earlyBronze": 4,
         "lateBronze": 7,
         "earlyIron": 10,
-        "lateIron": 14
+        "lateIron": 13
       },
       "lateIronThresholds": [
         1100,
@@ -224,7 +224,7 @@
         "earlyBronze": 4,
         "lateBronze": 7,
         "earlyIron": 10,
-        "lateIron": 14
+        "lateIron": 13
       },
       "lateIronThresholds": [
         1100,

@@ -40,6 +40,10 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
         return supported ?? { type: 'pass' };
       }
       case 'calamity': {
+        // §30: choosing which of your own cities to reduce — take the engine's
+        // suggestion (sacrifice the cheapest-to-rebuild city-site cities first).
+        const cityChoice = actions.find((a) => a.type === 'chooseCities');
+        if (cityChoice) return cityChoice;
         // §29.64: directing secondary losses — take the engine's leader-targeting
         // suggestion (the strategic choice: hit the current front-runner).
         const alloc = actions.find((a) => a.type === 'allocateLoss');

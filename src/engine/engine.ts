@@ -51,6 +51,7 @@ import {
   type CombatForce,
   type GameState,
   type PendingAllocation,
+  type PendingCityChoice,
   type Phase,
   type PlayerId,
 } from './types.js';
@@ -699,7 +700,20 @@ function runCalamity(s: GameState): void {
     delete player(s, holder).hand[`calamity:${calamityId}`];
     const lvl = calamityById.get(calamityId)?.level;
     if (lvl && s.trade.stacks[lvl]) s.trade.stacks[lvl]!.unshift(`calamity:${calamityId}`);
-    applyCalamity(s, calamityId, holder, rng); // primary effect
+    // §30.321/.711/.811: Superstition/Civil Disorder/Iconoclasm let the victim
+    // choose WHICH cities to reduce — pause for that choice if they have any.
+    const cityCut = primaryCityCount(s, calamityId, holder);
+    if (cityCut !== null) {
+      const n = Math.min(cityCut, cityCount(s, holder));
+      if (n > 0) {
+        s.pendingCityChoice = { calamityId, holder, count: n, before, overviewBefore };
+        s.rngState = rng.serialize();
+        return;
+      }
+      // Nothing to reduce (no cities / nullified) — fall through to any secondary.
+    } else {
+      applyCalamity(s, calamityId, holder, rng); // primary effect for the rest
+    }
     const alloc = secondaryAllocationFor(s, calamityId, holder);
     if (alloc) { // pause for the primary victim to direct the secondary losses
       s.pendingAllocation = { ...alloc, before, overviewBefore };
@@ -855,15 +869,48 @@ function applyFamine(s: GameState, holder: PlayerId): void {
 
 /** Superstition (§30.32): 3 cities reduced — but the highest Religion card held
  *  governs: Mysticism → 2, Deism → 1, Enlightenment → 0 (not cumulative). */
-function applySuperstition(s: GameState, holder: PlayerId): void {
+/** Cities the primary victim must reduce, where the rules let them CHOOSE which:
+ *  Superstition (§30.321), Civil Disorder (§30.711), Iconoclasm (§30.811). Returns
+ *  null for calamities that aren't a free-choice city reduction. */
+function primaryCityCount(s: GameState, calId: string, holder: PlayerId): number | null {
   const p = player(s, holder);
-  let n = 3;
-  if (has(p, 'enlightenment')) n = 0;
-  else if (has(p, 'deism')) n = 1;
-  else if (has(p, 'mysticism')) n = 2;
-  if (n === 0) { s.log.push(`${holder}'s Superstition is nullified by Enlightenment (§30.322).`); return; }
-  reduceCities(s, holder, n, false);
-  s.log.push(`${holder} suffers Superstition: ${n} cit${n === 1 ? 'y' : 'ies'} reduced.`);
+  if (calId === 'superstition') {
+    if (has(p, 'enlightenment')) return 0;
+    if (has(p, 'deism')) return 1;
+    if (has(p, 'mysticism')) return 2;
+    return 3;
+  }
+  if (calId === 'civildisorder') {
+    const cities = cityCount(s, holder);
+    let r = Math.max(0, cities - 3);
+    r -= (has(p, 'music') ? 1 : 0) + (has(p, 'drama') ? 1 : 0) + (has(p, 'law') ? 1 : 0) + (has(p, 'democracy') ? 1 : 0);
+    r += (has(p, 'military') ? 1 : 0) + (has(p, 'roadbuilding') ? 1 : 0);
+    return Math.max(0, Math.min(r, cities));
+  }
+  if (calId === 'iconoclasm') {
+    let n = 4;
+    if (has(p, 'law')) n -= 1;
+    if (has(p, 'philosophy')) n -= 1;
+    if (has(p, 'theology')) n -= 3;
+    if (has(p, 'monotheism')) n += 1;
+    if (has(p, 'roadbuilding')) n += 1;
+    return Math.max(0, n);
+  }
+  return null;
+}
+
+/** A sensible default city sacrifice: give up city-site cities first (cheapest to
+ *  rebuild, 6 vs 12 tokens), then by area. */
+function suggestCities(s: GameState, holder: PlayerId, count: number): string[] {
+  return Object.keys(s.areas)
+    .filter((aid) => s.areas[aid]!.city === holder)
+    .sort((x, y) => (areaById.get(x)?.isCitySite ? 0 : 1) - (areaById.get(y)?.isCitySite ? 0 : 1))
+    .slice(0, count);
+}
+
+/** Reduce the specific cities the primary victim chose (§26.41 substitution). */
+function reduceChosenCities(s: GameState, holder: PlayerId, areas: string[]): void {
+  for (const aid of areas) reduceSpecificCity(s, holder, aid);
 }
 
 /** Volcano / Earthquake (§30.21): destroys the largest area; but a holder of
@@ -1028,31 +1075,20 @@ function applySlaveRevolt(s: GameState, holder: PlayerId): void {
 /** Civil Disorder (§30.71): all but three cities reduced; the count drops by one
  *  for each of Music / Drama / Law / Democracy (§30.712) and rises by one for each
  *  of Military / Roadbuilding (§30.713/.714), cumulative. */
-function applyCivilDisorder(s: GameState, holder: PlayerId): void {
-  const p = player(s, holder);
-  const cities = cityCount(s, holder);
-  let reduced = Math.max(0, cities - 3);
-  reduced -= (has(p, 'music') ? 1 : 0) + (has(p, 'drama') ? 1 : 0) + (has(p, 'law') ? 1 : 0) + (has(p, 'democracy') ? 1 : 0);
-  reduced += (has(p, 'military') ? 1 : 0) + (has(p, 'roadbuilding') ? 1 : 0);
-  reduced = Math.max(0, Math.min(reduced, cities));
-  reduceCities(s, holder, reduced, false);
-  s.log.push(`${holder} suffers Civil Disorder: ${reduced} cit${reduced === 1 ? 'y' : 'ies'} reduced.`);
-}
 
 function applyCalamity(s: GameState, calId: string, holder: PlayerId, rng: Rng): void {
   const cal = calamityById.get(calId);
   if (!cal) return;
+  // Superstition / Civil Disorder / Iconoclasm primary city reductions are handled
+  // interactively in runCalamity (the victim chooses which cities), not here.
   switch (calId) {
     case 'famine': return applyFamine(s, holder);
-    case 'superstition': return applySuperstition(s, holder);
     case 'volcano': return applyVolcanoEarthquake(s, holder);
     case 'flood': return applyFlood(s, holder);
     case 'slaverevolt': return applySlaveRevolt(s, holder);
-    case 'civildisorder': return applyCivilDisorder(s, holder);
     case 'civilwar': return applyCivilWar(s, holder);
     case 'barbarianhordes': return applyBarbarians(s, holder, rng);
     case 'epidemic': return applyEpidemic(s, holder);
-    case 'iconoclasm': return applyIconoclasm(s, holder);
     case 'piracy': return applyPiracy(s, holder);
     case 'treachery': return applyTreachery(s, holder);
     default: s.log.push(`${holder} suffers ${cal.name} (effect not modeled).`);
@@ -1244,19 +1280,6 @@ function applyEpidemic(s: GameState, primary: PlayerId): void {
  *  Theology -3, Monotheism/Roadbuilding +1, cumulative), then orders 2 cities
  *  reduced among rivals — not the trader, never a Theology-holder, and at most 1
  *  from a Philosophy-holder (§30.818-819). */
-function applyIconoclasm(s: GameState, primary: PlayerId): void {
-  const pp = player(s, primary);
-  let n = 4;
-  if (has(pp, 'law')) n -= 1;
-  if (has(pp, 'philosophy')) n -= 1;
-  if (has(pp, 'theology')) n -= 3;
-  if (has(pp, 'monotheism')) n += 1;
-  if (has(pp, 'roadbuilding')) n += 1;
-  n = Math.max(0, n);
-  reduceCities(s, primary, n, false);
-  s.log.push(`${primary} suffers Iconoclasm & Heresy (-${n} cities).`);
-  // Secondary (2 cities among rivals) is the interactive allocation step (§29.64).
-}
 
 const isCoastal2 = (aid: string) => neighbors(aid).some((n) => areaById.get(n)?.isWater);
 
@@ -1768,7 +1791,8 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
   currentActor(state: GameState): PlayerId | null {
     if (state.finished && state.phase === 'taxation') return null;
     if (AUTO_PHASES.has(state.phase)) return null;
-    // A pending secondary-victim allocation is the primary victim's to resolve.
+    // A pending city-choice / secondary allocation is the primary victim's to resolve.
+    if (state.pendingCityChoice) return state.pendingCityChoice.holder;
     if (state.pendingAllocation) return state.pendingAllocation.holder;
     if (state.phase === 'trade') {
       const n = state.negotiation;
@@ -1888,6 +1912,26 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         if (!s.calamityActive) setupCalamityConversion(s);
         break;
       }
+      case 'chooseCities': {
+        const c = s.pendingCityChoice;
+        if (!c) throw new Error('no city reduction is pending');
+        if (actor !== c.holder) throw new Error('only the primary victim chooses which cities to reduce (§30)');
+        const areas = [...new Set(action.areas)];
+        if (areas.length !== c.count) throw new Error(`choose exactly ${c.count} cit${c.count === 1 ? 'y' : 'ies'} (§30.321)`);
+        if (areas.some((aid) => s.areas[aid]?.city !== actor)) throw new Error('you may only reduce your own cities');
+        reduceChosenCities(s, actor, areas);
+        s.log.push(`${actor} reduces ${areas.map(areaName).join(', ')} (${calamityById.get(c.calamityId)?.name ?? c.calamityId}).`);
+        const alloc = secondaryAllocationFor(s, c.calamityId, c.holder); // Iconoclasm orders 2 more
+        s.pendingCityChoice = undefined;
+        if (alloc) {
+          s.pendingAllocation = { ...alloc, before: c.before, overviewBefore: c.overviewBefore };
+        } else {
+          pushCalamityEvent(s, c.calamityId, c.holder, c.before, c.overviewBefore);
+          runCalamity(s);
+          if (!s.calamityActive) setupCalamityConversion(s);
+        }
+        break;
+      }
       default:
         throw new Error(`action ${(action as Action).type} not valid here`);
     }
@@ -1981,6 +2025,11 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         break;
       }
       case 'calamity': {
+        // §30.321/.711/.811: a pending city choice is the primary victim's; offer
+        // a sensible default (sacrifice city-site cities first). UI may pick others.
+        if (state.pendingCityChoice && state.pendingCityChoice.holder === actor) {
+          return [{ type: 'chooseCities', areas: suggestCities(state, actor, state.pendingCityChoice.count) }];
+        }
         // §29.64: a pending secondary allocation is the primary victim's to direct.
         // Offer the leader-targeting default; the UI may submit a custom split.
         if (state.pendingAllocation && state.pendingAllocation.holder === actor) {

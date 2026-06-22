@@ -732,6 +732,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
       </div>
     );
   }
+  if (phase === 'calamity' && state.pendingCityChoice?.holder === actor) return <CityChoiceControls state={state} legal={legal} onApply={onApply} />;
   if (phase === 'calamity' && state.pendingAllocation?.holder === actor) return <AllocationControls state={state} legal={legal} onApply={onApply} />;
   if (phase === 'calamity') return <ConversionControls state={state} legal={legal} onApply={onApply} />;
   if (phase === 'acquireAdvances') return <AdvancePicker state={state} actor={actor} onApply={onApply} />;
@@ -749,6 +750,33 @@ const COMMODITY_ORDER = ['ochre', 'hides', 'iron', 'papyrus', 'salt', 'timber', 
 /** Acquire-advances panel (§31): pick an advance, then choose exactly which
  *  commodity cards to spend and how much treasury — instead of auto-paying. */
 /** §29/§32.94 Monotheism conversion picker, shown during the calamity phase. */
+/** §30.321/.711/.811: as the primary victim of Superstition/Civil Disorder/
+ *  Iconoclasm, choose which of your cities to reduce. */
+function CityChoiceControls({ state, legal, onApply }: { state: GameState; legal: Action[]; onApply: (a: Action) => void }) {
+  const c = state.pendingCityChoice!;
+  const cities = Object.keys(state.areas).filter((a) => state.areas[a]!.city === c.holder);
+  const suggested = (legal.find((x) => x.type === 'chooseCities') as Extract<Action, { type: 'chooseCities' }> | undefined)?.areas ?? [];
+  const [sel, setSel] = useState<string[]>(suggested);
+  const toggle = (aid: string) => setSel((s) => (s.includes(aid) ? s.filter((x) => x !== aid) : s.length < c.count ? [...s, aid] : s));
+  const calName = (state.lastCalamities ?? []).find((e) => e.calamityId === c.calamityId)?.calamity ?? c.calamityId;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span className="civ-lbl"><b>{calName}</b> (§30) — choose <b>{c.count}</b> of your cit{c.count === 1 ? 'y' : 'ies'} to reduce:</span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+        {cities.map((aid) => (
+          <button key={aid} className={`civ-btn ${sel.includes(aid) ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => toggle(aid)}>
+            {sel.includes(aid) ? '✗ ' : ''}{areaById.get(aid)?.name ?? aid}{areaById.get(aid)?.isCitySite ? ' ⬚' : ''}
+          </button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <span className="civ-lbl" style={{ color: sel.length === c.count ? '#7caa6a' : '#caa05a' }}>{sel.length} / {c.count} chosen</span>
+        <button className="civ-btn" disabled={sel.length !== c.count} onClick={() => onApply({ type: 'chooseCities', areas: sel })}>Reduce these</button>
+      </div>
+    </div>
+  );
+}
+
 /** §29.64: as the primary victim of Famine/Epidemic/Iconoclasm, distribute the
  *  ordered secondary losses among rivals — you must direct the full amount. */
 function AllocationControls({ state, legal, onApply }: { state: GameState; legal: Action[]; onApply: (a: Action) => void }) {

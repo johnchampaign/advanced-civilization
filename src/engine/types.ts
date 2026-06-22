@@ -157,6 +157,18 @@ export interface PendingAllocation {
   overviewBefore: string;
 }
 
+/** A pending city-reduction choice (§30.321/.711/.811): the primary victim of
+ *  Superstition / Civil Disorder / Iconoclasm picks WHICH of their cities to
+ *  reduce. Resolved by a `chooseCities` action. */
+export interface PendingCityChoice {
+  calamityId: string;
+  holder: PlayerId;
+  /** How many of the holder's cities must be reduced. */
+  count: number;
+  before: Record<string, { city?: PlayerId; tokens: Record<PlayerId, number> }>;
+  overviewBefore: string;
+}
+
 /** A force present in an area, for the combat step-through display. */
 export interface CombatForce { id: PlayerId; tokens: number; city: boolean }
 
@@ -244,6 +256,9 @@ export interface GameState {
   /** Set when the current calamity's primary victim must distribute secondary
    *  losses among rivals (§29.64); resolved by an `allocateLoss` action. */
   pendingAllocation?: PendingAllocation;
+  /** Set when the current calamity's primary victim must choose which of their
+   *  cities to reduce (§30.321/.711/.811); resolved by a `chooseCities` action. */
+  pendingCityChoice?: PendingCityChoice;
   /** The most recent conflict phase's combats, one per area, for a step-through
    *  modal. Overwritten each conflict phase; empty if none. */
   lastCombats?: CombatEvent[];
@@ -357,6 +372,13 @@ export interface AllocateLossAction {
   allocation: Record<PlayerId, number>;
 }
 
+/** §30.321/.711/.811: as the primary victim of Superstition/Civil Disorder/
+ *  Iconoclasm, choose which of your cities to reduce. */
+export interface ChooseCitiesAction {
+  type: 'chooseCities';
+  areas: string[];
+}
+
 export interface ResolveCalamityAction {
   type: 'resolveCalamity';
   calamityId: string;
@@ -374,6 +396,7 @@ export type Action =
   | SetTaxRateAction
   | ConvertAreaAction
   | AllocateLossAction
+  | ChooseCitiesAction
   | PlaceTokensAction
   | MoveAction
   | BuildShipsAction

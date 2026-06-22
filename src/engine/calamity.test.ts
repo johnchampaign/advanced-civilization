@@ -40,9 +40,9 @@ function resolve(s: GameState): GameState {
     const actor = adapter.currentActor(s);
     if (!actor) break;
     if (s.phase === 'trade') { s = adapter.applyAction(s, { type: 'pass' }, actor); continue; }
-    if (s.pendingAllocation) {
-      const alloc = adapter.legalActions(s, actor).find((a) => a.type === 'allocateLoss');
-      s = adapter.applyAction(s, alloc ?? { type: 'pass' }, actor); continue;
+    if (s.pendingCityChoice || s.pendingAllocation) {
+      const suggested = adapter.legalActions(s, actor).find((a) => a.type === 'chooseCities' || a.type === 'allocateLoss');
+      s = adapter.applyAction(s, suggested ?? { type: 'pass' }, actor); continue;
     }
     break; // stop at a conversion choice or any later interactive phase
   }
@@ -206,6 +206,28 @@ describe('interactive secondary-victim allocation (§29.64)', () => {
     // Pool 25, caps 10 each: leader and runner-up maxed at 10, the laggard takes the rest.
     expect(suggested['crete']).toBe(10); // leader hit first, to its cap
     expect(suggested['asia']).toBeLessThan(10); // the trailing nation absorbs the remainder
+  });
+});
+
+describe('interactive city-reduction choice (§30.321/.711/.811)', () => {
+  it('lets the primary victim choose which cities to reduce', () => {
+    const cityAreas = [land[1]!.id, land[2]!.id, land[3]!.id, land[4]!.id, land[5]!.id];
+    let s = scenario({
+      tokens: { egypt: { [land[0]!.id]: 20 } }, // ample support so nothing extra is reduced
+      cities: { egypt: cityAreas },
+      hands: { egypt: { 'calamity:superstition': 1 } },
+    });
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    expect(s.pendingCityChoice?.count).toBe(3); // Superstition reduces 3
+    expect(adapter.currentActor(s)).toBe('egypt');
+    expect(() => adapter.applyAction(s, { type: 'chooseCities', areas: [cityAreas[0]!] }, 'egypt')).toThrow(); // wrong count
+    expect(() => adapter.applyAction(s, { type: 'chooseCities', areas: [land[0]!.id, cityAreas[0]!, cityAreas[1]!] }, 'egypt')).toThrow(); // not a city of egypt
+    const chosen = [cityAreas[0]!, cityAreas[2]!, cityAreas[4]!];
+    s = adapter.applyAction(s, { type: 'chooseCities', areas: chosen }, 'egypt');
+    expect(s.pendingCityChoice).toBeUndefined();
+    for (const a of chosen) expect(s.areas[a]?.city).toBeUndefined(); // the chosen three fell
+    expect(s.areas[cityAreas[1]!]?.city).toBe('egypt'); // the unchosen survived
+    expect(s.areas[cityAreas[3]!]?.city).toBe('egypt');
   });
 });
 

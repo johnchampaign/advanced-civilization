@@ -166,22 +166,6 @@
         1300
       ]
     },
-    "italy": {
-      "spaces": 16,
-      "finishSpace": 16,
-      "pointsPerSpace": 100,
-      "epochStart": {
-        "stone": 1,
-        "earlyBronze": 5,
-        "lateBronze": 8,
-        "earlyIron": 11,
-        "lateIron": 14
-      },
-      "lateIronThresholds": [
-        1400,
-        1700
-      ]
-    },
     "persia": {
       "spaces": 16,
       "finishSpace": 16,

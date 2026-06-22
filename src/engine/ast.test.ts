@@ -36,11 +36,11 @@ describe('AST track (read from the board)', () => {
     expect(astTrack.finishSpace).toBe(16);
     expect(astTrack.pointsPerSpace).toBe(100);
   });
-  it('has per-civ Late Iron Age thresholds for all 14 nations (from the VASSAL AST strips)', () => {
+  it('has per-civ Late Iron Age thresholds for all 13 nations (from the VASSAL AST strips)', () => {
     const expected: Record<string, number[]> = {
       africa: [1300, 1600], asia: [1200, 1500, 1800], assyria: [1500, 1800], babylon: [1600, 1900],
       crete: [1300, 1600], egypt: [1300, 1600, 1900], iberia: [1200], illyria: [1200, 1500, 1800],
-      indus: [1100, 1300], italy: [1400, 1700], persia: [1200, 1400], semites: [1100, 1300],
+      indus: [1100, 1300], persia: [1200, 1400], semites: [1100, 1300],
       sumeria: [1100, 1300], thrace: [1200, 1400, 1700],
     };
     const gapNations = new Set(['iberia', 'persia', 'sumeria', 'semites', 'indus']); // strips draw EI grey 1 cell short

@@ -19,7 +19,7 @@
         "siwa",
         "jalo"
       ],
-      "astOrder": 13
+      "astOrder": 12
     },
     {
       "id": "africa",
@@ -43,7 +43,7 @@
         "knossos",
         "phaestos"
       ],
-      "astOrder": 5
+      "astOrder": 4
     },
     {
       "id": "asia",
@@ -54,7 +54,7 @@
         "mikop",
         "kuban"
       ],
-      "astOrder": 6
+      "astOrder": 5
     },
     {
       "id": "assyria",
@@ -65,7 +65,7 @@
         "caucasus",
         "nalchik"
       ],
-      "astOrder": 8
+      "astOrder": 7
     },
     {
       "id": "babylon",
@@ -77,7 +77,7 @@
         "media",
         "parthia"
       ],
-      "astOrder": 9
+      "astOrder": 8
     },
     {
       "id": "sumeria",
@@ -91,7 +91,7 @@
         "susa",
         "portas-persas"
       ],
-      "astOrder": 10
+      "astOrder": 9
     },
     {
       "id": "thrace",
@@ -101,7 +101,7 @@
       "startAreas": [
         "scythia"
       ],
-      "astOrder": 4
+      "astOrder": 3
     },
     {
       "id": "illyria",
@@ -112,19 +112,7 @@
         "sudeten",
         "germania-2"
       ],
-      "astOrder": 3
-    },
-    {
-      "id": "italy",
-      "name": "Italy",
-      "color": "#daa520",
-      "start": "etruria-2",
-      "startAreas": [
-        "etruria-2",
-        "cisalpina-2",
-        "pannonia-2"
-      ],
-      "astOrder": 1
+      "astOrder": 2
     },
     {
       "id": "iberia",
@@ -136,7 +124,7 @@
         "corduba",
         "lusitania"
       ],
-      "astOrder": 2
+      "astOrder": 1
     },
     {
       "id": "persia",
@@ -148,7 +136,7 @@
         "prophtasia",
         "randamar"
       ],
-      "astOrder": 7
+      "astOrder": 6
     },
     {
       "id": "semites",
@@ -159,7 +147,7 @@
         "arabia",
         "rub-al-khali"
       ],
-      "astOrder": 11
+      "astOrder": 10
     },
     {
       "id": "indus",
@@ -171,7 +159,7 @@
         "karachi",
         "pala"
       ],
-      "astOrder": 12
+      "astOrder": 11
     }
   ]
 }

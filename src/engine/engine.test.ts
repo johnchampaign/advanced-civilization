@@ -436,17 +436,17 @@ describe('commodity-card hand limit (§31.71)', () => {
 });
 
 describe('A.S.T. order (§17.4)', () => {
-  it('is a fixed nation order — Africa first, Italy second, Egypt last (§17.4)', () => {
-    const s = createGame({ players: ['egypt', 'italy', 'africa', 'babylon'], seed: 7 });
-    expect(astOrder(s)).toEqual(['africa', 'italy', 'babylon', 'egypt']);
-    // §17.4 anchors: among any subset, Africa precedes all, Egypt follows all,
-    // and Italy precedes every other nation except Africa — even Iberia.
-    const s2 = createGame({ players: ['indus', 'iberia', 'italy', 'africa', 'egypt'], seed: 1 });
+  it('is a fixed nation order — Africa first, Iberia second, Egypt last (§17.4)', () => {
+    const s = createGame({ players: ['egypt', 'iberia', 'africa', 'babylon'], seed: 7 });
+    expect(astOrder(s)).toEqual(['africa', 'iberia', 'babylon', 'egypt']);
+    // §17.4 anchors: Africa precedes all, Egypt follows all; Iberia (which replaces
+    // Italy on the Western map) takes the second slot.
+    const s2 = createGame({ players: ['indus', 'iberia', 'asia', 'africa', 'egypt'], seed: 1 });
     const order = astOrder(s2);
     expect(order[0]).toBe('africa');
-    expect(order[1]).toBe('italy'); // second, ahead of Iberia
+    expect(order[1]).toBe('iberia'); // second, ahead of the rest
     expect(order.at(-1)).toBe('egypt');
-    expect(order.indexOf('italy')).toBeLessThan(order.indexOf('iberia'));
+    expect(order.indexOf('asia')).toBeLessThan(order.indexOf('indus'));
   });
 
   it('breaks census ties by A.S.T. order, not seating', () => {

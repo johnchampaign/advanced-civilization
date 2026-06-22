@@ -40,6 +40,10 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
         return supported ?? { type: 'pass' };
       }
       case 'calamity': {
+        // §29.64: directing secondary losses — take the engine's leader-targeting
+        // suggestion (the strategic choice: hit the current front-runner).
+        const alloc = actions.find((a) => a.type === 'allocateLoss');
+        if (alloc) return alloc;
         // §29/§32.94: Monotheism conversion — grab the richest target (a city
         // beats tokens; otherwise the most tokens).
         const converts = actions.filter((a) => a.type === 'convertArea') as Extract<Action, { type: 'convertArea' }>[];

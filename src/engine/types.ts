@@ -136,6 +136,27 @@ export interface TradeStacks {
   stacks: Record<number, string[]>;
 }
 
+/** A pending secondary-victim allocation (§29.64): the primary victim of Famine /
+ *  Epidemic / Iconoclasm must distribute the ordered losses among eligible rivals,
+ *  bounded by per-victim caps. Resolved by an `allocateLoss` action. */
+export interface PendingAllocation {
+  calamityId: string;
+  /** The primary victim, who directs the losses. */
+  holder: PlayerId;
+  /** 'unitPoints' (Famine/Epidemic) or 'cities' (Iconoclasm). */
+  kind: 'unitPoints' | 'cities';
+  /** Total to distribute (may exceed the sum of caps; then allocate all caps). */
+  pool: number;
+  /** Max each rival may be ordered to lose (player -> cap). */
+  caps: Record<PlayerId, number>;
+  /** Unit-point value of a city for this calamity (Epidemic 4, else 5). */
+  cityWorth: number;
+  /** Board snapshot at the calamity's start, to diff into the event after the
+   *  allocation is applied (resume context). */
+  before: Record<string, { city?: PlayerId; tokens: Record<PlayerId, number> }>;
+  overviewBefore: string;
+}
+
 /** A force present in an area, for the combat step-through display. */
 export interface CombatForce { id: PlayerId; tokens: number; city: boolean }
 
@@ -217,6 +238,12 @@ export interface GameState {
   /** The most recent calamity phase's outcomes, one per calamity, so the UI can
    *  show a step-by-step modal. Overwritten each calamity phase; empty if none. */
   lastCalamities?: CalamityEvent[];
+  /** True while the calamity phase is mid-resolution (held calamities still to
+   *  process). Lets runCalamity resume after an interactive allocation pause. */
+  calamityActive?: boolean;
+  /** Set when the current calamity's primary victim must distribute secondary
+   *  losses among rivals (§29.64); resolved by an `allocateLoss` action. */
+  pendingAllocation?: PendingAllocation;
   /** The most recent conflict phase's combats, one per area, for a step-through
    *  modal. Overwritten each conflict phase; empty if none. */
   lastCombats?: CombatEvent[];
@@ -323,6 +350,13 @@ export interface ConvertAreaAction {
   area: string;
 }
 
+/** §29.64: as the primary victim of Famine/Epidemic/Iconoclasm, distribute the
+ *  ordered secondary losses among rivals (player -> amount), within the caps. */
+export interface AllocateLossAction {
+  type: 'allocateLoss';
+  allocation: Record<PlayerId, number>;
+}
+
 export interface ResolveCalamityAction {
   type: 'resolveCalamity';
   calamityId: string;
@@ -339,6 +373,7 @@ export interface PassAction {
 export type Action =
   | SetTaxRateAction
   | ConvertAreaAction
+  | AllocateLossAction
   | PlaceTokensAction
   | MoveAction
   | BuildShipsAction

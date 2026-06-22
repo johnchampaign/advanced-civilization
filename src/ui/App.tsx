@@ -732,6 +732,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
       </div>
     );
   }
+  if (phase === 'calamity' && state.pendingAllocation?.holder === actor) return <AllocationControls state={state} legal={legal} onApply={onApply} />;
   if (phase === 'calamity') return <ConversionControls state={state} legal={legal} onApply={onApply} />;
   if (phase === 'acquireAdvances') return <AdvancePicker state={state} actor={actor} onApply={onApply} />;
   if (phase === 'trade') return <TradeControls state={state} actor={actor} onApply={onApply} />;
@@ -748,6 +749,48 @@ const COMMODITY_ORDER = ['ochre', 'hides', 'iron', 'papyrus', 'salt', 'timber', 
 /** Acquire-advances panel (§31): pick an advance, then choose exactly which
  *  commodity cards to spend and how much treasury — instead of auto-paying. */
 /** §29/§32.94 Monotheism conversion picker, shown during the calamity phase. */
+/** §29.64: as the primary victim of Famine/Epidemic/Iconoclasm, distribute the
+ *  ordered secondary losses among rivals — you must direct the full amount. */
+function AllocationControls({ state, legal, onApply }: { state: GameState; legal: Action[]; onApply: (a: Action) => void }) {
+  const a = state.pendingAllocation!;
+  const rivals = Object.keys(a.caps);
+  const maxTotal = Math.min(a.pool, rivals.reduce((t, v) => t + a.caps[v]!, 0));
+  const suggested = (legal.find((x) => x.type === 'allocateLoss') as Extract<Action, { type: 'allocateLoss' }> | undefined)?.allocation ?? {};
+  const [alloc, setAlloc] = useState<Record<string, number>>(suggested);
+  const total = rivals.reduce((t, v) => t + (alloc[v] ?? 0), 0);
+  const unit = a.kind === 'cities' ? 'cities' : 'unit points';
+  const set = (v: string, d: number) => setAlloc((s) => {
+    const cur = s[v] ?? 0;
+    const next = Math.max(0, Math.min(a.caps[v]!, cur + d));
+    const others = total - cur;
+    if (others + next > maxTotal) return s; // can't exceed the ordered amount
+    return { ...s, [v]: next };
+  });
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span className="civ-lbl"><b>{a.calamityId}</b> (§29.64) — you must direct <b>{maxTotal} {unit}</b> of loss onto rival nations (max {a.kind === 'cities' ? '' : `${a.pool === 20 ? 8 : 10} `}per nation):</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {rivals.map((v) => (
+          <div key={v} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 90, color: nationColor(v), fontWeight: 700 }}>{nationName(v)}</span>
+            <button className="civ-btn" style={{ padding: '0 8px' }} onClick={() => set(v, -1)}>−</button>
+            <b style={{ width: 24, textAlign: 'center' }}>{alloc[v] ?? 0}</b>
+            <button className="civ-btn" style={{ padding: '0 8px' }} onClick={() => set(v, +1)}>+</button>
+            <span className="civ-lbl" style={{ color: '#9a8d6a' }}>/ {a.caps[v]} max</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <span className="civ-lbl" style={{ color: total === maxTotal ? '#7caa6a' : '#caa05a' }}>directed {total} / {maxTotal}</span>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button className="civ-btn" onClick={() => setAlloc(suggested)}>Target the leader</button>
+          <button className="civ-btn" disabled={total !== maxTotal} onClick={() => onApply({ type: 'allocateLoss', allocation: alloc })}>Confirm</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ConversionControls({ state, legal, onApply }: { state: GameState; legal: Action[]; onApply: (a: Action) => void }) {
   const converts = legal.filter((a) => a.type === 'convertArea') as Extract<Action, { type: 'convertArea' }>[];
   const desc = (aid: string) => {

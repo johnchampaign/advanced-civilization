@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { adapter, createGame } from './index.js';
 import { areas, adjacency, areaById, civById, pieceCounts } from '../data/index.js';
 import { cityCount, pieceConservationProblems, populationCount } from './helpers.js';
-import type { GameState, PlayerId } from './types.js';
+import type { Action, GameState, PlayerId } from './types.js';
 
 const coastal = areas.filter((a) => !a.isWater && (adjacency[a.id] ?? []).some((n) => areaById.get(n)?.isWater));
 const land = areas.filter((a) => !a.isWater);
@@ -31,9 +31,21 @@ function scenario(o: Opts): GameState {
   return s;
 }
 
+/** Drive through the trade and calamity phases: pass trading, and for the
+ *  interactive calamity steps take the engine's suggested action (leader-targeting
+ *  allocation / Monotheism conversion), stopping when a later phase begins. */
 function resolve(s: GameState): GameState {
   let guard = 0;
-  while (s.phase === 'trade' && guard++ < 50) s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+  while (guard++ < 200) {
+    const actor = adapter.currentActor(s);
+    if (!actor) break;
+    if (s.phase === 'trade') { s = adapter.applyAction(s, { type: 'pass' }, actor); continue; }
+    if (s.pendingAllocation) {
+      const alloc = adapter.legalActions(s, actor).find((a) => a.type === 'allocateLoss');
+      s = adapter.applyAction(s, alloc ?? { type: 'pass' }, actor); continue;
+    }
+    break; // stop at a conversion choice or any later interactive phase
+  }
   return s;
 }
 
@@ -159,6 +171,41 @@ describe('advance modifiers on calamities (§30/§32)', () => {
     const limit = areaById.get(land[1]!.id)!.sustains;
     expect(sub([])).toBe(limit); // city → max tokens the area allows
     expect(sub(['agriculture'])).toBe(limit + 1); // Agriculture clause 2
+  });
+});
+
+describe('interactive secondary-victim allocation (§29.64)', () => {
+  it('pauses for the primary victim to direct the losses, who may choose the split', () => {
+    let s = scenario({
+      players: ['egypt', 'babylon', 'crete'],
+      tokens: { egypt: { [land[0]!.id]: 20 }, babylon: { [land[1]!.id]: 30 }, crete: { [land[2]!.id]: 30 } },
+      hands: { egypt: { 'calamity:epidemic': 1 } },
+    });
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    expect(s.pendingAllocation?.calamityId).toBe('epidemic');
+    expect(adapter.currentActor(s)).toBe('egypt'); // the primary victim directs
+    // Caps are 10 each (§30.611); pool 25 > total capacity 20, so egypt must order 20.
+    expect(() => adapter.applyAction(s, { type: 'allocateLoss', allocation: { babylon: 20 } }, 'egypt')).toThrow(); // over cap
+    expect(() => adapter.applyAction(s, { type: 'allocateLoss', allocation: { babylon: 10 } }, 'egypt')).toThrow(); // must direct the full 20
+    s = adapter.applyAction(s, { type: 'allocateLoss', allocation: { babylon: 10, crete: 10 } }, 'egypt'); // egypt's chosen split
+    expect(s.pendingAllocation).toBeUndefined();
+    expect(populationCount(s, 'babylon')).toBe(20);
+    expect(populationCount(s, 'crete')).toBe(20);
+  });
+
+  it('the engine suggests directing losses at the leader first (§29.64)', () => {
+    let s = scenario({
+      players: ['egypt', 'babylon', 'crete', 'asia'],
+      tokens: { egypt: { [land[0]!.id]: 30 }, babylon: { [land[1]!.id]: 12 }, crete: { [land[2]!.id]: 12 }, asia: { [land[3]!.id]: 12 } },
+      hands: { egypt: { 'calamity:epidemic': 1 } },
+    });
+    s.players['crete']!.advances = ['pottery', 'clothmaking', 'metalworking']; // crete leads, asia trails
+    s.players['babylon']!.advances = ['pottery'];
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    const suggested = (adapter.legalActions(s, 'egypt')[0] as Extract<Action, { type: 'allocateLoss' }>).allocation;
+    // Pool 25, caps 10 each: leader and runner-up maxed at 10, the laggard takes the rest.
+    expect(suggested['crete']).toBe(10); // leader hit first, to its cap
+    expect(suggested['asia']).toBeLessThan(10); // the trailing nation absorbs the remainder
   });
 });
 

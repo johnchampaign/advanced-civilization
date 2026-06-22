@@ -50,6 +50,7 @@ import {
   type CombatEvent,
   type CombatForce,
   type GameState,
+  type PendingAllocation,
   type Phase,
   type PlayerId,
 } from './types.js';
@@ -654,46 +655,65 @@ function calamitySteps(s: GameState, before: ReturnType<typeof snapAreas>, holde
   return steps.sort((x, y) => Number(x.secondary ?? false) - Number(y.secondary ?? false)).slice(0, 40);
 }
 
-function runCalamity(s: GameState): void {
-  const rng = Rng.fromState(s.rngState);
-  const held: { calamityId: string; holder: PlayerId }[] = [];
+/** The next held calamity to resolve, in ascending severity (§29.6). Resolved
+ *  cards are removed from hands, so this naturally advances. */
+function nextHeldCalamity(s: GameState): { calamityId: string; holder: PlayerId } | null {
+  let best: { calamityId: string; holder: PlayerId; sev: number } | null = null;
   for (const id of s.seating) {
     for (const card of Object.keys(player(s, id).hand)) {
-      if (card.startsWith('calamity:') && (player(s, id).hand[card] ?? 0) > 0) {
-        held.push({ calamityId: card.slice('calamity:'.length), holder: id });
-      }
+      if (!card.startsWith('calamity:') || (player(s, id).hand[card] ?? 0) <= 0) continue;
+      const calamityId = card.slice('calamity:'.length);
+      const sev = calamityById.get(calamityId)?.severity ?? 0;
+      if (!best || sev < best.sev) best = { calamityId, holder: id, sev };
     }
   }
-  held.sort((a, b) => (calamityById.get(a.calamityId)?.severity ?? 0) - (calamityById.get(b.calamityId)?.severity ?? 0));
-  const events: CalamityEvent[] = [];
-  for (const { calamityId, holder } of held) {
-    const key = `calamity:${calamityId}`;
-    delete player(s, holder).hand[key];
+  return best ? { calamityId: best.calamityId, holder: best.holder } : null;
+}
+
+/** Record one calamity's outcome (before→now diff) for the step-through modal. */
+function pushCalamityEvent(s: GameState, calamityId: string, holder: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string): void {
+  (s.lastCalamities ??= []).push({
+    calamity: calamityById.get(calamityId)?.name ?? calamityId,
+    calamityId,
+    description: CALAMITY_DESC[calamityId] ?? '',
+    holder,
+    steps: calamitySteps(s, before, holder),
+    overviewBefore,
+    overviewAfter: boardOverview(s),
+  });
+}
+
+/** Resolve held calamities in severity order (§29.6). Each one's primary effect
+ *  applies immediately; if it then needs the primary victim to direct secondary
+ *  losses (§29.64), resolution PAUSES with a pendingAllocation for an
+ *  `allocateLoss` action and resumes afterwards. Re-entrant. */
+function runCalamity(s: GameState): void {
+  const rng = Rng.fromState(s.rngState);
+  if (!s.calamityActive) { s.calamityActive = true; s.lastCalamities = []; }
+  let next: ReturnType<typeof nextHeldCalamity>;
+  while ((next = nextHeldCalamity(s))) {
+    const { calamityId, holder } = next;
     const before = snapAreas(s);
     const overviewBefore = boardOverview(s);
-    applyCalamity(s, calamityId, holder, rng);
-    events.push({
-      calamity: calamityById.get(calamityId)?.name ?? calamityId,
-      calamityId,
-      description: CALAMITY_DESC[calamityId] ?? '',
-      holder,
-      steps: calamitySteps(s, before, holder),
-      overviewBefore,
-      overviewAfter: boardOverview(s),
-    });
-    // §29.7: calamities are never removed from the game — return the card to the
-    // bottom of the stack of its value so it circulates back into play.
+    // §29.7: the card leaves the hand and returns to the bottom of its stack.
+    delete player(s, holder).hand[`calamity:${calamityId}`];
     const lvl = calamityById.get(calamityId)?.level;
-    if (lvl && s.trade.stacks[lvl]) s.trade.stacks[lvl]!.unshift(key);
+    if (lvl && s.trade.stacks[lvl]) s.trade.stacks[lvl]!.unshift(`calamity:${calamityId}`);
+    applyCalamity(s, calamityId, holder, rng); // primary effect
+    const alloc = secondaryAllocationFor(s, calamityId, holder);
+    if (alloc) { // pause for the primary victim to direct the secondary losses
+      s.pendingAllocation = { ...alloc, before, overviewBefore };
+      s.rngState = rng.serialize();
+      return;
+    }
+    pushCalamityEvent(s, calamityId, holder, before, overviewBefore);
   }
-  s.rngState = rng.serialize();
+  // All calamities resolved.
+  s.calamityActive = false;
   s.pendingCalamities = [];
   s.calamityTradedFrom = {};
-  // Surface this turn's calamity outcomes so the UI can show a step-by-step modal
-  // (otherwise they're buried in the log and players think nothing happened).
-  s.lastCalamities = events;
-  // §26.5: city support is re-checked after all calamities are resolved.
-  checkCitySupport(s);
+  s.rngState = rng.serialize();
+  checkCitySupport(s); // §26.5
 }
 
 /** §31.71: after buying advances, each player may keep at most 8 commodity cards;
@@ -748,21 +768,75 @@ function runAstAdjustment(s: GameState): void {
 /** Order `pool` unit points of loss among the primary's rivals (§29.64), at most
  *  `perCap` from any one player, never the trader (§29.6). Targets the strongest
  *  rivals first. */
-function orderUnitLoss(s: GameState, primary: PlayerId, calId: string, label: string, pool: number, perCap: number, cityWorth = 5): void {
+/** §29.64: build the secondary-victim allocation a primary victim must direct —
+ *  Famine (20 unit pts, ≤8 each), Epidemic (25, ≤10), Iconoclasm (2 cities, ≤1 for
+ *  Philosophy holders, Theology immune). Returns null if there's nothing to order. */
+type AllocationSpec = Omit<PendingAllocation, 'before' | 'overviewBefore'>;
+function secondaryAllocationFor(s: GameState, calId: string, holder: PlayerId): AllocationSpec | null {
   const trader = s.calamityTradedFrom[calId];
-  let remaining = pool;
-  // §29.64: the primary victim directs the losses. We aim them at the strongest
-  // rival first — the player currently leading (victory score) — which is what a
-  // self-interested primary (AI or human) would do.
-  const victims = s.seating
-    .filter((o) => o !== primary && o !== trader && boardUnitPoints(s, o) > 0)
-    .sort((x, y) => victoryScore(s, y) - victoryScore(s, x));
-  for (const v of victims) {
-    if (remaining <= 0) break;
-    const order = Math.min(remaining, perCap, boardUnitPoints(s, v));
-    const removed = removeUnitPoints(s, v, order, cityWorth);
-    remaining -= order;
-    if (removed > 0) s.log.push(`${v} is a secondary victim of ${label} (-${removed}).`);
+  const rivals = s.seating.filter((o) => o !== holder && o !== trader);
+  if (calId === 'famine' || calId === 'epidemic') {
+    const pool = calId === 'famine' ? 20 : 25;
+    const per = calId === 'famine' ? 8 : 10;
+    const cityWorth = calId === 'epidemic' ? 4 : 5;
+    const caps: Record<PlayerId, number> = {};
+    for (const v of rivals) { const c = Math.min(per, boardUnitPoints(s, v)); if (c > 0) caps[v] = c; }
+    return Object.keys(caps).length ? { calamityId: calId, holder, kind: 'unitPoints', pool, caps, cityWorth } : null;
+  }
+  if (calId === 'iconoclasm') {
+    const caps: Record<PlayerId, number> = {};
+    for (const v of rivals) {
+      if (has(player(s, v), 'theology')) continue; // §30.819 immune
+      const c = Math.min(has(player(s, v), 'philosophy') ? 1 : 2, cityCount(s, v));
+      if (c > 0) caps[v] = c;
+    }
+    return Object.keys(caps).length ? { calamityId: calId, holder, kind: 'cities', pool: 2, caps, cityWorth: 5 } : null;
+  }
+  return null;
+}
+
+/** The most a primary victim can actually distribute (pool, capped by total caps). */
+function maxAllocatable(a: PendingAllocation): number {
+  return Math.min(a.pool, Object.values(a.caps).reduce((t, c) => t + c, 0));
+}
+
+/** A sensible default allocation: hit the current leader(s) first, fill to the max. */
+function suggestAllocation(s: GameState, a: PendingAllocation): Record<PlayerId, number> {
+  const out: Record<PlayerId, number> = {};
+  let left = maxAllocatable(a);
+  const order = Object.keys(a.caps).sort((x, y) => victoryScore(s, y) - victoryScore(s, x));
+  for (const v of order) { if (left <= 0) break; const take = Math.min(a.caps[v]!, left); if (take > 0) { out[v] = take; left -= take; } }
+  return out;
+}
+
+/** §29.64: the allocation must distribute the full required amount (pool, capped
+ *  by total caps), with each rival within its cap and eligible. */
+function validateAllocation(a: PendingAllocation, allocation: Record<PlayerId, number>): void {
+  let sum = 0;
+  for (const [v, amt] of Object.entries(allocation)) {
+    if (!Number.isInteger(amt) || amt < 0) throw new Error(`bad allocation amount for ${v}`);
+    if (amt === 0) continue;
+    if (!(v in a.caps)) throw new Error(`${v} is not an eligible secondary victim`);
+    if (amt > a.caps[v]!) throw new Error(`${v} can lose at most ${a.caps[v]} (§30)`);
+    sum += amt;
+  }
+  if (sum !== maxAllocatable(a)) throw new Error(`must direct ${maxAllocatable(a)} (got ${sum}) — §29.64`);
+}
+
+/** Apply a chosen secondary allocation: each rival loses the ordered amount
+ *  (Epidemic adjusts per-victim for Medicine/Roadbuilding). */
+function applyAllocation(s: GameState, a: PendingAllocation, allocation: Record<PlayerId, number>): void {
+  for (const [v, amt] of Object.entries(allocation)) {
+    if (amt <= 0) continue;
+    if (a.kind === 'cities') {
+      reduceCities(s, v, amt, false);
+      s.log.push(`${v} loses ${amt} city(ies) to ${a.calamityId} (directed by ${a.holder}).`);
+    } else {
+      let actual = amt;
+      if (a.calamityId === 'epidemic') { if (has(player(s, v), 'medicine')) actual -= 5; if (has(player(s, v), 'roadbuilding')) actual += 5; }
+      const removed = removeUnitPoints(s, v, Math.max(0, actual), a.cityWorth);
+      if (removed > 0) s.log.push(`${v} is a secondary victim of ${a.calamityId} (-${removed}, directed by ${a.holder}).`);
+    }
   }
 }
 
@@ -776,7 +850,7 @@ function applyFamine(s: GameState, holder: PlayerId): void {
   const loss = Math.max(0, 10 - soften);
   const removed = removeUnitPoints(s, holder, loss);
   s.log.push(`${holder} suffers Famine (-${removed}${soften ? `; Pottery + ${grainCards(p)} Grain softened it by ${soften}` : ''}).`);
-  orderUnitLoss(s, holder, 'famine', 'Famine', 20, 8);
+  // Secondary (order 20 among rivals) is the interactive allocation step (§29.64).
 }
 
 /** Superstition (§30.32): 3 cities reduced — but the highest Religion card held
@@ -1163,24 +1237,7 @@ function applyEpidemic(s: GameState, primary: PlayerId): void {
   if (has(pp, 'roadbuilding')) loss += 5;
   removeUnitPoints(s, primary, Math.max(0, loss), 4);
   s.log.push(`${primary} suffers Epidemic (-${Math.max(0, loss)} unit points).`);
-  // Secondary: order 25 unit points among rivals, ≤10 from any one (§30.611),
-  // aimed at the leader first (the primary victim's strategic choice).
-  const trader = s.calamityTradedFrom['epidemic'];
-  let pool = 25;
-  const victims = s.seating
-    .filter((o) => o !== primary && o !== trader && boardUnitPoints(s, o) > 0)
-    .sort((x, y) => victoryScore(s, y) - victoryScore(s, x));
-  for (const v of victims) {
-    if (pool <= 0) break;
-    const ordered = Math.min(pool, 10, boardUnitPoints(s, v)); // §30.611: ≤10 per player
-    pool -= ordered;
-    const vp = player(s, v);
-    let actual = ordered;
-    if (has(vp, 'medicine')) actual -= 5;
-    if (has(vp, 'roadbuilding')) actual += 5;
-    const removed = removeUnitPoints(s, v, Math.max(0, actual), 4);
-    if (removed > 0) s.log.push(`${v} is a secondary victim of Epidemic (-${removed}).`);
-  }
+  // Secondary (order 25 among rivals, ≤10 each §30.611) is the interactive step.
 }
 
 /** Iconoclasm & Heresy (§30.81): primary reduces 4 cities (Law/Philosophy -1,
@@ -1198,18 +1255,7 @@ function applyIconoclasm(s: GameState, primary: PlayerId): void {
   n = Math.max(0, n);
   reduceCities(s, primary, n, false);
   s.log.push(`${primary} suffers Iconoclasm & Heresy (-${n} cities).`);
-  // Secondary: 2 cities total among eligible rivals.
-  const trader = s.calamityTradedFrom['iconoclasm'];
-  let remaining = 2;
-  const victims = s.seating
-    .filter((o) => o !== primary && o !== trader && !has(player(s, o), 'theology') && cityCount(s, o) > 0)
-    .sort((x, y) => victoryScore(s, y) - victoryScore(s, x)); // target the leader (§29.64)
-  for (const v of victims) {
-    if (remaining <= 0) break;
-    const cap = has(player(s, v), 'philosophy') ? 1 : remaining;
-    const take = Math.min(remaining, cap, cityCount(s, v));
-    if (take > 0) { reduceCities(s, v, take, false); remaining -= take; s.log.push(`${v} loses ${take} city(ies) to Iconoclasm (secondary).`); }
-  }
+  // Secondary (2 cities among rivals) is the interactive allocation step (§29.64).
 }
 
 const isCoastal2 = (aid: string) => neighbors(aid).some((n) => areaById.get(n)?.isWater);
@@ -1456,7 +1502,7 @@ function enterPhase(s: GameState, phase: Phase): void {
     if (phase === 'shipConstruction') runShipMaintenance(s); // §22.3, before building
     if (phase === 'taxation') setupTaxation(s); // §19: auto-tax non-Coinage; Coinage holders pick
     if (phase === 'populationExpansion') resolvePendingRevolts(s); // §19.31: revolts settle after all paid
-    if (phase === 'calamity') { runCalamity(s); setupCalamityConversion(s); } // §29: resolve, then Monotheism converts
+    if (phase === 'calamity') { runCalamity(s); if (!s.calamityActive) setupCalamityConversion(s); } // §29: resolve (may pause for allocation), then Monotheism converts
     if (phase === 'acquireAdvances') checkCitySupport(s); // §29.8: support rechecked after any conversion
     // §13: apply growth now (auto when stock allows); constrained players are
     // left to place their limited tokens interactively.
@@ -1722,6 +1768,8 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
   currentActor(state: GameState): PlayerId | null {
     if (state.finished && state.phase === 'taxation') return null;
     if (AUTO_PHASES.has(state.phase)) return null;
+    // A pending secondary-victim allocation is the primary victim's to resolve.
+    if (state.pendingAllocation) return state.pendingAllocation.holder;
     if (state.phase === 'trade') {
       const n = state.negotiation;
       if (tradePhaseEnded(state)) return null;
@@ -1828,6 +1876,18 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         applyConvert(s, actor, action.area);
         if (!s.actedThisPhase.includes(actor)) s.actedThisPhase.push(actor); // one conversion per turn
         break;
+      case 'allocateLoss': {
+        const a = s.pendingAllocation;
+        if (!a) throw new Error('no secondary-victim allocation is pending');
+        if (actor !== a.holder) throw new Error('only the primary victim directs these losses (§29.64)');
+        validateAllocation(a, action.allocation);
+        applyAllocation(s, a, action.allocation);
+        pushCalamityEvent(s, a.calamityId, a.holder, a.before, a.overviewBefore); // finalize this calamity's event
+        s.pendingAllocation = undefined;
+        runCalamity(s); // resume the rest of the calamity phase
+        if (!s.calamityActive) setupCalamityConversion(s);
+        break;
+      }
       default:
         throw new Error(`action ${(action as Action).type} not valid here`);
     }
@@ -1921,6 +1981,11 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         break;
       }
       case 'calamity': {
+        // §29.64: a pending secondary allocation is the primary victim's to direct.
+        // Offer the leader-targeting default; the UI may submit a custom split.
+        if (state.pendingAllocation && state.pendingAllocation.holder === actor) {
+          return [{ type: 'allocateLoss', allocation: suggestAllocation(state, state.pendingAllocation) }];
+        }
         // §29/§32.941: a Monotheism holder may convert one adjacent enemy area.
         if (has(p, 'monotheism') && !p.convertedThisTurn) {
           for (const area of monotheismTargets(state, actor)) out.push({ type: 'convertArea', area });

@@ -19,7 +19,7 @@
         "siwa",
         "jalo"
       ],
-      "astOrder": 12
+      "astOrder": 10
     },
     {
       "id": "africa",
@@ -80,20 +80,6 @@
       "astOrder": 8
     },
     {
-      "id": "sumeria",
-      "name": "Sumeria",
-      "color": "#008080",
-      "start": "chaldaea",
-      "startAreas": [
-        "chaldaea",
-        "ahwaz",
-        "apolagos",
-        "susa",
-        "portas-persas"
-      ],
-      "astOrder": 9
-    },
-    {
       "id": "thrace",
       "name": "Thrace",
       "color": "#ff8c00",
@@ -139,17 +125,6 @@
       "astOrder": 6
     },
     {
-      "id": "semites",
-      "name": "Semites",
-      "color": "#a0522d",
-      "start": "arabia",
-      "startAreas": [
-        "arabia",
-        "rub-al-khali"
-      ],
-      "astOrder": 10
-    },
-    {
       "id": "indus",
       "name": "Indus",
       "color": "#20b2aa",
@@ -159,7 +134,7 @@
         "karachi",
         "pala"
       ],
-      "astOrder": 11
+      "astOrder": 9
     }
   ]
 }

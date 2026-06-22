@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 
-const civs = ['africa', 'asia', 'assyria', 'babylon', 'crete', 'egypt', 'iberia', 'illyria', 'indus', 'persia', 'semites', 'sumeria', 'thrace'];
+const civs = ['africa', 'asia', 'assyria', 'babylon', 'crete', 'egypt', 'iberia', 'illyria', 'indus', 'persia', 'thrace'];
 const W = 2600, H = 80, gap = 10;
 // Crop the right 42% of each strip (where the Late Iron Age numbers sit).
 const cropW = Math.round(W * 0.42);

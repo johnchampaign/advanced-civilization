@@ -182,38 +182,6 @@
         1400
       ]
     },
-    "semites": {
-      "spaces": 16,
-      "finishSpace": 16,
-      "pointsPerSpace": 100,
-      "epochStart": {
-        "stone": 1,
-        "earlyBronze": 4,
-        "lateBronze": 7,
-        "earlyIron": 10,
-        "lateIron": 13
-      },
-      "lateIronThresholds": [
-        1100,
-        1300
-      ]
-    },
-    "sumeria": {
-      "spaces": 16,
-      "finishSpace": 16,
-      "pointsPerSpace": 100,
-      "epochStart": {
-        "stone": 1,
-        "earlyBronze": 4,
-        "lateBronze": 7,
-        "earlyIron": 10,
-        "lateIron": 13
-      },
-      "lateIronThresholds": [
-        1100,
-        1300
-      ]
-    },
     "thrace": {
       "spaces": 16,
       "finishSpace": 16,

@@ -17,8 +17,7 @@ const space = (x) => Math.round((x - X0) / CW);
 const THRESHOLDS = {
   africa: [1300, 1600], asia: [1200, 1500, 1800], assyria: [1500, 1800], babylon: [1600, 1900],
   crete: [1300, 1600], egypt: [1300, 1600, 1900], iberia: [1200], illyria: [1200, 1500, 1800],
-  indus: [1100, 1300], persia: [1200, 1400], semites: [1100, 1300],
-  sumeria: [1100, 1300], thrace: [1200, 1400, 1700],
+  indus: [1100, 1300], persia: [1200, 1400], thrace: [1200, 1400, 1700],
 };
 
 const tracks = {};

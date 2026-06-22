@@ -7,6 +7,7 @@ export * from './types.js';
 export { CivAdapter, victoryScore, normalize, setupTaxation, monotheismTargets, militaryLast } from './engine.js';
 export { createInitialState } from './setup.js';
 export type { NewGameOptions } from './setup.js';
+export { astOrder, astRank, censusOrder } from './helpers.js';
 
 /** Create a ready-to-play, normalized initial state (auto phases advanced to the
  *  first interactive decision). */

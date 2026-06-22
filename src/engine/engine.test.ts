@@ -10,7 +10,7 @@ import {
   pieceCensus,
   pieceConservationProblems,
 } from './helpers.js';
-import { createGame, adapter, victoryScore, normalize, setupTaxation, monotheismTargets, militaryLast } from './index.js';
+import { createGame, adapter, victoryScore, normalize, setupTaxation, monotheismTargets, militaryLast, astOrder, censusOrder } from './index.js';
 import type { Action, GameState } from './types.js';
 
 describe('data integrity', () => {
@@ -304,6 +304,7 @@ describe('taxation (§19 / §32.421 Coinage)', () => {
       s.players['babylon']!.stock = 50; s.players['babylon']!.citiesAvailable = 5; // reserve leader → taker
       s.phase = 'taxation'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
       setupTaxation(s);
+      normalize(s); // §19.31: revolts resolve once taxation completes (population-expansion entry)
       return s;
     }
     const revolted = await run(false);
@@ -311,6 +312,23 @@ describe('taxation (§19 / §32.421 Coinage)', () => {
     expect(Object.values(revolted.areas).filter((a) => a.city === 'babylon').length).toBe(2); // taken over
     const democratic = await run(true);
     expect(Object.values(democratic.areas).filter((a) => a.city === 'egypt').length).toBe(3); // none revolt
+  });
+
+  it('defers tax revolts until every player has paid (§19.31)', async () => {
+    const { areas } = await import('../data/index.js');
+    const land = areas.filter((a) => !a.isWater).slice(0, 3).map((a) => a.id);
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 7 });
+    s.areas = {} as typeof s.areas;
+    for (const aid of land) s.areas[aid] = { tokens: {}, city: 'egypt' };
+    s.players['egypt']!.stock = 0; s.players['egypt']!.citiesAvailable = 6; // can't pay → all 3 revolt
+    s.players['babylon']!.stock = 50; s.players['babylon']!.citiesAvailable = 5;
+    s.phase = 'taxation'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    setupTaxation(s);
+    expect(s.pendingRevolts!['egypt']).toBe(3); // recorded during taxation, NOT yet resolved
+    expect(Object.values(s.areas).filter((a) => a.city === 'egypt').length).toBe(3);
+    normalize(s); // taxation completes → revolts settle
+    expect(s.pendingRevolts).toEqual({});
+    expect(Object.values(s.areas).filter((a) => a.city === 'babylon').length).toBe(3); // taken over
   });
 
   it('pauses for a Coinage holder with cities to choose their rate, which collects', () => {
@@ -399,6 +417,24 @@ describe('advance refinements (§32.261/.631/.251)', () => {
       { from: a, to: c, count: 2, via: b },
       { from: c, to: a, count: 1, byShip: true },
     ] }, 'egypt')).toThrow(/road into .* board a ship/);
+  });
+});
+
+describe('A.S.T. order (§17.4)', () => {
+  it('is a fixed nation order — Africa first, Italy second, Egypt last', () => {
+    const s = createGame({ players: ['egypt', 'italy', 'africa', 'babylon'], seed: 7 });
+    expect(astOrder(s)).toEqual(['africa', 'italy', 'babylon', 'egypt']);
+    // §17.4 anchors: among any subset, Africa precedes all, Egypt follows all.
+    const s2 = createGame({ players: ['egypt', 'crete', 'africa'], seed: 1 });
+    expect(astOrder(s2)[0]).toBe('africa');
+    expect(astOrder(s2).at(-1)).toBe('egypt');
+  });
+
+  it('breaks census ties by A.S.T. order, not seating', () => {
+    const s = createGame({ players: ['egypt', 'africa'], seed: 7 });
+    // Equal population → Africa (lower A.S.T. rank) comes first regardless of seat.
+    s.areas = { a: { tokens: { egypt: 1 } }, b: { tokens: { africa: 1 } } } as typeof s.areas;
+    expect(censusOrder(s)).toEqual(['africa', 'egypt']);
   });
 });
 

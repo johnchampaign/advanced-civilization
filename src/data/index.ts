@@ -75,6 +75,10 @@ export interface Civilization {
   start: string;
   /** All legal opening areas (from VASSAL StartRegion tags). */
   startAreas: string[];
+  /** Fixed A.S.T. rank (§17.4): Africa=0 first … Egypt=13 last. Used as the
+   *  census tie-breaker and the primary actor order for the phases the rules run
+   *  in A.S.T. order (taxation, population expansion, advance acquisition). */
+  astOrder: number;
 }
 
 export interface Epoch {
@@ -143,5 +147,8 @@ export function validateData(): string[] {
     for (const p of a.prerequisites ?? []) if (!advanceById.has(p)) problems.push(`advance ${a.id} prereq ${p} unknown`);
     for (const card of Object.keys(a.credits.byCard)) if (!advanceById.has(card)) problems.push(`advance ${a.id} credit -> unknown ${card}`);
   }
+  // §17.4: every nation has a unique A.S.T. rank forming a 0..n-1 sequence.
+  const ranks = civilizations.map((c) => c.astOrder).sort((x, y) => x - y);
+  ranks.forEach((r, i) => { if (r !== i) problems.push(`civ astOrder not a 0..n-1 permutation (got ${r} at position ${i})`); });
   return problems;
 }

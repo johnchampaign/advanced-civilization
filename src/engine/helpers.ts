@@ -8,6 +8,7 @@ import {
   adjacency,
   areaById,
   calamities as CALAMITIES,
+  civById,
   commodities as COMMODITIES,
   commodityById,
   type AdvanceGroup,
@@ -143,13 +144,23 @@ export function populationCount(state: GameState, player: PlayerId): number {
 
 /** Census order: by population descending; ties broken by seating order
  *  (rules: highest census moves/acts first in most phases). */
+/** A.S.T. rank of a nation (§17.4): Africa first … Egypt last. Lower acts first. */
+export function astRank(id: PlayerId): number {
+  return civById.get(id)?.astOrder ?? 99;
+}
+
+/** Players in fixed A.S.T. order (§17.4) — the primary order for taxation,
+ *  population expansion, and advance acquisition. */
+export function astOrder(state: GameState): PlayerId[] {
+  return [...state.seating].sort((a, b) => astRank(a) - astRank(b));
+}
+
 export function censusOrder(state: GameState): PlayerId[] {
-  const seatIdx = new Map(state.seating.map((p, i) => [p, i]));
   return [...state.seating].sort((a, b) => {
     const pa = populationCount(state, a);
     const pb = populationCount(state, b);
     if (pa !== pb) return pb - pa;
-    return (seatIdx.get(a) ?? 0) - (seatIdx.get(b) ?? 0);
+    return astRank(a) - astRank(b); // §17.4: A.S.T. order breaks census ties
   });
 }
 

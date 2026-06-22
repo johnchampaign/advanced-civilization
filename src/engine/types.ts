@@ -146,6 +146,9 @@ export interface GameState {
   /** The turn's census order (§21), captured once so per-phase reordering (e.g.
    *  Military moving last, §32.831) derives from it without drifting. */
   censusOrder?: PlayerId[];
+  /** Cities that revolted this taxation phase (player -> count), resolved only
+   *  after every player has paid (§19.31). Cleared once resolved. */
+  pendingRevolts?: Record<PlayerId, number>;
   actedThisPhase: PlayerId[];
   players: Record<PlayerId, PlayerState>;
   /** All players in seating order (stable). */

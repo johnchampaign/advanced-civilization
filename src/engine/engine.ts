@@ -27,6 +27,7 @@ import {
 import {
   actingPlayer,
   advancesFaceValue,
+  astOrder,
   cardGroupsHeld,
   censusOrder,
   cityCount,
@@ -153,13 +154,27 @@ function collectTax(s: GameState, id: PlayerId, rate: number): void {
     if (collected > 0) s.log.push(`${id} collected ${collected} tax (rate ${r}) from ${cities} cities.`);
     return;
   }
-  // §19.31: pay for as many cities as stock allows; the remainder revolt.
+  // §19.31: pay for as many cities as stock allows; the remainder revolt — but
+  // revolts are resolved only AFTER every player has paid, so record them now.
   const payable = Math.floor(p.stock / r);
   const collected = payable * r;
   p.stock -= collected; p.treasury += collected;
   const revolting = cities - payable;
-  s.log.push(`${id} could only pay tax for ${payable}/${cities} cities (rate ${r}) — ${revolting} revolt (§19.31).`);
-  resolveTaxRevolt(s, id, revolting);
+  (s.pendingRevolts ??= {})[id] = revolting;
+  s.log.push(`${id} could only pay tax for ${payable}/${cities} cities (rate ${r}) — ${revolting} will revolt (§19.31).`);
+}
+
+/** §19.31-.33: resolve all recorded tax revolts once every player has paid, in
+ *  A.S.T. order. Each revolting city is taken over by the highest-reserve rival
+ *  with a city to spare, else it collapses to tokens. */
+function resolvePendingRevolts(s: GameState): void {
+  const pending = s.pendingRevolts;
+  if (!pending) return;
+  for (const id of astOrder(s)) {
+    const n = pending[id] ?? 0;
+    if (n > 0) resolveTaxRevolt(s, id, n);
+  }
+  s.pendingRevolts = {};
 }
 
 /** §19.32-.34: revolting cities are taken over by the player with the most units
@@ -190,7 +205,8 @@ function resolveTaxRevolt(s: GameState, owner: PlayerId, n: number): void {
 /** §19 taxation. Coinage holders WITH cities choose their rate (1-3) — they're
  *  left to act; everyone else is auto-taxed at rate 2 on phase entry. */
 export function setupTaxation(s: GameState): void {
-  for (const id of s.seating) {
+  s.pendingRevolts = {}; // revolts this phase accumulate here, resolved once all have paid
+  for (const id of astOrder(s)) {
     const p = player(s, id);
     if (has(p, 'coinage') && cityCount(s, id) > 0) continue; // interactive — they pick the rate
     collectTax(s, id, 2);
@@ -1346,17 +1362,22 @@ function enterPhase(s: GameState, phase: Phase): void {
   s.phase = phase;
   if (phase === 'astAdjustment') return; // order handled per-phase
   if (!AUTO_PHASES.has(phase)) {
-    // Interactive phase: act in the turn's census order, nobody has acted yet.
-    // Movement & ship construction put Military holders last (§32.831), derived
-    // from the census baseline so other phases keep plain census order.
-    const base = s.censusOrder?.length ? s.censusOrder : (s.activeOrder.length ? s.activeOrder : censusOrder(s));
-    s.activeOrder = (phase === 'movement' || phase === 'shipConstruction') ? militaryLast(s, base) : [...base];
+    // Interactive phase actor order (§18 / §17.4):
+    //  - movement & ship construction: census order, Military holders last (§32.831);
+    //  - taxation, population expansion, calamity (Monotheism), advances: A.S.T. order;
+    //  - everything else: the turn's census order.
+    const census = s.censusOrder?.length ? s.censusOrder : (s.activeOrder.length ? s.activeOrder : censusOrder(s));
+    const astPhases = phase === 'taxation' || phase === 'populationExpansion' || phase === 'calamity' || phase === 'acquireAdvances';
+    s.activeOrder = (phase === 'movement' || phase === 'shipConstruction') ? militaryLast(s, census)
+      : astPhases ? astOrder(s)
+      : [...census];
     s.actedThisPhase = [];
     if (phase === 'trade') {
       s.negotiation = { turnPointer: 0, passStreak: 0, actions: 0, nextOfferId: 0, done: [], offers: [], completed: [] };
     }
     if (phase === 'shipConstruction') runShipMaintenance(s); // §22.3, before building
     if (phase === 'taxation') setupTaxation(s); // §19: auto-tax non-Coinage; Coinage holders pick
+    if (phase === 'populationExpansion') resolvePendingRevolts(s); // §19.31: revolts settle after all paid
     if (phase === 'calamity') { runCalamity(s); setupCalamityConversion(s); } // §29: resolve, then Monotheism converts
     if (phase === 'acquireAdvances') checkCitySupport(s); // §29.8: support rechecked after any conversion
     // §13: apply growth now (auto when stock allows); constrained players are

@@ -162,6 +162,56 @@ describe('advance modifiers on calamities (§30/§32)', () => {
   });
 });
 
+describe('Flood & Volcano geography (§30.51 / §30.21)', () => {
+  const nile = ['alexandria', 'tanis', 'memphis', 'fayum', 'upper-egypt']; // one flood-plain region
+
+  function floodPop(adv: string[]): number {
+    const tokens: Record<string, number> = {};
+    for (const aid of nile) tokens[aid] = 4; // 20 unit points on the Nile flood plain
+    let s = scenario({ tokens: { egypt: tokens }, hands: { egypt: { 'calamity:flood': 1 } } });
+    s.players['egypt']!.advances = adv;
+    return populationCount(resolve(s), 'egypt');
+  }
+  it('Flood removes up to 17 unit points from the flood plain, 7 with Engineering (§30.511/.515)', () => {
+    expect(floodPop([])).toBe(3); // 20 − 17
+    expect(floodPop(['engineering'])).toBe(13); // 20 − 7
+  });
+
+  it('Flood with no flood-plain units eliminates a coastal city (§30.514)', () => {
+    const dry = coastal.find((a) => !a.isFloodplain)!.id; // a coastal, non-flood-plain area
+    let s = scenario({ tokens: { egypt: { [dry]: 6 } }, cities: { egypt: [dry] }, hands: { egypt: { 'calamity:flood': 1 } } });
+    s = resolve(s);
+    expect(s.areas[dry]?.city).toBeUndefined(); // the coastal city is gone
+  });
+
+  it('Volcanic Eruption destroys every unit in the volcano’s areas (§30.211)', () => {
+    let s = scenario({ tokens: { egypt: { campania: 3, neapolis: 2 } }, cities: { egypt: ['campania'] }, hands: { egypt: { 'calamity:volcano': 1 } } });
+    s = resolve(s);
+    expect(s.areas['campania']?.city).toBeUndefined();
+    expect(populationCount(s, 'egypt')).toBe(0); // Vesuvius wipes campania + neapolis
+  });
+
+  it('volcano-site data matches the three §4.41 volcanoes (guards the engine grouping)', () => {
+    const ids = areas.filter((a) => a.isVolcanoSite).map((a) => a.id).sort();
+    expect(ids).toEqual(['campania', 'milazzo', 'neapolis', 'syracus', 'thera'].sort());
+  });
+
+  it('Earthquake (no volcano-area city) destroys a city; Engineering reduces it instead (§30.212/.213)', () => {
+    function quakePop(eng: boolean): number {
+      let s = scenario({
+        tokens: { egypt: { [land[0]!.id]: 6 } }, // enough to support the surviving city
+        cities: { egypt: [land[1]!.id, land[2]!.id] },
+        hands: { egypt: { 'calamity:volcano': 1 } },
+      });
+      s.players['egypt']!.advances = eng ? ['engineering'] : [];
+      s = resolve(s);
+      expect(cityCount(s, 'egypt')).toBe(1); // exactly one city lost either way
+      return populationCount(s, 'egypt');
+    }
+    expect(quakePop(true)).toBeGreaterThan(quakePop(false)); // Engineering substitutes tokens
+  });
+});
+
 describe('§30.52 Barbarian Hordes', () => {
   it('lands in a start area, breaks the defenders and razes the city', () => {
     const start = civById.get('egypt')!.start; // barbarians land in a start area

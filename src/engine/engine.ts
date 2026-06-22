@@ -693,23 +693,144 @@ function applySuperstition(s: GameState, holder: PlayerId): void {
 
 /** Volcano / Earthquake (§30.21): destroys the largest area; but a holder of
  *  Engineering suffers an earthquake that merely reduces one city (§30.213). */
-function applyVolcanoEarthquake(s: GameState, holder: PlayerId): void {
-  if (has(player(s, holder), 'engineering')) {
-    reduceCities(s, holder, 1, false);
-    s.log.push(`${holder} suffers an Earthquake — Engineering limits it to one reduced city (§30.213).`);
-  } else {
-    destroyOneArea(s, holder);
-    s.log.push(`${holder} suffers a Volcano / Earthquake.`);
+/** §4.41: the three volcanoes — Vesuvius and Etna each touch two areas, the
+ *  Aegean volcano (Thera) one. (Adjacency can't distinguish the two Sicilian/
+ *  mainland pairs, so the grouping is fixed here.) */
+const VOLCANO_GROUPS: readonly (readonly string[])[] = [
+  ['campania', 'neapolis'], // Vesuvius
+  ['milazzo', 'syracus'],   // Etna
+  ['thera'],                // Aegean (§4.41)
+];
+
+/** Contiguous flood-plain regions (§4.42): connected components of floodplain
+ *  areas. Computed once — the map is static. */
+let _floodRegions: string[][] | null = null;
+function floodRegions(): string[][] {
+  if (_floodRegions) return _floodRegions;
+  const fp = [...areaById.values()].filter((a) => a.isFloodplain).map((a) => a.id);
+  const set = new Set(fp), seen = new Set<string>(), out: string[][] = [];
+  for (const id of fp) {
+    if (seen.has(id)) continue;
+    const stack = [id], comp: string[] = []; seen.add(id);
+    while (stack.length) { const x = stack.pop()!; comp.push(x); for (const n of neighbors(x)) if (set.has(n) && !seen.has(n)) { seen.add(n); stack.push(n); } }
+    out.push(comp);
   }
+  _floodRegions = out;
+  return out;
+}
+
+/** Unit points a player has across the given areas (token = 1, city = 5). */
+function unitPointsInAreas(s: GameState, owner: PlayerId, areaIds: readonly string[]): number {
+  let pts = 0;
+  for (const aid of areaIds) { const a = s.areas[aid]; if (!a) continue; pts += a.tokens[owner] ?? 0; if (a.city === owner) pts += 5; }
+  return pts;
+}
+
+/** Remove up to `points` of a player's unit points confined to `areaIds` (tokens
+ *  first, then cities eliminated — no token substitution). Returns points removed. */
+function removeUnitPointsInAreas(s: GameState, owner: PlayerId, areaIds: readonly string[], points: number, cityWorth = 5): number {
+  const before = unitPointsInAreas(s, owner, areaIds);
+  let remaining = points;
+  for (const aid of areaIds) {
+    if (remaining <= 0) break;
+    const t = s.areas[aid]?.tokens[owner] ?? 0;
+    const take = Math.min(t, remaining);
+    if (take > 0) { setTokens(s, aid, owner, t - take); player(s, owner).stock += take; remaining -= take; }
+  }
+  for (const aid of areaIds) {
+    if (remaining <= 0) break;
+    if (s.areas[aid]?.city === owner) { delete s.areas[aid]!.city; player(s, owner).citiesAvailable += 1; remaining -= cityWorth; }
+  }
+  return before - unitPointsInAreas(s, owner, areaIds);
+}
+
+/** Eliminate one of a player's coastal cities (no token substitution). */
+function eliminateOneCoastalCity(s: GameState, owner: PlayerId): boolean {
+  for (const [aid, a] of Object.entries(s.areas)) {
+    if (a.city === owner && isCoastal(aid)) { delete a.city; player(s, owner).citiesAvailable += 1; return true; }
+  }
+  return false;
+}
+
+/** Reduce one specific city to tokens (§26.41 substitution, Agriculture +1). */
+function reduceSpecificCity(s: GameState, owner: PlayerId, aid: string): void {
+  const a = s.areas[aid];
+  if (!a || a.city !== owner) return;
+  delete a.city; player(s, owner).citiesAvailable += 1;
+  const place = Math.min(areaLimitFor(s, aid, owner), player(s, owner).stock);
+  if (place > 0) { a.tokens[owner] = (a.tokens[owner] ?? 0) + place; player(s, owner).stock -= place; }
+}
+
+/** Destroy every unit (any owner) in the given areas — players' pieces return to
+ *  stock; neutral (Barbarian/Pirate) pieces vanish (§30.211). */
+function destroyAllInAreas(s: GameState, areaIds: readonly string[]): void {
+  for (const aid of areaIds) {
+    const a = s.areas[aid];
+    if (!a) continue;
+    for (const [o, n] of Object.entries(a.tokens)) { if (n > 0 && isPlayer(s, o)) player(s, o).stock += n; delete a.tokens[o]; }
+    if (a.city) { if (isPlayer(s, a.city)) player(s, a.city).citiesAvailable += 1; delete a.city; delete a.pirateCity; }
+  }
+}
+
+/** Volcanic Eruption / Earthquake (§30.21). A city in a volcano's area triggers
+ *  an eruption that wipes every unit in that volcano's areas (§30.211). Otherwise
+ *  it's an earthquake: one of the victim's cities is destroyed (Engineering merely
+ *  reduces it, §30.213) and one adjacent enemy city is reduced (§30.212). */
+function applyVolcanoEarthquake(s: GameState, holder: PlayerId): void {
+  const eng = has(player(s, holder), 'engineering');
+  const erupting = VOLCANO_GROUPS.filter((g) => g.some((aid) => s.areas[aid]?.city === holder));
+  if (erupting.length) {
+    const damage = (g: readonly string[]) => g.reduce((m, aid) => { const a = s.areas[aid]; return m + (a ? Object.values(a.tokens).reduce((x, y) => x + y, 0) + (a.city ? 5 : 0) : 0); }, 0);
+    const g = erupting.slice().sort((x, y) => damage(y) - damage(x))[0]!;
+    destroyAllInAreas(s, g);
+    s.log.push(`${holder} suffers a Volcanic Eruption — all units in ${g.map(areaName).join(' & ')} are destroyed (§30.211).`);
+    return;
+  }
+  // Earthquake: destroy one of the holder's cities (prefer one with an adjacent
+  // enemy city to maximise the §30.212 secondary effect).
+  const myCities = Object.keys(s.areas).filter((aid) => s.areas[aid]!.city === holder);
+  if (myCities.length === 0) { s.log.push(`${holder} suffers an Earthquake but holds no city to damage.`); return; }
+  const enemyCityNear = (aid: string) => neighbors(aid).find((n) => { const c = s.areas[n]?.city; return !!c && c !== holder && isPlayer(s, c) && !has(player(s, c), 'engineering'); });
+  const target = myCities.find((aid) => enemyCityNear(aid)) ?? myCities[0]!;
+  if (eng) { reduceSpecificCity(s, holder, target); s.log.push(`${holder} suffers an Earthquake — Engineering reduces the city in ${areaName(target)} (§30.213).`); }
+  else { delete s.areas[target]!.city; player(s, holder).citiesAvailable += 1; s.log.push(`${holder} suffers an Earthquake — the city in ${areaName(target)} is destroyed (§30.212).`); }
+  const victimArea = enemyCityNear(target); // §30.213: an Engineering holder is never a secondary
+  if (victimArea) { const o = s.areas[victimArea]!.city!; reduceSpecificCity(s, o, victimArea); s.log.push(`${o}'s city in ${areaName(victimArea)} is reduced by the Earthquake (§30.212).`); }
 }
 
 /** Flood (§30.51): ~10 unit points lost; Engineering caps the loss at 7 (§30.515).
  *  (Flood-plain geography per §4.42 is not modeled; this is the unit-loss core.) */
+/** Flood (§30.51): on the flood plain where the victim has the most units, he
+ *  loses ≤17 unit points (Engineering caps it at 7, §30.515) and orders 10 among
+ *  secondaries on the SAME plain. A victim with no flood-plain units instead loses
+ *  one coastal city (Engineering reduces it rather than eliminating it, §30.514). */
 function applyFlood(s: GameState, holder: PlayerId): void {
-  let loss = 10;
-  if (has(player(s, holder), 'engineering')) loss = Math.min(loss, 7);
-  const removed = removeUnitPoints(s, holder, loss);
-  s.log.push(`${holder} suffers Flood (-${removed}${has(player(s, holder), 'engineering') ? ', capped by Engineering' : ''}).`);
+  const eng = has(player(s, holder), 'engineering');
+  let best: string[] | null = null, bestPts = 0;
+  for (const region of floodRegions()) { const pts = unitPointsInAreas(s, holder, region); if (pts > bestPts) { bestPts = pts; best = region; } }
+  if (best && bestPts > 0) {
+    const removed = removeUnitPointsInAreas(s, holder, best, eng ? 7 : 17);
+    s.log.push(`${holder} suffers Flood on ${best.map(areaName)[0]} (-${removed}${eng ? ', capped by Engineering' : ''}).`);
+    const trader = s.calamityTradedFrom['flood'];
+    let pool = 10;
+    const others = s.seating
+      .filter((o) => o !== holder && o !== trader && unitPointsInAreas(s, o, best!) > 0)
+      .sort((x, y) => unitPointsInAreas(s, y, best!) - unitPointsInAreas(s, x, best!));
+    for (const v of others) {
+      if (pool <= 0) break;
+      const cap = has(player(s, v), 'engineering') ? 7 : pool; // §30.515
+      const take = Math.min(pool, cap, unitPointsInAreas(s, v, best!));
+      const r = removeUnitPointsInAreas(s, v, best!, take);
+      pool -= take;
+      if (r > 0) s.log.push(`${v} is a secondary victim of Flood (-${r}).`);
+    }
+  } else if (eng) {
+    reduceCities(s, holder, 1, true); // §30.515: reduce a coastal city rather than eliminate
+    s.log.push(`${holder}'s Flood reduces one coastal city (Engineering, §30.515).`);
+  } else {
+    const did = eliminateOneCoastalCity(s, holder);
+    s.log.push(did ? `${holder} loses a coastal city to Flood (§30.514).` : `${holder} is unaffected by Flood (no units on a flood plain).`);
+  }
 }
 
 /** Slave Revolt (§30.42): 15 tokens can't support cities (Mining +5, Enlightenment
@@ -1144,22 +1265,6 @@ function reduceCities(s: GameState, owner: PlayerId, n: number, coastalOnly: boo
   }
 }
 
-function destroyOneArea(s: GameState, owner: PlayerId): void {
-  // Remove the largest stack (and any city there) of the owner.
-  let best: string | null = null;
-  let bestN = -1;
-  for (const [aid, a] of Object.entries(s.areas)) {
-    const t = (a.tokens[owner] ?? 0) + (a.city === owner ? 6 : 0);
-    if (t > bestN) { bestN = t; best = aid; }
-  }
-  if (!best) return;
-  const a = s.areas[best]!;
-  const t = a.tokens[owner] ?? 0;
-  setTokens(s, best, owner, 0);
-  returnLostToStock(s, owner, t);
-  if (a.city === owner) { delete a.city; player(s, owner).citiesAvailable += 1; }
-}
-
 function isCoastal(aid: string): boolean {
   return neighbors(aid).some((n) => areaById.get(n)?.isWater);
 }
@@ -1288,10 +1393,14 @@ export function normalize(s: GameState): void {
 function applyMovement(s: GameState, actor: PlayerId, moves: { from: string; to: string; count: number; via?: string; byShip?: boolean }[]): void {
   const p = player(s, actor);
   const road = has(p, 'roadbuilding');
+  // §32.251: tokens that arrived via a road move may not then board a ship this
+  // phase. Track the areas a road move deposited tokens into.
+  const roadDest = new Set<string>();
   for (const m of moves) {
     const from = s.areas[m.from];
     if (!from || (from.tokens[actor] ?? 0) < m.count) throw new Error(`illegal move: not enough tokens in ${m.from}`);
     if (m.byShip) {
+      if (roadDest.has(m.from)) throw new Error(`illegal move: cannot road into ${m.from} then board a ship there (§32.251)`);
       // Naval transport (§23.5): a ship at `from` carries up to 5 tokens to a
       // coastal `to` within range, then relocates there.
       if ((from.ships?.[actor] ?? 0) <= 0) throw new Error(`no ship in ${m.from} to embark`);
@@ -1318,6 +1427,7 @@ function applyMovement(s: GameState, actor: PlayerId, moves: { from: string; to:
     setTokens(s, m.from, actor, (from.tokens[actor] ?? 0) - m.count);
     const to = (s.areas[m.to] ??= { tokens: {} });
     to.tokens[actor] = (to.tokens[actor] ?? 0) + m.count;
+    if (!adjacent && roadReachable) roadDest.add(m.to); // §32.251: no ship from here after
   }
 }
 

@@ -162,6 +162,24 @@ describe('advance modifiers on calamities (§30/§32)', () => {
   });
 });
 
+describe('Monotheism conversion timing (§29/§32.941)', () => {
+  it('is offered during the calamity phase, before advance acquisition', () => {
+    const a0 = land[0]!.id;
+    const a1 = (adjacency[a0] ?? []).find((n) => !areaById.get(n)?.isWater)!;
+    let s = scenario({ tokens: { egypt: { [a0]: 1 }, babylon: { [a1]: 2 } } });
+    s.players['egypt']!.advances = ['monotheism'];
+    s.players['egypt']!.stock = 10;
+    s = resolve(s); // pass through trade
+    expect(s.phase).toBe('calamity'); // paused here, not acquireAdvances
+    expect(adapter.currentActor(s)).toBe('egypt');
+    const conv = adapter.legalActions(s, 'egypt').filter((a) => a.type === 'convertArea');
+    expect(conv.length).toBeGreaterThan(0);
+    s = adapter.applyAction(s, conv[0]!, 'egypt');
+    expect(s.areas[a1]!.tokens['egypt']).toBe(2); // took over babylon's tokens
+    expect(s.phase).not.toBe('calamity'); // conversion done → phase advances
+  });
+});
+
 describe('Flood & Volcano geography (§30.51 / §30.21)', () => {
   const nile = ['alexandria', 'tanis', 'memphis', 'fayum', 'upper-egypt']; // one flood-plain region
 

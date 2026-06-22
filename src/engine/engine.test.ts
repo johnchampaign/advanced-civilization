@@ -434,7 +434,7 @@ describe('Monotheism conversion (§32.94)', () => {
     s.players['egypt']!.advances = ['monotheism'];
     s.players['egypt']!.stock = 5; s.players['egypt']!.citiesAvailable = 2;
     const babyStock = s.players['babylon']!.stock;
-    s.phase = 'acquireAdvances'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    s.phase = 'calamity'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
     const legal = adapter.legalActions(s, 'egypt').filter((a) => a.type === 'convertArea');
     expect(legal.some((a) => (a as Extract<Action, { type: 'convertArea' }>).area === theirs)).toBe(true);
     s = adapter.applyAction(s, { type: 'convertArea', area: theirs }, 'egypt');
@@ -453,7 +453,7 @@ describe('Monotheism conversion (§32.94)', () => {
     s.areas[theirs] = { tokens: { babylon: 2 } };
     s.players['egypt']!.advances = ['monotheism']; s.players['egypt']!.stock = 5;
     s.players['babylon']!.advances = ['theology'];
-    s.phase = 'acquireAdvances'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    s.phase = 'calamity'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
     const targets = monotheismTargets(s, 'egypt');
     expect(targets).not.toContain(theirs);
   });

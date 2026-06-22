@@ -39,14 +39,14 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
         });
         return supported ?? { type: 'pass' };
       }
-      case 'acquireAdvances': {
-        // §32.94: if Monotheism offers a conversion, grab the richest target first
-        // (a city beats tokens; otherwise the most tokens).
+      case 'calamity': {
+        // §29/§32.94: Monotheism conversion — grab the richest target (a city
+        // beats tokens; otherwise the most tokens).
         const converts = actions.filter((a) => a.type === 'convertArea') as Extract<Action, { type: 'convertArea' }>[];
-        if (converts.length > 0) {
-          const best = converts.slice().sort((x, y) => convertValue(state, y.area) - convertValue(state, x.area))[0]!;
-          return best;
-        }
+        if (converts.length > 0) return converts.slice().sort((x, y) => convertValue(state, y.area) - convertValue(state, x.area))[0]!;
+        return { type: 'pass' };
+      }
+      case 'acquireAdvances': {
         const buys = actions.filter((a) => a.type === 'buyAdvance') as Extract<Action, { type: 'buyAdvance' }>[];
         if (buys.length === 0) return { type: 'pass' };
         const p = state.players[actor]!;

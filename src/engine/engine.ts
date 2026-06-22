@@ -59,7 +59,8 @@ const AUTO_PHASES: Set<Phase> = new Set([
   'removeSurplus',
   'tradeAcquisition',
   // 'trade' is INTERACTIVE (negotiation), not auto.
-  'calamity',
+  // 'calamity' resolves automatically on entry, then is INTERACTIVE only for
+  // Monotheism holders choosing a conversion (§29 / §32.941).
   'astAdjustment',
 ]);
 
@@ -514,8 +515,11 @@ function runTradeAcquisition(s: GameState): void {
   const rng = Rng.fromState(s.rngState);
   // §27.1: a player draws one card from each of stacks 1..N, where N is the
   // number of cities on the board. A city-less player draws nothing — building
-  // your first city is what starts the flow of trade cards.
-  for (const id of s.activeOrder) {
+  // your first city is what starts the flow of trade cards. The player with the
+  // FEWEST cities draws first (it matters once a stack runs dry), ties by the
+  // turn's census order.
+  const drawOrder = [...s.activeOrder].sort((a, b) => cityCount(s, a) - cityCount(s, b));
+  for (const id of drawOrder) {
     const p = player(s, id);
     const cities = Math.min(9, cityCount(s, id));
     let drawn = 0;
@@ -1222,6 +1226,15 @@ function applyConvert(s: GameState, holder: PlayerId, aid: string): void {
   s.log.push(`${holder} converts ${areaName(aid)} from ${victim} by Monotheism (§32.94)${hadCity ? ' (city)' : ''}${tokens > 0 ? ` (${tokens} tokens)` : ''}.`);
 }
 
+/** §29/§32.941: after calamities resolve, only Monotheism holders who can still
+ *  convert an area get to act this (calamity) phase; everyone else is marked done. */
+function setupCalamityConversion(s: GameState): void {
+  for (const id of s.seating) {
+    const eligible = has(player(s, id), 'monotheism') && !player(s, id).convertedThisTurn && monotheismTargets(s, id).length > 0;
+    if (!eligible && !s.actedThisPhase.includes(id)) s.actedThisPhase.push(id);
+  }
+}
+
 function returnLostToStock(s: GameState, owner: PlayerId, n: number): void {
   // Neutral forces (Barbarians, pirates) have no stock — their pieces just vanish.
   if (isPlayer(s, owner)) player(s, owner).stock += n;
@@ -1325,7 +1338,6 @@ function runAutoPhase(s: GameState): void {
     case 'conflict': return runConflict(s);
     case 'removeSurplus': return runRemoveSurplus(s);
     case 'tradeAcquisition': return runTradeAcquisition(s);
-    case 'calamity': return runCalamity(s);
     case 'astAdjustment': return runAstAdjustment(s);
   }
 }
@@ -1345,6 +1357,8 @@ function enterPhase(s: GameState, phase: Phase): void {
     }
     if (phase === 'shipConstruction') runShipMaintenance(s); // §22.3, before building
     if (phase === 'taxation') setupTaxation(s); // §19: auto-tax non-Coinage; Coinage holders pick
+    if (phase === 'calamity') { runCalamity(s); setupCalamityConversion(s); } // §29: resolve, then Monotheism converts
+    if (phase === 'acquireAdvances') checkCitySupport(s); // §29.8: support rechecked after any conversion
     // §13: apply growth now (auto when stock allows); constrained players are
     // left to place their limited tokens interactively.
     if (phase === 'populationExpansion') setupPopulationExpansion(s);
@@ -1711,9 +1725,10 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         applyBuyAdvance(s, actor, action.advance, action.spendCommodities, action.spendTreasury);
         break; // stays acting; may buy again or pass
       case 'convertArea':
-        if (s.phase !== 'acquireAdvances') throw new Error('Monotheism conversion happens during the advances phase (§32.941)');
+        if (s.phase !== 'calamity') throw new Error('Monotheism conversion happens at the end of the calamity phase (§29/§32.941)');
         applyConvert(s, actor, action.area);
-        break; // stays acting; may still buy advances or pass
+        if (!s.actedThisPhase.includes(actor)) s.actedThisPhase.push(actor); // one conversion per turn
+        break;
       default:
         throw new Error(`action ${(action as Action).type} not valid here`);
     }
@@ -1804,7 +1819,10 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
             out.push({ type: 'buyAdvance', advance: adv.id, spendCommodities: { ...commHand }, spendTreasury: Math.max(0, Math.min(p.treasury, netAdvanceCost(p.advances, adv.id) - handValue(commHand, { mining: has(p, 'mining') }))) });
           }
         }
-        // §32.94: a Monotheism holder may convert one adjacent enemy area this turn.
+        break;
+      }
+      case 'calamity': {
+        // §29/§32.941: a Monotheism holder may convert one adjacent enemy area.
         if (has(p, 'monotheism') && !p.convertedThisTurn) {
           for (const area of monotheismTargets(state, actor)) out.push({ type: 'convertArea', area });
         }

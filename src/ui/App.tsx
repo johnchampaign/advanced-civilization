@@ -698,7 +698,8 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
       </div>
     );
   }
-  if (phase === 'acquireAdvances') return <AdvancePicker state={state} actor={actor} legal={legal} onApply={onApply} />;
+  if (phase === 'calamity') return <ConversionControls state={state} legal={legal} onApply={onApply} />;
+  if (phase === 'acquireAdvances') return <AdvancePicker state={state} actor={actor} onApply={onApply} />;
   if (phase === 'trade') return <TradeControls state={state} actor={actor} onApply={onApply} />;
   return <button className="civ-btn" onClick={() => pass && onApply(pass)}>Continue</button>;
 }
@@ -712,17 +713,30 @@ const COMMODITY_ORDER = ['ochre', 'hides', 'iron', 'papyrus', 'salt', 'timber', 
 
 /** Acquire-advances panel (§31): pick an advance, then choose exactly which
  *  commodity cards to spend and how much treasury — instead of auto-paying. */
-function AdvancePicker({ state, actor, legal, onApply }: { state: GameState; actor: PlayerId; legal: Action[]; onApply: (a: Action) => void }) {
-  const p = state.players[actor]!;
-  const mining = p.advances.includes('mining');
+/** §29/§32.94 Monotheism conversion picker, shown during the calamity phase. */
+function ConversionControls({ state, legal, onApply }: { state: GameState; legal: Action[]; onApply: (a: Action) => void }) {
   const converts = legal.filter((a) => a.type === 'convertArea') as Extract<Action, { type: 'convertArea' }>[];
-  const convertDesc = (aid: string) => {
+  const desc = (aid: string) => {
     const a = state.areas[aid]; const nm = areaById.get(aid)?.name ?? aid;
     const victim = a?.city && a.city in state.players ? a.city : Object.keys(a?.tokens ?? {}).find((o) => o in state.players);
     const cityHere = a?.city && a.city in state.players;
     const toks = victim ? a?.tokens[victim] ?? 0 : 0;
     return `${nm} — ${cityHere ? 'city' : ''}${cityHere && toks ? ' + ' : ''}${toks ? `${toks} token${toks > 1 ? 's' : ''}` : ''} of ${civById.get(victim ?? '')?.name ?? victim}`;
   };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span className="civ-lbl"><b>Monotheism</b> (§32.94) — convert <i>one</i> adjacent enemy area, replacing their pieces with your own (from stock):</span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+        {converts.map((c) => <button key={c.area} className="civ-btn" style={{ fontSize: 11 }} onClick={() => onApply(c)}>✝ Convert {desc(c.area)}</button>)}
+      </div>
+      <button className="civ-btn" onClick={() => onApply({ type: 'pass' })}>Don't convert (pass)</button>
+    </div>
+  );
+}
+
+function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: PlayerId; onApply: (a: Action) => void }) {
+  const p = state.players[actor]!;
+  const mining = p.advances.includes('mining');
   const [sel, setSel] = useState<string>('');
   const [spend, setSpend] = useState<Record<string, number>>({});
   const [treasury, setTreasury] = useState(0);
@@ -746,14 +760,6 @@ function AdvancePicker({ state, actor, legal, onApply }: { state: GameState; act
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {converts.length > 0 && (
-        <div style={{ border: '1px solid #5a8c6a', borderRadius: 4, padding: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className="civ-lbl"><b>Monotheism</b> (§32.94) — convert <i>one</i> adjacent enemy area this turn, replacing their pieces with your own (from stock):</span>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-            {converts.map((c) => <button key={c.area} className="civ-btn" style={{ fontSize: 11 }} onClick={() => onApply(c)}>✝ Convert {convertDesc(c.area)}</button>)}
-          </div>
-        </div>
-      )}
       <span className="civ-lbl">Acquire an advance — pick one, then choose how to pay (cards + treasury). Treasury available: {p.treasury}.</span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
         {available.length === 0 && <span className="civ-lbl">No advance available (prerequisites unmet).</span>}

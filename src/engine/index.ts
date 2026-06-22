@@ -1,10 +1,10 @@
 import { jsonCodec } from 'digital-boardgame-framework';
-import { CivAdapter, normalize, victoryScore } from './engine.js';
+import { CivAdapter, normalize, setupTaxation, victoryScore } from './engine.js';
 import { createInitialState, type NewGameOptions } from './setup.js';
 import type { GameState } from './types.js';
 
 export * from './types.js';
-export { CivAdapter, victoryScore, normalize } from './engine.js';
+export { CivAdapter, victoryScore, normalize, setupTaxation, monotheismTargets } from './engine.js';
 export { createInitialState } from './setup.js';
 export type { NewGameOptions } from './setup.js';
 
@@ -12,6 +12,7 @@ export type { NewGameOptions } from './setup.js';
  *  first interactive decision). */
 export function createGame(opts: NewGameOptions): GameState {
   const s = createInitialState(opts);
+  setupTaxation(s); // the initial state starts at taxation; prime it (turn 1: no Coinage → auto)
   normalize(s);
   return s;
 }

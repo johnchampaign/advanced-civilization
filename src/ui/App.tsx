@@ -106,12 +106,9 @@ export default function App() {
                 {actor ? <><b style={{ color: civById.get(actor)?.color }}>{civById.get(actor)?.name}</b> — {messageFor(state.phase)}</> : 'Resolving…'}
               </div>
               {actor && seats[actor] === 'human'
-                ? (<>
-                    <TaxRateControl state={state} actor={actor} onApply={apply} />
-                    {inMovement
-                      ? <MovementControls planner={planner} />
-                      : <ActionList legal={legal} selectedArea={selectedArea} phase={state.phase} onApply={apply} state={state} actor={actor} />}
-                  </>)
+                ? (inMovement
+                    ? <MovementControls planner={planner} />
+                    : <ActionList legal={legal} selectedArea={selectedArea} phase={state.phase} onApply={apply} state={state} actor={actor} />)
                 : <div className="civ-lbl" style={{ textAlign: 'center', padding: 8 }}>AI is taking its turn…</div>}
             </>
           )}
@@ -628,26 +625,24 @@ export function MovementControls({ planner }: { planner: MovementPlanner }) {
   );
 }
 
-/** Tax-rate selector, shown only to a player who owns Coinage (§32.421). */
-export function TaxRateControl({ state, actor, onApply }: { state: GameState; actor: PlayerId; onApply: (a: Action) => void }) {
-  const p = state.players[actor];
-  if (!p || !p.advances.includes('coinage')) return null;
-  const rate = p.taxRate ?? 2;
-  return (
-    <div className="civ-lbl" style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-      <b>Tax rate</b> (Coinage):
-      {[1, 2, 3].map((r) => <button key={r} className={`civ-btn ${rate === r ? 'on' : ''}`} style={{ padding: '0 8px' }} onClick={() => onApply({ type: 'setTaxRate', rate: r })}>{r}</button>)}
-      <span>· applies at your next taxation</span>
-    </div>
-  );
-}
-
 // ---- Per-phase action controls (reused) ----------------------------------
 
 export function ActionList({ legal, selectedArea, phase, onApply, state, actor }: {
   legal: Action[]; selectedArea: string | null; phase: string; onApply: (a: Action) => void; state: GameState; actor: PlayerId;
 }) {
   const pass = legal.find((a) => a.type === 'pass');
+  if (phase === 'taxation') {
+    const rates = legal.filter((a) => a.type === 'setTaxRate') as Extract<Action, { type: 'setTaxRate' }>[];
+    const cities = Object.values(state.areas).filter((a) => a.city === actor).length;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span className="civ-lbl"><b>Coinage</b> — choose your tax rate (§32.421). You collect <b>cities × rate</b> ({cities} cit{cities === 1 ? 'y' : 'ies'}) tokens from stock into your treasury:</span>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {rates.map((r) => <button className="civ-btn" key={r.rate} onClick={() => onApply(r)}>Rate {r.rate} → collect {cities * r.rate}</button>)}
+        </div>
+      </div>
+    );
+  }
   if (phase === 'populationExpansion') {
     const places = legal.filter((a) => a.type === 'placeTokens') as Extract<Action, { type: 'placeTokens' }>[];
     const rem = state.expansion?.remaining[actor] ?? 0;
@@ -703,7 +698,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
       </div>
     );
   }
-  if (phase === 'acquireAdvances') return <AdvancePicker state={state} actor={actor} onApply={onApply} />;
+  if (phase === 'acquireAdvances') return <AdvancePicker state={state} actor={actor} legal={legal} onApply={onApply} />;
   if (phase === 'trade') return <TradeControls state={state} actor={actor} onApply={onApply} />;
   return <button className="civ-btn" onClick={() => pass && onApply(pass)}>Continue</button>;
 }
@@ -717,9 +712,17 @@ const COMMODITY_ORDER = ['ochre', 'hides', 'iron', 'papyrus', 'salt', 'timber', 
 
 /** Acquire-advances panel (§31): pick an advance, then choose exactly which
  *  commodity cards to spend and how much treasury — instead of auto-paying. */
-function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: PlayerId; onApply: (a: Action) => void }) {
+function AdvancePicker({ state, actor, legal, onApply }: { state: GameState; actor: PlayerId; legal: Action[]; onApply: (a: Action) => void }) {
   const p = state.players[actor]!;
   const mining = p.advances.includes('mining');
+  const converts = legal.filter((a) => a.type === 'convertArea') as Extract<Action, { type: 'convertArea' }>[];
+  const convertDesc = (aid: string) => {
+    const a = state.areas[aid]; const nm = areaById.get(aid)?.name ?? aid;
+    const victim = a?.city && a.city in state.players ? a.city : Object.keys(a?.tokens ?? {}).find((o) => o in state.players);
+    const cityHere = a?.city && a.city in state.players;
+    const toks = victim ? a?.tokens[victim] ?? 0 : 0;
+    return `${nm} — ${cityHere ? 'city' : ''}${cityHere && toks ? ' + ' : ''}${toks ? `${toks} token${toks > 1 ? 's' : ''}` : ''} of ${civById.get(victim ?? '')?.name ?? victim}`;
+  };
   const [sel, setSel] = useState<string>('');
   const [spend, setSpend] = useState<Record<string, number>>({});
   const [treasury, setTreasury] = useState(0);
@@ -743,6 +746,14 @@ function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: Pla
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {converts.length > 0 && (
+        <div style={{ border: '1px solid #5a8c6a', borderRadius: 4, padding: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span className="civ-lbl"><b>Monotheism</b> (§32.94) — convert <i>one</i> adjacent enemy area this turn, replacing their pieces with your own (from stock):</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+            {converts.map((c) => <button key={c.area} className="civ-btn" style={{ fontSize: 11 }} onClick={() => onApply(c)}>✝ Convert {convertDesc(c.area)}</button>)}
+          </div>
+        </div>
+      )}
       <span className="civ-lbl">Acquire an advance — pick one, then choose how to pay (cards + treasury). Treasury available: {p.treasury}.</span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
         {available.length === 0 && <span className="civ-lbl">No advance available (prerequisites unmet).</span>}

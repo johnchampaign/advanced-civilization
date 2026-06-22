@@ -40,6 +40,13 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
         return supported ?? { type: 'pass' };
       }
       case 'acquireAdvances': {
+        // §32.94: if Monotheism offers a conversion, grab the richest target first
+        // (a city beats tokens; otherwise the most tokens).
+        const converts = actions.filter((a) => a.type === 'convertArea') as Extract<Action, { type: 'convertArea' }>[];
+        if (converts.length > 0) {
+          const best = converts.slice().sort((x, y) => convertValue(state, y.area) - convertValue(state, x.area))[0]!;
+          return best;
+        }
         const buys = actions.filter((a) => a.type === 'buyAdvance') as Extract<Action, { type: 'buyAdvance' }>[];
         if (buys.length === 0) return { type: 'pass' };
         const p = state.players[actor]!;
@@ -99,6 +106,14 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
         });
         scored.sort((x, y) => y.score - x.score);
         return scored[0]!.score >= 3 ? scored[0]!.m : { type: 'pass' };
+      }
+      case 'taxation': {
+        // Coinage holder: tax higher (3) when treasury is low and stock can cover
+        // it, to fund advances; otherwise the standard rate 2.
+        const me = state.players[actor]!;
+        const cities = Object.values(state.areas).filter((a) => a.city === actor).length;
+        const rate = me.treasury < 40 && me.stock >= cities * 3 ? 3 : 2;
+        return { type: 'setTaxRate', rate };
       }
       case 'trade':
         return planTradeTurn(state, actor, ctx.rng) ?? { type: 'pass' };
@@ -186,6 +201,16 @@ function planExpansionSpread(state: GameState, actor: PlayerId): Action | null {
 }
 
 // ---- Trade ----------------------------------------------------------------
+
+/** Worth of a Monotheism conversion target: a city is worth a lot; otherwise the
+ *  token count. */
+function convertValue(state: GameState, aid: string): number {
+  const a = state.areas[aid];
+  if (!a) return 0;
+  const cityBonus = a.city && a.city in state.players ? 12 : 0;
+  const tokens = Object.entries(a.tokens).filter(([o]) => o in state.players).reduce((m, [, n]) => Math.max(m, n), 0);
+  return cityBonus + tokens;
+}
 
 const isCal = (c: string) => c.startsWith('calamity:');
 const isTradableCal = (c: string) => isCal(c) && calamityById.get(c.slice(9))?.tradable === true;

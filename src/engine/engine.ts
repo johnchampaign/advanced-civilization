@@ -49,7 +49,8 @@ import {
 } from './types.js';
 
 const AUTO_PHASES: Set<Phase> = new Set([
-  'taxation',
+  // 'taxation' is INTERACTIVE only for Coinage holders with cities (they pick
+  // their rate 1-3); everyone else is auto-collected at rate 2 on phase entry.
   // 'populationExpansion' is INTERACTIVE only when stock can't cover all growth
   // (the player then places their limited tokens); otherwise auto on phase entry.
   'census',
@@ -136,16 +137,26 @@ function transferCards(s: GameState, giver: PlayerId, receiver: PlayerId, cards:
 
 // ---- Auto-phase processors ----------------------------------------------
 
-function runTaxation(s: GameState): void {
+/** Collect one player's tax: `cities × rate` tokens move stock → treasury (§19). */
+function collectTax(s: GameState, id: PlayerId, rate: number): void {
+  const p = player(s, id);
+  const cities = cityCount(s, id);
+  const r = Math.max(1, Math.min(3, Math.trunc(rate)));
+  const collected = Math.min(p.stock, cities * r);
+  p.stock -= collected;
+  p.treasury += collected;
+  p.taxRate = r; // remembered as the default for next turn's prompt
+  if (collected > 0) s.log.push(`${id} collected ${collected} tax (rate ${r}) from ${cities} cities.`);
+}
+
+/** §19 taxation. Coinage holders WITH cities choose their rate (1-3) — they're
+ *  left to act; everyone else is auto-taxed at rate 2 on phase entry. */
+export function setupTaxation(s: GameState): void {
   for (const id of s.seating) {
     const p = player(s, id);
-    const cities = cityCount(s, id);
-    // Default rate 2; a player with Coinage may set 1-3 (§32.421).
-    const rate = has(p, 'coinage') ? Math.max(1, Math.min(3, p.taxRate ?? 2)) : 2;
-    const collected = Math.min(p.stock, cities * rate);
-    p.stock -= collected;
-    p.treasury += collected;
-    if (collected > 0) s.log.push(`${id} collected ${collected} tax (rate ${rate}) from ${cities} cities.`);
+    if (has(p, 'coinage') && cityCount(s, id) > 0) continue; // interactive — they pick the rate
+    collectTax(s, id, 2);
+    if (!s.actedThisPhase.includes(id)) s.actedThisPhase.push(id);
   }
 }
 
@@ -896,6 +907,69 @@ function setTokens(s: GameState, aid: string, owner: PlayerId, n: number): void 
   else a.tokens[owner] = n;
 }
 
+// ---- Monotheism conversion (§32.94) --------------------------------------
+
+/** §32.952: a player holding Monotheism or Theology is immune to conversion. */
+function conversionImmune(s: GameState, id: PlayerId): boolean {
+  return isPlayer(s, id) && (has(player(s, id), 'monotheism') || has(player(s, id), 'theology'));
+}
+
+/** The single real-player occupant of an area (city owner or the token owner),
+ *  or null if empty / neutral (barbarians, pirates) / mixed. */
+function soleOccupant(s: GameState, aid: string): PlayerId | null {
+  const a = s.areas[aid];
+  if (!a) return null;
+  if (a.pirateCity) return null;
+  const tokenOwners = Object.entries(a.tokens).filter(([, n]) => n > 0).map(([o]) => o);
+  if (a.city && isPlayer(s, a.city)) {
+    if (tokenOwners.length === 0 || (tokenOwners.length === 1 && tokenOwners[0] === a.city)) return a.city;
+    return null;
+  }
+  if (tokenOwners.length === 1 && isPlayer(s, tokenOwners[0]!) && tokenOwners[0] !== BARBARIAN) return tokenOwners[0]!;
+  return null;
+}
+
+/** Areas a Monotheism holder may convert this turn (§32.941/.942): land-adjacent
+ *  to one of his own occupied areas, held by a single convertible enemy, and
+ *  affordable from his stock/cities. */
+export function monotheismTargets(s: GameState, holder: PlayerId): string[] {
+  if (!isPlayer(s, holder) || !has(player(s, holder), 'monotheism')) return [];
+  const mine = player(s, holder);
+  const ownsTokens = (aid: string) => (s.areas[aid]?.tokens[holder] ?? 0) > 0 || s.areas[aid]?.city === holder;
+  const out: string[] = [];
+  for (const [aid, a] of Object.entries(s.areas)) {
+    const victim = soleOccupant(s, aid);
+    if (!victim || victim === holder) continue;
+    if (conversionImmune(s, victim)) continue; // §32.942
+    if (!landNeighbors(aid).some(ownsTokens)) continue; // adjacent by land to my units
+    const tokens = a.tokens[victim] ?? 0;
+    const needsCity = a.city === victim;
+    if (tokens > mine.stock) continue; // §32.942: must be able to replace the tokens
+    if (needsCity && mine.citiesAvailable < 1) continue; // must have a city to place
+    out.push(aid);
+  }
+  return out;
+}
+
+/** Execute a Monotheism conversion: the victim's pieces in `aid` return to them,
+ *  replaced one-for-one by the holder's own units (§32.941). */
+function applyConvert(s: GameState, holder: PlayerId, aid: string): void {
+  if (player(s, holder).convertedThisTurn) throw new Error('Monotheism may convert only one area per turn (§32.941)');
+  if (!monotheismTargets(s, holder).includes(aid)) throw new Error(`cannot convert ${areaName(aid)} (§32.94)`);
+  const a = s.areas[aid]!;
+  const victim = soleOccupant(s, aid)!;
+  const tokens = a.tokens[victim] ?? 0;
+  const hadCity = a.city === victim;
+  // Return the victim's pieces.
+  if (tokens > 0) { setTokens(s, aid, victim, 0); player(s, victim).stock += tokens; }
+  if (hadCity) { delete a.city; player(s, victim).citiesAvailable += 1; }
+  // Replace with the holder's own units.
+  if (tokens > 0) { setTokens(s, aid, holder, tokens); player(s, holder).stock -= tokens; }
+  if (hadCity) { a.city = holder; player(s, holder).citiesAvailable -= 1; }
+  player(s, holder).convertedThisTurn = true;
+  s.log.push(`${holder} converts ${areaName(aid)} from ${victim} by Monotheism (§32.94)${hadCity ? ' (city)' : ''}${tokens > 0 ? ` (${tokens} tokens)` : ''}.`);
+}
+
 function returnLostToStock(s: GameState, owner: PlayerId, n: number): void {
   // Neutral forces (Barbarians, pirates) have no stock — their pieces just vanish.
   if (isPlayer(s, owner)) player(s, owner).stock += n;
@@ -1005,7 +1079,6 @@ function nextPhase(phase: Phase): Phase {
 
 function runAutoPhase(s: GameState): void {
   switch (s.phase) {
-    case 'taxation': return runTaxation(s);
     case 'census': return runCensus(s);
     case 'conflict': return runConflict(s);
     case 'removeSurplus': return runRemoveSurplus(s);
@@ -1026,6 +1099,7 @@ function enterPhase(s: GameState, phase: Phase): void {
       s.negotiation = { turnPointer: 0, passStreak: 0, actions: 0, nextOfferId: 0, done: [], offers: [], completed: [] };
     }
     if (phase === 'shipConstruction') runShipMaintenance(s); // §22.3, before building
+    if (phase === 'taxation') setupTaxation(s); // §19: auto-tax non-Coinage; Coinage holders pick
     // §13: apply growth now (auto when stock allows); constrained players are
     // left to place their limited tokens interactively.
     if (phase === 'populationExpansion') setupPopulationExpansion(s);
@@ -1047,6 +1121,7 @@ export function normalize(s: GameState): void {
         s.turn += 1;
         s.activeOrder = censusOrder(s);
         s.actedThisPhase = [];
+        for (const id of s.seating) player(s, id).convertedThisTurn = false; // §32.941 once-per-turn
       }
       enterPhase(s, np);
       continue;
@@ -1317,6 +1392,8 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
           s.negotiation.passStreak += 1;
           s.negotiation.turnPointer += 1;
         } else if (!s.actedThisPhase.includes(actor)) {
+          // Passing taxation = accept the default rate 2 (still collect the tax).
+          if (s.phase === 'taxation') collectTax(s, actor, 2);
           s.actedThisPhase.push(actor);
         }
         break;
@@ -1349,11 +1426,11 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         s.negotiation.turnPointer += 1;
         break;
       case 'setTaxRate': {
-        const p = player(s, actor);
-        if (!has(p, 'coinage')) throw new Error('only a player with Coinage may set the tax rate (§32.421)');
-        p.taxRate = Math.max(1, Math.min(3, Math.trunc(action.rate)));
-        s.log.push(`${actor} sets their tax rate to ${p.taxRate} (applies next taxation).`);
-        break; // adjusting the rate does not consume the turn
+        if (s.phase !== 'taxation') throw new Error('the tax rate is chosen during taxation');
+        if (!has(player(s, actor), 'coinage')) throw new Error('only a player with Coinage may set the tax rate (§32.421)');
+        collectTax(s, actor, action.rate); // collect immediately at the chosen rate
+        if (!s.actedThisPhase.includes(actor)) s.actedThisPhase.push(actor);
+        break;
       }
       case 'placeTokens':
         if (s.phase !== 'populationExpansion') throw new Error('placeTokens only in population expansion');
@@ -1377,6 +1454,10 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         if (s.phase !== 'acquireAdvances') throw new Error('buyAdvance only in acquireAdvances phase');
         applyBuyAdvance(s, actor, action.advance, action.spendCommodities, action.spendTreasury);
         break; // stays acting; may buy again or pass
+      case 'convertArea':
+        if (s.phase !== 'acquireAdvances') throw new Error('Monotheism conversion happens during the advances phase (§32.941)');
+        applyConvert(s, actor, action.area);
+        break; // stays acting; may still buy advances or pass
       default:
         throw new Error(`action ${(action as Action).type} not valid here`);
     }
@@ -1390,9 +1471,12 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
     if (this.currentActor(state) !== actor) return [];
     const p = player(state, actor);
     const out: Action[] = [{ type: 'pass' }];
-    // Coinage holders may adjust their tax rate on any of their turns (§32.421).
-    if (has(p, 'coinage')) for (const rate of [1, 2, 3]) if (rate !== (p.taxRate ?? 2)) out.push({ type: 'setTaxRate', rate });
     switch (state.phase) {
+      case 'taxation': {
+        // A Coinage holder (with cities) picks their rate 1-3, which collects now.
+        for (const rate of [1, 2, 3]) out.push({ type: 'setTaxRate', rate });
+        break;
+      }
       case 'populationExpansion': {
         // Constrained growth: offer placing one token into each area that can
         // still grow (the UI/AI repeat as desired). 'pass' forfeits the rest.
@@ -1463,6 +1547,10 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
             // Suggest a concrete payment: spend whole commodity hand + needed treasury.
             out.push({ type: 'buyAdvance', advance: adv.id, spendCommodities: { ...commHand }, spendTreasury: Math.max(0, Math.min(p.treasury, netAdvanceCost(p.advances, adv.id) - handValue(commHand, { mining: has(p, 'mining') }))) });
           }
+        }
+        // §32.94: a Monotheism holder may convert one adjacent enemy area this turn.
+        if (has(p, 'monotheism') && !p.convertedThisTurn) {
+          for (const area of monotheismTargets(state, actor)) out.push({ type: 'convertArea', area });
         }
         break;
       }

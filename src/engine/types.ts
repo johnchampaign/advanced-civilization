@@ -111,6 +111,8 @@ export interface PlayerState {
   epoch: string;
   /** Whether the nation has been knocked to zero board presence this turn. */
   eliminatedFromBoard?: boolean;
+  /** Set once this player has used Monotheism's one conversion this turn (§32.941). */
+  convertedThisTurn?: boolean;
 }
 
 /** Contents of a single map area. An area is held by at most one nation's
@@ -274,6 +276,13 @@ export interface SetTaxRateAction {
   rate: number; // 1-3 (Coinage allows variation, §32.421)
 }
 
+/** Monotheism (§32.94): replace the occupants of one land-adjacent enemy area
+ *  with your own units. Usable once per turn, during the advances phase. */
+export interface ConvertAreaAction {
+  type: 'convertArea';
+  area: string;
+}
+
 export interface ResolveCalamityAction {
   type: 'resolveCalamity';
   calamityId: string;
@@ -289,6 +298,7 @@ export interface PassAction {
 
 export type Action =
   | SetTaxRateAction
+  | ConvertAreaAction
   | PlaceTokensAction
   | MoveAction
   | BuildShipsAction

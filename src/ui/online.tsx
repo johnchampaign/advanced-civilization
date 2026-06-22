@@ -6,7 +6,7 @@ import { adapter } from '../engine/index.js';
 import type { Action, GameState, PlayerId } from '../engine/index.js';
 import { civilizations, civById } from '../data/index.js';
 import { createCivClient, createNetworkGame, realtimeSubscribe, tokenFromInvite } from '../client/api.js';
-import { ActionList, Board, CalamityModal, InfoView, MovementControls, StatusPanel, TaxRateControl, legalAreas, nationFocusArea, prettyPhase, scrollBoardTo, useMovementPlanner, type View } from './App.js';
+import { ActionList, Board, CalamityModal, InfoView, MovementControls, StatusPanel, legalAreas, nationFocusArea, prettyPhase, scrollBoardTo, useMovementPlanner, type View } from './App.js';
 
 const API = ''; // same-origin; Vite proxies /api -> the GameServer host
 // Placeholder so the movement-planner hook can run before the game view loads.
@@ -128,7 +128,6 @@ export function OnlineGame({ gameId, token }: { gameId: string; token: string })
           ) : game.yourTurn ? (
             <>
               <div className="civ-msg" style={{ padding: '6px 10px', textAlign: 'center' }}>Your turn — {prettyPhase(s.phase)}</div>
-              <TaxRateControl state={s} actor={you} onApply={submitAction} />
               {inMovement
                 ? <MovementControls planner={planner} />
                 : <ActionList legal={game.legalActions} selectedArea={selected} phase={s.phase} onApply={submitAction} state={s} actor={you} />}

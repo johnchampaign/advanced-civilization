@@ -10,7 +10,7 @@ import {
   pieceCensus,
   pieceConservationProblems,
 } from './helpers.js';
-import { createGame, adapter, victoryScore, normalize } from './index.js';
+import { createGame, adapter, victoryScore, normalize, setupTaxation, monotheismTargets } from './index.js';
 import type { Action, GameState } from './types.js';
 
 describe('data integrity', () => {
@@ -284,6 +284,80 @@ describe('movement & trade-card acquisition rules', () => {
   });
 });
 
+describe('taxation (§19 / §32.421 Coinage)', () => {
+  it('auto-taxes a non-Coinage player at rate 2 (no pause)', () => {
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 7 });
+    // Fresh game: nobody holds Coinage, so taxation never pauses.
+    expect(s.phase).not.toBe('taxation');
+  });
+
+  it('pauses for a Coinage holder with cities to choose their rate, which collects', () => {
+    let s = createGame({ players: ['egypt', 'babylon'], seed: 7 });
+    // Give egypt Coinage + a city + stock, then re-enter taxation.
+    s.players['egypt']!.advances = ['coinage'];
+    const land = Object.keys(s.areas)[0]!;
+    s.areas[land] = { tokens: { egypt: 1 }, city: 'egypt' };
+    s.players['egypt']!.stock = 10; s.players['egypt']!.treasury = 0;
+    s.phase = 'taxation'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    setupTaxation(s); // babylon auto-collected; egypt (Coinage + city) left to choose
+    normalize(s);
+    expect(s.phase).toBe('taxation');
+    expect(adapter.currentActor(s)).toBe('egypt');
+    const rates = adapter.legalActions(s, 'egypt').filter((a) => a.type === 'setTaxRate');
+    expect(rates).toHaveLength(3);
+    s = adapter.applyAction(s, { type: 'setTaxRate', rate: 3 }, 'egypt');
+    expect(s.players['egypt']!.treasury).toBe(3); // 1 city × rate 3, stock → treasury
+    expect(s.phase).not.toBe('taxation'); // advanced past taxation
+  });
+});
+
+describe('Monotheism conversion (§32.94)', () => {
+  async function twoAdjacentLand() {
+    // Find a land area with a land neighbour, both usable.
+    const { areas, adjacency } = await import('../data/index.js') as { areas: { id: string; isWater?: boolean }[]; adjacency: Record<string, string[]> };
+    const water = new Set(areas.filter((a) => a.isWater).map((a) => a.id));
+    for (const a of areas) {
+      if (a.isWater) continue;
+      const nb = (adjacency[a.id] ?? []).find((n) => !water.has(n));
+      if (nb) return [a.id, nb] as const;
+    }
+    throw new Error('no adjacent land pair');
+  }
+
+  it('lets a Monotheism holder take over an adjacent enemy area, replacing pieces', async () => {
+    let s = createGame({ players: ['egypt', 'babylon'], seed: 7 });
+    const [mine, theirs] = await twoAdjacentLand();
+    s.areas = {} as typeof s.areas;
+    s.areas[mine] = { tokens: { egypt: 1 } };
+    s.areas[theirs] = { tokens: { babylon: 3 }, city: 'babylon' };
+    s.players['egypt']!.advances = ['monotheism'];
+    s.players['egypt']!.stock = 5; s.players['egypt']!.citiesAvailable = 2;
+    const babyStock = s.players['babylon']!.stock;
+    s.phase = 'acquireAdvances'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    const legal = adapter.legalActions(s, 'egypt').filter((a) => a.type === 'convertArea');
+    expect(legal.some((a) => (a as Extract<Action, { type: 'convertArea' }>).area === theirs)).toBe(true);
+    s = adapter.applyAction(s, { type: 'convertArea', area: theirs }, 'egypt');
+    expect(s.areas[theirs]!.city).toBe('egypt');
+    expect(s.areas[theirs]!.tokens['egypt']).toBe(3);
+    expect(s.areas[theirs]!.tokens['babylon']).toBeUndefined();
+    expect(s.players['babylon']!.stock).toBe(babyStock + 3); // their tokens returned
+    expect(s.players['egypt']!.convertedThisTurn).toBe(true);
+  });
+
+  it('cannot convert a player who also holds Monotheism or Theology (§32.942/.952)', async () => {
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 7 });
+    const [mine, theirs] = await twoAdjacentLand();
+    s.areas = {} as typeof s.areas;
+    s.areas[mine] = { tokens: { egypt: 1 } };
+    s.areas[theirs] = { tokens: { babylon: 2 } };
+    s.players['egypt']!.advances = ['monotheism']; s.players['egypt']!.stock = 5;
+    s.players['babylon']!.advances = ['theology'];
+    s.phase = 'acquireAdvances'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    const targets = monotheismTargets(s, 'egypt');
+    expect(targets).not.toContain(theirs);
+  });
+});
+
 describe('population expansion (§13 placement when stock-limited)', () => {
   it('auto-grows when stock is ample (no pause at expansion)', () => {
     const ample = createGame({ players: ['egypt', 'babylon'], seed: 7 });
@@ -299,7 +373,8 @@ describe('population expansion (§13 placement when stock-limited)', () => {
     s.players['egypt']!.stock = 4; s.players['egypt']!.treasury = 20;
     s.players['babylon']!.stock = 4; s.players['babylon']!.treasury = 20;
     s.phase = 'taxation'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
-    normalize(s); // auto taxation → population expansion; egypt is stock-short → pauses
+    setupTaxation(s); // prime taxation (no Coinage → auto-collect; 0 cities → no-op)
+    normalize(s); // → population expansion; egypt is stock-short → pauses
     expect(s.phase).toBe('populationExpansion');
     expect(adapter.currentActor(s)).toBe('egypt');
     expect(s.expansion!.remaining['egypt']!).toBeGreaterThan(0);

@@ -137,16 +137,53 @@ function transferCards(s: GameState, giver: PlayerId, receiver: PlayerId, cards:
 
 // ---- Auto-phase processors ----------------------------------------------
 
-/** Collect one player's tax: `cities × rate` tokens move stock → treasury (§19). */
+/** Collect one player's tax: each city costs `rate` tokens from stock → treasury
+ *  (§19.1). If stock can't cover every city, the unpayable cities revolt (§19.31)
+ *  — unless the player holds Democracy, whose cities never revolt (§19.34). */
 function collectTax(s: GameState, id: PlayerId, rate: number): void {
   const p = player(s, id);
   const cities = cityCount(s, id);
   const r = Math.max(1, Math.min(3, Math.trunc(rate)));
-  const collected = Math.min(p.stock, cities * r);
-  p.stock -= collected;
-  p.treasury += collected;
   p.taxRate = r; // remembered as the default for next turn's prompt
-  if (collected > 0) s.log.push(`${id} collected ${collected} tax (rate ${r}) from ${cities} cities.`);
+  const cost = cities * r;
+  if (p.stock >= cost || has(p, 'democracy')) {
+    const collected = Math.min(p.stock, cost);
+    p.stock -= collected; p.treasury += collected;
+    if (collected > 0) s.log.push(`${id} collected ${collected} tax (rate ${r}) from ${cities} cities.`);
+    return;
+  }
+  // §19.31: pay for as many cities as stock allows; the remainder revolt.
+  const payable = Math.floor(p.stock / r);
+  const collected = payable * r;
+  p.stock -= collected; p.treasury += collected;
+  const revolting = cities - payable;
+  s.log.push(`${id} could only pay tax for ${payable}/${cities} cities (rate ${r}) — ${revolting} revolt (§19.31).`);
+  resolveTaxRevolt(s, id, revolting);
+}
+
+/** §19.32-.34: revolting cities are taken over by the player with the most units
+ *  in stock (cities ×5, tokens ×1) who has a city available; if none can, the
+ *  city is reduced to tokens (§19.33). */
+function resolveTaxRevolt(s: GameState, owner: PlayerId, n: number): void {
+  const reserves = (x: PlayerId) => player(s, x).stock + 5 * player(s, x).citiesAvailable;
+  let remaining = n;
+  for (const aid of Object.keys(s.areas)) {
+    if (remaining <= 0) break;
+    if (s.areas[aid]!.city !== owner) continue;
+    const taker = s.seating
+      .filter((o) => o !== owner && isPlayer(s, o) && player(s, o).citiesAvailable > 0)
+      .sort((x, y) => reserves(y) - reserves(x))[0];
+    delete s.areas[aid]!.city; player(s, owner).citiesAvailable += 1;
+    if (taker) {
+      s.areas[aid]!.city = taker; player(s, taker).citiesAvailable -= 1;
+      s.log.push(`The revolting city in ${areaName(aid)} is taken over by ${taker} (§19.32).`);
+    } else {
+      const place = Math.min(areaLimitFor(s, aid, owner), player(s, owner).stock);
+      if (place > 0) { s.areas[aid]!.tokens[owner] = (s.areas[aid]!.tokens[owner] ?? 0) + place; player(s, owner).stock -= place; }
+      s.log.push(`The revolting city in ${areaName(aid)} collapses — no one could take it over (§19.33).`);
+    }
+    remaining -= 1;
+  }
 }
 
 /** §19 taxation. Coinage holders WITH cities choose their rate (1-3) — they're
@@ -211,8 +248,16 @@ function applyPlaceTokens(s: GameState, actor: PlayerId, placements: Record<stri
 
 function runCensus(s: GameState): void {
   for (const id of s.seating) player(s, id).census = populationCount(s, id);
-  s.activeOrder = censusOrder(s);
+  s.censusOrder = s.activeOrder = censusOrder(s);
   s.actedThisPhase = [];
+}
+
+const hasMil = (s: GameState, id: PlayerId) => isPlayer(s, id) && has(player(s, id), 'military');
+
+/** §32.831: Military holders move (and build ships) AFTER non-Military players;
+ *  within each group the census order is preserved (Array#sort is stable). */
+export function militaryLast(s: GameState, order: PlayerId[]): PlayerId[] {
+  return [...order].sort((a, b) => (hasMil(s, a) ? 1 : 0) - (hasMil(s, b) ? 1 : 0));
 }
 
 /** §22.3 ship maintenance, run when the ship-construction phase begins: each ship
@@ -602,62 +647,140 @@ function runAstAdjustment(s: GameState): void {
 
 // ---- Calamity effects ----------------------------------------------------
 
+/** Order `pool` unit points of loss among the primary's rivals (§29.64), at most
+ *  `perCap` from any one player, never the trader (§29.6). Targets the strongest
+ *  rivals first. */
+function orderUnitLoss(s: GameState, primary: PlayerId, calId: string, label: string, pool: number, perCap: number, cityWorth = 5): void {
+  const trader = s.calamityTradedFrom[calId];
+  let remaining = pool;
+  const victims = s.seating
+    .filter((o) => o !== primary && o !== trader && boardUnitPoints(s, o) > 0)
+    .sort((x, y) => boardUnitPoints(s, y) - boardUnitPoints(s, x));
+  for (const v of victims) {
+    if (remaining <= 0) break;
+    const order = Math.min(remaining, perCap, boardUnitPoints(s, v));
+    const removed = removeUnitPoints(s, v, order, cityWorth);
+    remaining -= order;
+    if (removed > 0) s.log.push(`${v} is a secondary victim of ${label} (-${removed}).`);
+  }
+}
+
+const grainCards = (p: { hand: Record<string, number> }) => p.hand['grain'] ?? 0;
+
+/** Famine (§30.31): primary loses 10 unit points (Pottery −4 per Grain card held,
+ *  §30.312), then orders 20 among rivals, ≤8 each (§30.311). */
+function applyFamine(s: GameState, holder: PlayerId): void {
+  const p = player(s, holder);
+  const soften = has(p, 'pottery') ? 4 * grainCards(p) : 0;
+  const loss = Math.max(0, 10 - soften);
+  const removed = removeUnitPoints(s, holder, loss);
+  s.log.push(`${holder} suffers Famine (-${removed}${soften ? `; Pottery + ${grainCards(p)} Grain softened it by ${soften}` : ''}).`);
+  orderUnitLoss(s, holder, 'famine', 'Famine', 20, 8);
+}
+
+/** Superstition (§30.32): 3 cities reduced — but the highest Religion card held
+ *  governs: Mysticism → 2, Deism → 1, Enlightenment → 0 (not cumulative). */
+function applySuperstition(s: GameState, holder: PlayerId): void {
+  const p = player(s, holder);
+  let n = 3;
+  if (has(p, 'enlightenment')) n = 0;
+  else if (has(p, 'deism')) n = 1;
+  else if (has(p, 'mysticism')) n = 2;
+  if (n === 0) { s.log.push(`${holder}'s Superstition is nullified by Enlightenment (§30.322).`); return; }
+  reduceCities(s, holder, n, false);
+  s.log.push(`${holder} suffers Superstition: ${n} cit${n === 1 ? 'y' : 'ies'} reduced.`);
+}
+
+/** Volcano / Earthquake (§30.21): destroys the largest area; but a holder of
+ *  Engineering suffers an earthquake that merely reduces one city (§30.213). */
+function applyVolcanoEarthquake(s: GameState, holder: PlayerId): void {
+  if (has(player(s, holder), 'engineering')) {
+    reduceCities(s, holder, 1, false);
+    s.log.push(`${holder} suffers an Earthquake — Engineering limits it to one reduced city (§30.213).`);
+  } else {
+    destroyOneArea(s, holder);
+    s.log.push(`${holder} suffers a Volcano / Earthquake.`);
+  }
+}
+
+/** Flood (§30.51): ~10 unit points lost; Engineering caps the loss at 7 (§30.515).
+ *  (Flood-plain geography per §4.42 is not modeled; this is the unit-loss core.) */
+function applyFlood(s: GameState, holder: PlayerId): void {
+  let loss = 10;
+  if (has(player(s, holder), 'engineering')) loss = Math.min(loss, 7);
+  const removed = removeUnitPoints(s, holder, loss);
+  s.log.push(`${holder} suffers Flood (-${removed}${has(player(s, holder), 'engineering') ? ', capped by Engineering' : ''}).`);
+}
+
+/** Slave Revolt (§30.42): 15 tokens can't support cities (Mining +5, Enlightenment
+ *  −5, cancelling if both, §30.423); cities are reduced one at a time until the
+ *  rest are supportable by the remaining (unlocked) tokens. */
+function applySlaveRevolt(s: GameState, holder: PlayerId): void {
+  const p = player(s, holder);
+  let lock = 15 + (has(p, 'mining') ? 5 : 0) - (has(p, 'enlightenment') ? 5 : 0);
+  lock = Math.max(0, lock);
+  let reduced = 0, guard = 0;
+  while (guard++ < 100) {
+    const cities = cityCount(s, holder);
+    if (cities === 0) break;
+    const supportable = Math.max(0, populationCount(s, holder) - lock);
+    if (supportable >= 2 * cities) break;
+    reduceCities(s, holder, 1, false);
+    reduced += 1;
+  }
+  s.log.push(`${holder} suffers Slave Revolt: ${lock} tokens withheld from city support → ${reduced} cit${reduced === 1 ? 'y' : 'ies'} reduced.`);
+}
+
+/** Civil Disorder (§30.71): all but three cities reduced; the count drops by one
+ *  for each of Music / Drama / Law / Democracy (§30.712) and rises by one for each
+ *  of Military / Roadbuilding (§30.713/.714), cumulative. */
+function applyCivilDisorder(s: GameState, holder: PlayerId): void {
+  const p = player(s, holder);
+  const cities = cityCount(s, holder);
+  let reduced = Math.max(0, cities - 3);
+  reduced -= (has(p, 'music') ? 1 : 0) + (has(p, 'drama') ? 1 : 0) + (has(p, 'law') ? 1 : 0) + (has(p, 'democracy') ? 1 : 0);
+  reduced += (has(p, 'military') ? 1 : 0) + (has(p, 'roadbuilding') ? 1 : 0);
+  reduced = Math.max(0, Math.min(reduced, cities));
+  reduceCities(s, holder, reduced, false);
+  s.log.push(`${holder} suffers Civil Disorder: ${reduced} cit${reduced === 1 ? 'y' : 'ies'} reduced.`);
+}
+
 function applyCalamity(s: GameState, calId: string, holder: PlayerId, rng: Rng): void {
   const cal = calamityById.get(calId);
   if (!cal) return;
-  const p = player(s, holder);
-  // Advance modifiers reduce/aggravate the magnitude.
-  const reduce = (cal.reducedBy ?? []).filter((id) => has(p, id)).length;
-  const worsen = (cal.worsenedBy ?? []).filter((id) => has(p, id)).length;
-  const nullified = (cal.nullifiedBy ?? []).some((id) => has(p, id));
-  if (nullified) {
-    s.log.push(`${holder}'s ${cal.name} is nullified by an advance.`);
-    return;
+  switch (calId) {
+    case 'famine': return applyFamine(s, holder);
+    case 'superstition': return applySuperstition(s, holder);
+    case 'volcano': return applyVolcanoEarthquake(s, holder);
+    case 'flood': return applyFlood(s, holder);
+    case 'slaverevolt': return applySlaveRevolt(s, holder);
+    case 'civildisorder': return applyCivilDisorder(s, holder);
+    case 'civilwar': return applyCivilWar(s, holder);
+    case 'barbarianhordes': return applyBarbarians(s, holder, rng);
+    case 'epidemic': return applyEpidemic(s, holder);
+    case 'iconoclasm': return applyIconoclasm(s, holder);
+    case 'piracy': return applyPiracy(s, holder);
+    case 'treachery': return applyTreachery(s, holder);
+    default: s.log.push(`${holder} suffers ${cal.name} (effect not modeled).`);
   }
-  const eff = cal.effect as { kind: string; unitPoints?: number; cities?: number; keepCities?: number; tokens?: number };
-  const mod = (base: number) => Math.max(0, base - reduce * Math.ceil(base / 4) + worsen * Math.ceil(base / 4));
-  switch (eff.kind) {
-    case 'unitLoss': {
-      const loss = mod(eff.unitPoints ?? 0);
-      removeTokensFromBoard(s, holder, loss);
-      s.log.push(`${holder} suffers ${cal.name}: lost ${loss} unit points.`);
-      break;
-    }
-    case 'cityLoss': {
-      const n = mod(eff.cities ?? 1);
-      reduceCities(s, holder, n, false);
-      s.log.push(`${holder} suffers ${cal.name}: lost up to ${n} cities.`);
-      break;
-    }
-    case 'piracy':
-      applyPiracy(s, holder);
-      break;
-    case 'epidemic':
-      applyEpidemic(s, holder);
-      break;
-    case 'iconoclasm':
-      applyIconoclasm(s, holder);
-      break;
-    case 'reduceToCities': {
-      const keep = (eff.keepCities ?? 3);
-      const total = cityCount(s, holder);
-      reduceCities(s, holder, Math.max(0, total - keep), false);
-      s.log.push(`${holder} suffers ${cal.name}: reduced to ${keep} cities.`);
-      break;
-    }
-    case 'areaDestruction': {
-      destroyOneArea(s, holder);
-      s.log.push(`${holder} suffers ${cal.name}.`);
-      break;
-    }
-    case 'civilWar':
-      applyCivilWar(s, holder);
-      break;
-    case 'barbarians':
-      applyBarbarians(s, holder, rng);
-      break;
-    default:
-      s.log.push(`${holder} suffers ${cal.name} (effect not modeled).`);
+}
+
+/** Treachery (§30.22): one of the primary's cities is taken over by the player who
+ *  traded the card to them (§30.221); if it was drawn (not traded), the city is
+ *  instead reduced (§30.222). */
+function applyTreachery(s: GameState, holder: PlayerId): void {
+  const trader = s.calamityTradedFrom['treachery'];
+  const aid = Object.keys(s.areas).find((a) => s.areas[a]!.city === holder);
+  if (!aid) { s.log.push(`${holder} suffers Treachery but holds no city.`); return; }
+  const a = s.areas[aid]!;
+  delete a.city; player(s, holder).citiesAvailable += 1;
+  if (trader && trader !== holder && isPlayer(s, trader) && player(s, trader).citiesAvailable > 0) {
+    a.city = trader; player(s, trader).citiesAvailable -= 1;
+    s.log.push(`${holder} suffers Treachery: the city in ${areaName(aid)} defects to ${trader} (§30.221).`);
+  } else {
+    const place = Math.min(areaLimitFor(s, aid, holder), player(s, holder).stock);
+    if (place > 0) { a.tokens[holder] = (a.tokens[holder] ?? 0) + place; player(s, holder).stock -= place; }
+    s.log.push(`${holder} suffers Treachery: lost the city in ${areaName(aid)} (§30.222).`);
   }
 }
 
@@ -721,14 +844,22 @@ function applyCivilWar(s: GameState, primary: PlayerId): void {
     s.log.push(`${primary}'s Civil War fizzles — it holds the most reserves (§30.411).`);
     return;
   }
-  const size = has(pp, 'philosophy')
+  // The primary composes a first faction it KEEPS (§30.4121-.4122): 15 unit
+  // points, +5 Music, +5 Drama, +10 Democracy (cumulative). Those advances
+  // therefore REDUCE the loss — the bigger the kept faction, the smaller the
+  // faction that defects. With Philosophy the beneficiary instead picks a fixed
+  // 15-point faction that defects (§30.4124 — "not necessarily for the better").
+  const board = boardUnitPoints(s, primary);
+  const philosophy = has(pp, 'philosophy');
+  const firstFaction = philosophy
     ? 15
-    : 15 + (has(pp, 'music') ? 5 : 0) + (has(pp, 'drama') ? 5 : 0) + (has(pp, 'democracy') ? 10 : 0) + 20;
-  if (boardUnitPoints(s, primary) <= size) {
+    : Math.min(board, 15 + (has(pp, 'music') ? 5 : 0) + (has(pp, 'drama') ? 5 : 0) + (has(pp, 'democracy') ? 10 : 0));
+  const loss = philosophy ? Math.min(15, board) : board - firstFaction;
+  if (loss <= 0) {
     s.log.push(`${primary}'s Civil War: nation too small to split — no effect (§30.413).`);
     return;
   }
-  const moved = transferUnits(s, primary, beneficiary, size, true);
+  const moved = transferUnits(s, primary, beneficiary, loss, true);
   s.log.push(`${primary} suffers Civil War: a faction worth ${moved} defects to ${beneficiary}.`);
   if (has(pp, 'military')) {
     removeTokensFromBoard(s, primary, 5);
@@ -995,14 +1126,20 @@ function removeTokensFromBoard(s: GameState, owner: PlayerId, unitPoints: number
 /** Reduce `n` of a player's cities (each city -> tokens removed; rules model a
  *  reduced city becoming tokens, but for losses we return the city + its
  *  notional support to stock). `coastalOnly` restricts to coastal areas. */
+/** §26.41: reduce up to `n` of a player's cities. A reduced city is REPLACED by
+ *  the maximum tokens its area allows (Agriculture §32.241 gives +1), drawn from
+ *  stock — those tokens can then support the player's remaining cities. */
 function reduceCities(s: GameState, owner: PlayerId, n: number, coastalOnly: boolean): void {
   let remaining = n;
+  const p = player(s, owner);
   for (const [aid, a] of Object.entries(s.areas)) {
     if (remaining <= 0) break;
     if (a.city !== owner) continue;
     if (coastalOnly && !isCoastal(aid)) continue;
     delete a.city;
-    player(s, owner).citiesAvailable += 1;
+    p.citiesAvailable += 1;
+    const place = Math.min(areaLimitFor(s, aid, owner), p.stock);
+    if (place > 0) { a.tokens[owner] = (a.tokens[owner] ?? 0) + place; p.stock -= place; }
     remaining -= 1;
   }
 }
@@ -1092,8 +1229,11 @@ function enterPhase(s: GameState, phase: Phase): void {
   s.phase = phase;
   if (phase === 'astAdjustment') return; // order handled per-phase
   if (!AUTO_PHASES.has(phase)) {
-    // Interactive phase: act in census order, nobody has acted yet.
-    s.activeOrder = s.activeOrder.length ? s.activeOrder : censusOrder(s);
+    // Interactive phase: act in the turn's census order, nobody has acted yet.
+    // Movement & ship construction put Military holders last (§32.831), derived
+    // from the census baseline so other phases keep plain census order.
+    const base = s.censusOrder?.length ? s.censusOrder : (s.activeOrder.length ? s.activeOrder : censusOrder(s));
+    s.activeOrder = (phase === 'movement' || phase === 'shipConstruction') ? militaryLast(s, base) : [...base];
     s.actedThisPhase = [];
     if (phase === 'trade') {
       s.negotiation = { turnPointer: 0, passStreak: 0, actions: 0, nextOfferId: 0, done: [], offers: [], completed: [] };
@@ -1119,7 +1259,7 @@ export function normalize(s: GameState): void {
         // Turn rollover.
         if (s.finished || (s.maxTurns && s.turn >= s.maxTurns)) { s.phase = 'taxation'; return; }
         s.turn += 1;
-        s.activeOrder = censusOrder(s);
+        s.censusOrder = s.activeOrder = censusOrder(s);
         s.actedThisPhase = [];
         for (const id of s.seating) player(s, id).convertedThisTurn = false; // §32.941 once-per-turn
       }

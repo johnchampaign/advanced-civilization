@@ -10,7 +10,7 @@ import {
   pieceCensus,
   pieceConservationProblems,
 } from './helpers.js';
-import { createGame, adapter, victoryScore, normalize, setupTaxation, monotheismTargets } from './index.js';
+import { createGame, adapter, victoryScore, normalize, setupTaxation, monotheismTargets, militaryLast } from './index.js';
 import type { Action, GameState } from './types.js';
 
 describe('data integrity', () => {
@@ -291,6 +291,28 @@ describe('taxation (§19 / §32.421 Coinage)', () => {
     expect(s.phase).not.toBe('taxation');
   });
 
+  it('unpayable cities revolt and are taken over; Democracy is immune (§19.31/.34)', async () => {
+    async function run(democracy: boolean) {
+      const { areas } = await import('../data/index.js');
+      const land = areas.filter((a) => !a.isWater).slice(0, 3).map((a) => a.id);
+      const s = createGame({ players: ['egypt', 'babylon'], seed: 7 });
+      s.areas = {} as typeof s.areas;
+      for (const aid of land) s.areas[aid] = { tokens: {}, city: 'egypt' }; // 3 egypt cities
+      s.players['egypt']!.stock = 2; // can only pay for 1 city at rate 2
+      s.players['egypt']!.citiesAvailable = 6;
+      if (democracy) s.players['egypt']!.advances = ['democracy'];
+      s.players['babylon']!.stock = 50; s.players['babylon']!.citiesAvailable = 5; // reserve leader → taker
+      s.phase = 'taxation'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+      setupTaxation(s);
+      return s;
+    }
+    const revolted = await run(false);
+    expect(Object.values(revolted.areas).filter((a) => a.city === 'egypt').length).toBe(1); // 2 revolted
+    expect(Object.values(revolted.areas).filter((a) => a.city === 'babylon').length).toBe(2); // taken over
+    const democratic = await run(true);
+    expect(Object.values(democratic.areas).filter((a) => a.city === 'egypt').length).toBe(3); // none revolt
+  });
+
   it('pauses for a Coinage holder with cities to choose their rate, which collects', () => {
     let s = createGame({ players: ['egypt', 'babylon'], seed: 7 });
     // Give egypt Coinage + a city + stock, then re-enter taxation.
@@ -308,6 +330,16 @@ describe('taxation (§19 / §32.421 Coinage)', () => {
     s = adapter.applyAction(s, { type: 'setTaxRate', rate: 3 }, 'egypt');
     expect(s.players['egypt']!.treasury).toBe(3); // 1 city × rate 3, stock → treasury
     expect(s.phase).not.toBe('taxation'); // advanced past taxation
+  });
+});
+
+describe('Military move order (§32.831)', () => {
+  it('puts Military holders after non-Military, preserving census order within each group', () => {
+    const s = createGame({ players: ['egypt', 'babylon', 'crete'], seed: 7 });
+    s.players['egypt']!.advances = ['military'];
+    s.players['crete']!.advances = ['military'];
+    expect(militaryLast(s, ['egypt', 'babylon', 'crete'])).toEqual(['babylon', 'egypt', 'crete']);
+    expect(militaryLast(s, ['egypt', 'babylon', 'crete']).slice(-2).sort()).toEqual(['crete', 'egypt']);
   });
 });
 

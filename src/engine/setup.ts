@@ -87,6 +87,7 @@ export function createInitialState(opts: NewGameOptions): GameState {
     turn: 1,
     phase: 'taxation',
     activeOrder: censusSeed(seating),
+    censusOrder: censusSeed(seating),
     actedThisPhase: [],
     players,
     seating,

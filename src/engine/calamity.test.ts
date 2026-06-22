@@ -46,9 +46,10 @@ describe('§30.41 Civil War', () => {
     });
     expect(populationCount(s, 'babylon')).toBe(0);
     s = resolve(s);
-    // ~35 unit points (15 + beneficiary's 20) defect from egypt to babylon.
-    expect(populationCount(s, 'egypt')).toBeLessThan(10);
-    expect(populationCount(s, 'babylon')).toBeGreaterThan(20);
+    // §30.4121: egypt keeps a first faction of 15 unit points; the remaining 25
+    // defect to babylon (the player with the most reserves).
+    expect(populationCount(s, 'egypt')).toBe(15);
+    expect(populationCount(s, 'babylon')).toBeGreaterThanOrEqual(20);
     expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
   });
 
@@ -62,6 +63,102 @@ describe('§30.41 Civil War', () => {
     s.players['egypt']!.stock += 40; s.areas[land[0]!.id]!.tokens['egypt'] = 0;
     s = resolve(s);
     expect(populationCount(s, 'babylon')).toBe(40); // unchanged: no defection
+  });
+});
+
+describe('advance modifiers on calamities (§30/§32)', () => {
+  const cityAreas = [land[1]!.id, land[2]!.id, land[3]!.id, land[4]!.id, land[5]!.id, land[6]!.id];
+
+  function superstitionCitiesLeft(adv: string[]): number {
+    let s = scenario({
+      tokens: { egypt: { [land[0]!.id]: 20 } },
+      cities: { egypt: cityAreas.slice(0, 4) },
+      hands: { egypt: { 'calamity:superstition': 1 } },
+    });
+    s.players['egypt']!.advances = adv;
+    return cityCount(resolve(s), 'egypt');
+  }
+  it('Superstition reduces 3 cities, softened by the highest Religion card (§30.322)', () => {
+    expect(superstitionCitiesLeft([])).toBe(1); // 4 - 3
+    expect(superstitionCitiesLeft(['mysticism'])).toBe(2); // 4 - 2
+    expect(superstitionCitiesLeft(['deism'])).toBe(3); // 4 - 1
+    expect(superstitionCitiesLeft(['enlightenment'])).toBe(4); // nullified
+    expect(superstitionCitiesLeft(['mysticism', 'deism', 'enlightenment'])).toBe(4); // highest governs
+  });
+
+  function faminePopLeft(adv: string[], grain: number): number {
+    let s = scenario({
+      tokens: { egypt: { [land[0]!.id]: 10 }, babylon: { [land[7]!.id]: 30 } },
+      hands: { egypt: { 'calamity:famine': 1, grain } },
+    });
+    s.players['egypt']!.advances = adv;
+    return populationCount(resolve(s), 'egypt');
+  }
+  it('Famine costs 10 unit points; Pottery softens 4 per Grain card held (§30.312)', () => {
+    expect(faminePopLeft([], 0)).toBe(0); // lost all 10
+    expect(faminePopLeft(['pottery'], 2)).toBe(8); // 10 - 8 = 2 lost
+    expect(faminePopLeft(['pottery'], 0)).toBe(0); // Pottery without Grain does nothing
+  });
+
+  function disorderCitiesLeft(adv: string[]): number {
+    let s = scenario({
+      tokens: { egypt: { [land[0]!.id]: 20 } },
+      cities: { egypt: cityAreas.slice(0, 6) },
+      hands: { egypt: { 'calamity:civildisorder': 1 } },
+    });
+    s.players['egypt']!.advances = adv;
+    return cityCount(resolve(s), 'egypt');
+  }
+  it('Civil Disorder reduces all but 3 cities, ±1 per advance (§30.712-.714)', () => {
+    expect(disorderCitiesLeft([])).toBe(3); // 6 → keep 3
+    expect(disorderCitiesLeft(['music', 'drama'])).toBe(5); // 3 reduced − 2 = 1 reduced
+    expect(disorderCitiesLeft(['music', 'drama', 'law', 'democracy'])).toBe(6); // none reduced
+    expect(disorderCitiesLeft(['military'])).toBe(2); // 3 + 1 = 4 reduced
+  });
+
+  function slaveRevoltCitiesLeft(adv: string[]): number {
+    let s = scenario({
+      tokens: { egypt: { [land[0]!.id]: 20 } },
+      cities: { egypt: cityAreas.slice(0, 5) },
+      hands: { egypt: { 'calamity:slaverevolt': 1 } },
+    });
+    s.players['egypt']!.advances = adv;
+    return cityCount(resolve(s), 'egypt');
+  }
+  it('Slave Revolt: Enlightenment eases it, Mining worsens it (§30.423)', () => {
+    const none = slaveRevoltCitiesLeft([]);
+    expect(slaveRevoltCitiesLeft(['enlightenment'])).toBeGreaterThanOrEqual(none);
+    expect(slaveRevoltCitiesLeft(['mining'])).toBeLessThanOrEqual(none);
+    expect(slaveRevoltCitiesLeft(['mining'])).toBeLessThan(5); // it does bite
+  });
+
+  it('Earthquake: Engineering reduces a city instead of destroying an area (§30.213)', () => {
+    function quakePop(eng: boolean): number {
+      let s = scenario({
+        tokens: { egypt: { [land[0]!.id]: 8 } },
+        cities: { egypt: [land[1]!.id] },
+        hands: { egypt: { 'calamity:volcano': 1 } },
+      });
+      s.players['egypt']!.advances = eng ? ['engineering'] : [];
+      return populationCount(resolve(s), 'egypt');
+    }
+    expect(quakePop(true)).toBeGreaterThan(quakePop(false)); // keeps the 8-token area
+  });
+
+  it('reduced cities are replaced by tokens, +1 with Agriculture (§26.41/§32.241)', () => {
+    function sub(adv: string[]): number {
+      let s = scenario({
+        tokens: { egypt: { [land[0]!.id]: 20 } },
+        cities: { egypt: [land[1]!.id] },
+        hands: { egypt: { 'calamity:superstition': 1 } },
+      });
+      s.players['egypt']!.advances = adv;
+      s = resolve(s);
+      return s.areas[land[1]!.id]?.tokens['egypt'] ?? 0;
+    }
+    const limit = areaById.get(land[1]!.id)!.sustains;
+    expect(sub([])).toBe(limit); // city → max tokens the area allows
+    expect(sub(['agriculture'])).toBe(limit + 1); // Agriculture clause 2
   });
 });
 

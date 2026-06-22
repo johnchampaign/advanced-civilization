@@ -141,6 +141,9 @@ export interface GameState {
   /** Player order for the current turn (census order). Acting player = first
    *  in `activeOrder` not yet in `actedThisPhase`. */
   activeOrder: PlayerId[];
+  /** The turn's census order (§21), captured once so per-phase reordering (e.g.
+   *  Military moving last, §32.831) derives from it without drifting. */
+  censusOrder?: PlayerId[];
   actedThisPhase: PlayerId[];
   players: Record<PlayerId, PlayerState>;
   /** All players in seating order (stable). */

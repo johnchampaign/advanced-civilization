@@ -4,7 +4,7 @@ import { createInitialState, type NewGameOptions } from './setup.js';
 import type { GameState } from './types.js';
 
 export * from './types.js';
-export { CivAdapter, victoryScore, normalize, setupTaxation, monotheismTargets } from './engine.js';
+export { CivAdapter, victoryScore, normalize, setupTaxation, monotheismTargets, militaryLast } from './engine.js';
 export { createInitialState } from './setup.js';
 export type { NewGameOptions } from './setup.js';
 

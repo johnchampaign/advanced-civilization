@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { UpdateBanner } from 'digital-boardgame-framework/client';
 import App from './App.js';
 import { Lobby, OnlineGame } from './online.js';
-import { fetchUnseenResponses, markResponseSeen, submitStandaloneReport, type MyReport } from '../client/api.js';
+import { fetchUnseenResponses, markResponseSeen, resolutionNote, submitStandaloneReport, type MyReport } from '../client/api.js';
 
 /** Catches render/runtime crashes so the app shows a recoverable message (with a
  *  one-click report) instead of a blank screen. */
@@ -34,9 +34,8 @@ function ReportResponseModal({ r, onDismiss }: { r: MyReport; onDismiss: () => v
   return (
     <div onClick={onDismiss} style={{ position: 'fixed', inset: 0, background: 'rgba(8,6,3,0.78)', display: 'grid', placeItems: 'center', zIndex: 200 }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: '#211c14', color: '#eee', padding: 22, borderRadius: 12, border: '2px solid #ffd23f', width: 460, maxWidth: '92vw', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 8px 40px #000' }}>
-        <div style={{ fontSize: 12, color: '#ffd23f', fontWeight: 800, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Reply to your problem report</div>
-        {r.message && <div style={{ fontSize: 13, color: '#aa9', marginBottom: 14, fontStyle: 'italic' }}>“{r.message}”</div>}
-        <div style={{ fontSize: 14, color: '#ece4d2', lineHeight: 1.55, whiteSpace: 'pre-wrap', marginBottom: 16 }}>{r.resolution?.note}</div>
+        <div style={{ fontSize: 12, color: '#ffd23f', fontWeight: 800, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Reply to your problem report</div>
+        <div style={{ fontSize: 14, color: '#ece4d2', lineHeight: 1.55, whiteSpace: 'pre-wrap', marginBottom: 16 }}>{resolutionNote(r.resolution)}</div>
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button className="civ-btn" onClick={onDismiss} style={{ padding: '8px 18px', fontWeight: 700 }}>Thanks</button>
         </div>

@@ -66,7 +66,13 @@ export async function submitStandaloneReport(baseUrl: string, body: {
   return { reportId: j.reportId };
 }
 
-export interface MyReport { reportId: string; message: string; severity: string; category?: string; createdAt: string; resolution?: { at: string; note: string } | null; tagged?: boolean }
+/** A resolution may be a plain note string or a { note } object (depending on how
+ *  it was recorded); this normalises it to the reply text. */
+export type Resolution = string | { at?: string; note: string } | null | undefined;
+export function resolutionNote(r: Resolution): string {
+  return (typeof r === 'string' ? r : r?.note ?? '').trim();
+}
+export interface MyReport { reportId: string; message: string; severity: string; category?: string; createdAt: string; resolution?: Resolution; tagged?: boolean }
 
 const SEEN_KEY = 'civ-seen-responses';
 function getSeenResponses(): Set<string> {
@@ -80,8 +86,9 @@ export function markResponseSeen(reportId: string): void {
 export async function fetchUnseenResponses(baseUrl: string): Promise<MyReport[]> {
   const seen = getSeenResponses();
   const reports = await fetchMyReports(baseUrl);
-  // Only auto-pop responses to reports THIS device filed (tagged), unseen.
-  return reports.filter((r) => r.tagged && r.resolution && !seen.has(r.reportId));
+  // Only auto-pop responses to reports THIS device filed (tagged), with a real
+  // reply written, unseen.
+  return reports.filter((r) => r.tagged && resolutionNote(r.resolution) && !seen.has(r.reportId));
 }
 
 /** Fetch this browser's own reports (with any resolutions). */

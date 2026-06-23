@@ -5,7 +5,7 @@ import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent } from '..
 import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, civById, commodityById, epochs, ADVANCE_EFFECTS } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
 import { handValue, creditTowards, commoditySetValue } from '../engine/helpers.js';
-import { submitStandaloneReport, fetchMyReports, type MyReport } from '../client/api.js';
+import { submitStandaloneReport, fetchMyReports, resolutionNote, type MyReport } from '../client/api.js';
 import { anchors, MAIN_VIEWBOX } from './anchors.js';
 
 const DEFAULT_PLAYERS: PlayerId[] = ['egypt', 'babylon', 'crete', 'assyria'];
@@ -1125,7 +1125,7 @@ function HotseatReport({ state, focus }: { state: GameState; focus: PlayerId }) 
 
   const refreshMine = useCallback(() => { fetchMyReports('').then(setMine).catch(() => {}); }, []);
   useEffect(() => { refreshMine(); }, [refreshMine]);
-  const answered = mine.filter((r) => r.resolution);
+  const answered = mine.filter((r) => resolutionNote(r.resolution));
 
   const download = () => {
     const text = `Advanced Civilization — hotseat, turn ${state.turn}\n\n${state.log.join('\n')}\n\n--- state ---\n${JSON.stringify(state)}`;
@@ -1162,8 +1162,8 @@ function HotseatReport({ state, focus }: { state: GameState; focus: PlayerId }) 
           {mine.map((r, i) => (
             <div key={i} style={{ fontSize: 11, borderBottom: '1px solid #7a4a1855', paddingBottom: 3 }}>
               <div><b>{r.severity}</b>: {r.message}</div>
-              {r.resolution
-                ? <div style={{ color: '#2e6b3a' }}>✓ <b>Response:</b> {r.resolution.note}</div>
+              {resolutionNote(r.resolution)
+                ? <div style={{ color: '#2e6b3a' }}>✓ <b>Response:</b> {resolutionNote(r.resolution)}</div>
                 : <div className="civ-lbl">⏳ awaiting response</div>}
             </div>
           ))}

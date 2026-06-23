@@ -94,6 +94,17 @@ describe('advance credits', () => {
     expect(groups.has('Religion')).toBe(true);
     expect(groups.has('Arts')).toBe(true);
   });
+  it('does not grant a freshly-bought card’s credit in the same turn (§31.53)', () => {
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 1, maxTurns: 60 });
+    s.phase = 'acquireAdvances'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    s.players['egypt']!.hand = {}; s.players['egypt']!.treasury = 80; // pay by treasury only
+    // Buy Pottery (45). It credits 10 toward Cloth Making — but not until next turn.
+    const after = adapter.applyAction(s, { type: 'buyAdvance', advance: 'pottery', spendCommodities: {}, spendTreasury: 45 }, 'egypt');
+    expect(after.players['egypt']!.advances).toContain('pottery');
+    // 35 treasury left; Cloth Making costs 45. With the (illegal) same-turn credit it
+    // would be affordable; §31.53 forbids it, so this must be rejected.
+    expect(() => adapter.applyAction(after, { type: 'buyAdvance', advance: 'clothmaking', spendCommodities: {}, spendTreasury: 35 }, 'egypt')).toThrow(/insufficient/);
+  });
 });
 
 describe('game setup', () => {

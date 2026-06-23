@@ -122,6 +122,9 @@ export interface PlayerState {
   /** §26.32: area ids of cities built or acquired THIS turn — these must be the
    *  first reduced when short of city support. Cleared at turn rollover. */
   citiesBuiltThisTurn?: string[];
+  /** §31.53: advances acquired THIS turn — their credits may not be used until
+   *  next turn. Cleared at turn rollover. */
+  advancesThisTurn?: string[];
 }
 
 /** Contents of a single map area. An area is held by at most one nation's

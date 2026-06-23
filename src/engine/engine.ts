@@ -38,7 +38,6 @@ import {
   landNeighbors,
   navalDestinations,
   neighbors,
-  netAdvanceCost,
   player,
   populationCount,
 } from './helpers.js';
@@ -233,6 +232,7 @@ export function setupTaxation(s: GameState): void {
 function growthCaps(s: GameState, id: PlayerId): Record<string, number> {
   const caps: Record<string, number> = {};
   for (const [aid, a] of Object.entries(s.areas)) {
+    if (a.city) continue; // §20.1: tokens are never added to areas with cities
     const t = a.tokens[id] ?? 0;
     if (t > 0) caps[aid] = t >= 2 ? 2 : 1;
   }
@@ -416,22 +416,36 @@ function resolveTokenCombat(s: GameState, aid: string, limit: number): void {
     return (seatIdx.get(x) ?? 0) - (seatIdx.get(y) ?? 0);
   });
   const before = Object.fromEntries(order.map((o) => [o, a.tokens[o] ?? 0]));
+  const sum = (l: string[]) => l.reduce((t, o) => t + (a.tokens[o] ?? 0), 0);
+  const removalOrder = (l: string[]) => l.slice().sort((x, y) => {
+    const mx = hasMetal(s, x) ? 1 : 0, my = hasMetal(s, y) ? 1 : 0; // §24.24 Metalworking removes after
+    if (mx !== my) return mx - my;
+    const cx = a.tokens[x] ?? 0, cy = a.tokens[y] ?? 0; // §24.21 fewest removes first
+    if (cx !== cy) return cx - cy;
+    return (seatIdx.get(x) ?? 0) - (seatIdx.get(y) ?? 0);
+  });
   let guard = 0;
+  // §24.21-.24: combatants alternate removing one token at a time (fewest first,
+  // Metalworking last). Combatants tied on (Metalworking status, token count) remove
+  // SIMULTANEOUSLY (§24.22/.23) — we don't stop in the middle of a tied group — so a
+  // symmetric fight in a one-token area ends DEPOPULATED instead of leaving an
+  // arbitrary survivor; an asymmetric fight still eliminates the weaker side and the
+  // stronger keeps the difference.
   while (guard++ < 5000) {
     const l = live();
-    if (l.length < 2) break;
-    if (l.reduce((t, o) => t + (a.tokens[o] ?? 0), 0) <= limit) break;
-    let removed = false;
-    for (const o of order) {
-      if ((a.tokens[o] ?? 0) <= 0) continue;
-      const ln = live();
-      if (ln.length < 2) break;
-      if (ln.reduce((t, x) => t + (a.tokens[x] ?? 0), 0) <= limit) break;
-      setTokens(s, aid, o, (a.tokens[o] ?? 0) - 1);
-      returnLostToStock(s, o, 1);
-      removed = true;
+    if (l.length < 2 || sum(l) <= limit) break;
+    const ord = removalOrder(l);
+    let i = 0, stop = false;
+    while (i < ord.length && !stop) {
+      const metal = hasMetal(s, ord[i]!), cnt = a.tokens[ord[i]!] ?? 0;
+      let j = i; // the simultaneous group: consecutive combatants tied on (metal, count)
+      while (j < ord.length && hasMetal(s, ord[j]!) === metal && (a.tokens[ord[j]!] ?? 0) === cnt) j++;
+      for (let k = i; k < j; k++) { setTokens(s, aid, ord[k]!, (a.tokens[ord[k]!] ?? 0) - 1); returnLostToStock(s, ord[k]!, 1); }
+      i = j;
+      const lv = live();
+      if (lv.length < 2 || sum(lv) <= limit) stop = true;
     }
-    if (!removed) break;
+    if (stop) break;
   }
   const losses = order.map((o) => `${o} -${before[o]! - (a.tokens[o] ?? 0)}`).filter((x) => !x.endsWith('-0'));
   if (losses.length) s.log.push(`Conflict in ${areaName(aid)}: ${losses.join(', ')}.`);
@@ -1915,7 +1929,7 @@ export function normalize(s: GameState): void {
         s.turn += 1;
         s.censusOrder = s.activeOrder = censusOrder(s);
         s.actedThisPhase = [];
-        for (const id of s.seating) { player(s, id).convertedThisTurn = false; player(s, id).builtWithTreasuryThisTurn = false; player(s, id).grainLockedThisTurn = 0; player(s, id).citiesBuiltThisTurn = []; } // §32.941/.631/.312/.26.32 once-per-turn
+        for (const id of s.seating) { const q = player(s, id); q.convertedThisTurn = false; q.builtWithTreasuryThisTurn = false; q.grainLockedThisTurn = 0; q.citiesBuiltThisTurn = []; q.advancesThisTurn = []; } // §32.941/.631/.312/26.32/31.53 once-per-turn
       }
       enterPhase(s, np);
       continue;
@@ -2030,7 +2044,9 @@ function applyBuyAdvance(s: GameState, actor: PlayerId, advanceId: string, spend
   const spentHand: Record<string, number> = {};
   for (const [cid, n] of Object.entries(spendCommodities)) if (n > 0) spentHand[cid] = n;
   const cardValue = handValue(spentHand, { mining: has(p, 'mining') });
-  const credit = creditTowards(p.advances, advanceId);
+  // §31.53: credits from advances acquired THIS turn may not be used until next turn.
+  const creditEligible = p.advances.filter((a) => !(p.advancesThisTurn ?? []).includes(a));
+  const credit = creditTowards(creditEligible, advanceId);
   // Treasury is paid in single tokens, so you pay EXACTLY the remaining cost from
   // it — never overpay. (Commodity sets are indivisible, so card value may exceed
   // the cost; that excess is unavoidable, but treasury must not be wasted.)
@@ -2051,6 +2067,7 @@ function applyBuyAdvance(s: GameState, actor: PlayerId, advanceId: string, spend
   p.treasury -= spendTreasury;
   p.stock += spendTreasury;
   p.advances.push(advanceId);
+  (p.advancesThisTurn ??= []).push(advanceId); // §31.53: no credit from it until next turn
   s.log.push(`${actor} acquired ${adv.name} (paid ${paid} for ${adv.cost}).`);
 }
 
@@ -2515,13 +2532,15 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         // Only commodity cards are spendable currency (not calamity cards).
         const commHand: Record<string, number> = {};
         for (const [c, n] of Object.entries(p.hand)) if (!isCalamityCard(c) && n > 0) commHand[c] = n;
+        const creditEligible = p.advances.filter((a) => !(p.advancesThisTurn ?? []).includes(a)); // §31.53
         for (const adv of advanceById.values()) {
           if (has(p, adv.id)) continue;
           if ((adv.prerequisites ?? []).some((pre) => !has(p, pre))) continue;
-          const maxPay = handValue(commHand, { mining: has(p, 'mining') }) + p.treasury + creditTowards(p.advances, adv.id);
+          const credit = creditTowards(creditEligible, adv.id);
+          const maxPay = handValue(commHand, { mining: has(p, 'mining') }) + p.treasury + credit;
           if (maxPay >= adv.cost) {
             // Suggest a concrete payment: spend whole commodity hand + needed treasury.
-            out.push({ type: 'buyAdvance', advance: adv.id, spendCommodities: { ...commHand }, spendTreasury: Math.max(0, Math.min(p.treasury, netAdvanceCost(p.advances, adv.id) - handValue(commHand, { mining: has(p, 'mining') }))) });
+            out.push({ type: 'buyAdvance', advance: adv.id, spendCommodities: { ...commHand }, spendTreasury: Math.max(0, Math.min(p.treasury, adv.cost - credit - handValue(commHand, { mining: has(p, 'mining') }))) });
           }
         }
         break;

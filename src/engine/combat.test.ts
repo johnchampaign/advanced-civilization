@@ -55,6 +55,14 @@ describe('§24.2 token attrition', () => {
     expect(s.areas[sus2.id]!.tokens['babylon']).toBe(1);
   });
 
+  it('equal forces in a one-token area remove simultaneously and depopulate it (§24.22)', () => {
+    let s = scenario({ egypt: { [sus1.id]: 1 }, babylon: { [sus1.id]: 1 } }, {});
+    s = runConflict(s);
+    expect(s.areas[sus1.id]!.tokens['egypt'] ?? 0).toBe(0);
+    expect(s.areas[sus1.id]!.tokens['babylon'] ?? 0).toBe(0); // both go — no arbitrary survivor
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
+  });
+
   it('Metalworking removes last, so it wins an otherwise-even fight', () => {
     // Even 2v2 in a limit-1 area: without Metalworking the first remover (by seat)
     // loses; egypt with Metalworking forces babylon to remove first and survives.

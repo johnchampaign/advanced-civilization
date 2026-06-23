@@ -764,7 +764,9 @@ function startPrimary(s: GameState, calId: string, holder: PlayerId, before: Ret
   if (calId === 'treachery') return startTreachery(s, holder, before, overviewBefore); // §30.22: the trader picks the city
   if (calId === 'piracy') return startPiracy(s, holder, before, overviewBefore); // §30.91: trader/primary pick coastal cities
   if (calId === 'slaverevolt') return startSlaveRevolt(s, holder, before, overviewBefore); // §30.42: the victim picks which cities (§26.32)
-  applyCalamity(s, calId, holder, rng); // fully-auto calamities (Volcano, Barbarians)
+  if (calId === 'volcano') return startVolcano(s, holder, before, overviewBefore); // §30.21: primary breaks an exact site tie
+  if (calId === 'barbarianhordes') return startBarbarians(s, holder, before, overviewBefore, rng); // §30.52: chooser breaks march ties
+  s.log.push(`${holder} suffers ${calamityById.get(calId)?.name ?? calId} (effect not modeled).`);
   return false;
 }
 
@@ -1201,39 +1203,59 @@ function destroyAllInAreas(s: GameState, areaIds: readonly string[]): void {
   }
 }
 
-/** Volcanic Eruption / Earthquake (§30.21). A city in a volcano's area triggers
- *  an eruption that wipes every unit in that volcano's areas (§30.211). Otherwise
- *  it's an earthquake: one of the victim's cities is destroyed (Engineering merely
- *  reduces it, §30.213) and one adjacent enemy city is reduced (§30.212). */
-function applyVolcanoEarthquake(s: GameState, holder: PlayerId): void {
+/** §30.211 damage of a volcano group: only players' pieces count (neutral
+ *  Barbarian/Pirate pieces are not "damage"). */
+function volcanoDamage(s: GameState, g: readonly string[]): number {
+  return g.reduce((m, aid) => {
+    const a = s.areas[aid]; if (!a) return m;
+    let pts = 0;
+    for (const [o, n] of Object.entries(a.tokens)) if (isPlayer(s, o)) pts += n;
+    if (a.city && isPlayer(s, a.city)) pts += 5;
+    return m + pts;
+  }, 0);
+}
+
+/** An adjacent reducible enemy city of `holder`'s city in `aid` (§30.212 — an
+ *  Engineering holder can't be the secondary victim, §30.213). */
+function enemyCityNear(s: GameState, holder: PlayerId, aid: string): string | undefined {
+  return neighbors(aid).find((n) => { const c = s.areas[n]?.city; return !!c && c !== holder && isPlayer(s, c) && !has(player(s, c), 'engineering'); });
+}
+
+function resolveEruption(s: GameState, holder: PlayerId, group: readonly string[]): void {
+  destroyAllInAreas(s, group);
+  s.log.push(`${holder} suffers a Volcanic Eruption — all units in ${group.map(areaName).join(' & ')} are destroyed (§30.211).`);
+}
+
+function resolveEarthquake(s: GameState, holder: PlayerId, target: string): void {
   const eng = has(player(s, holder), 'engineering');
-  const erupting = VOLCANO_GROUPS.filter((g) => g.some((aid) => s.areas[aid]?.city === holder));
-  if (erupting.length) {
-    // §30.211: choose the site causing the greatest damage to the primary and
-    // secondary victims — count only players' pieces (neutral Barbarians/Pirates
-    // don't count toward "damage").
-    const damage = (g: readonly string[]) => g.reduce((m, aid) => {
-      const a = s.areas[aid]; if (!a) return m;
-      let pts = 0;
-      for (const [o, n] of Object.entries(a.tokens)) if (isPlayer(s, o)) pts += n;
-      if (a.city && isPlayer(s, a.city)) pts += 5;
-      return m + pts;
-    }, 0);
-    const g = erupting.slice().sort((x, y) => damage(y) - damage(x))[0]!;
-    destroyAllInAreas(s, g);
-    s.log.push(`${holder} suffers a Volcanic Eruption — all units in ${g.map(areaName).join(' & ')} are destroyed (§30.211).`);
-    return;
-  }
-  // Earthquake: destroy one of the holder's cities (prefer one with an adjacent
-  // enemy city to maximise the §30.212 secondary effect).
-  const myCities = Object.keys(s.areas).filter((aid) => s.areas[aid]!.city === holder);
-  if (myCities.length === 0) { s.log.push(`${holder} suffers an Earthquake but holds no city to damage.`); return; }
-  const enemyCityNear = (aid: string) => neighbors(aid).find((n) => { const c = s.areas[n]?.city; return !!c && c !== holder && isPlayer(s, c) && !has(player(s, c), 'engineering'); });
-  const target = myCities.find((aid) => enemyCityNear(aid)) ?? myCities[0]!;
   if (eng) { reduceSpecificCity(s, holder, target); s.log.push(`${holder} suffers an Earthquake — Engineering reduces the city in ${areaName(target)} (§30.213).`); }
   else { delete s.areas[target]!.city; player(s, holder).citiesAvailable += 1; s.log.push(`${holder} suffers an Earthquake — the city in ${areaName(target)} is destroyed (§30.212).`); }
-  const victimArea = enemyCityNear(target); // §30.213: an Engineering holder is never a secondary
+  const victimArea = enemyCityNear(s, holder, target);
   if (victimArea) { const o = s.areas[victimArea]!.city!; reduceSpecificCity(s, o, victimArea); s.log.push(`${o}'s city in ${areaName(victimArea)} is reduced by the Earthquake (§30.212).`); }
+}
+
+/** Volcanic Eruption / Earthquake (§30.21). Resolves the highest-damage site; on
+ *  an exact tie the primary victim chooses (§30.211/.212). Returns true if it
+ *  paused for that choice. */
+function startVolcano(s: GameState, holder: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string): boolean {
+  const erupting = VOLCANO_GROUPS.filter((g) => g.some((aid) => s.areas[aid]?.city === holder));
+  if (erupting.length) {
+    const best = Math.max(...erupting.map((g) => volcanoDamage(s, g)));
+    const tied = erupting.filter((g) => volcanoDamage(s, g) === best);
+    if (tied.length > 1) { s.pendingPick = { chooser: holder, stage: 'volcanoSite', victim: holder, count: 1, candidates: tied.map((g) => g[0]!), before, overviewBefore }; return true; }
+    resolveEruption(s, holder, tied[0]!);
+    return false;
+  }
+  // Earthquake: the destroyed city's damage is the §30.212 secondary (5 if it has
+  // an adjacent reducible enemy city, else 0). Greatest damage wins; tie → primary.
+  const myCities = Object.keys(s.areas).filter((aid) => s.areas[aid]!.city === holder);
+  if (myCities.length === 0) { s.log.push(`${holder} suffers an Earthquake but holds no city to damage.`); return false; }
+  const dmg = (aid: string) => (enemyCityNear(s, holder, aid) ? 5 : 0);
+  const best = Math.max(...myCities.map(dmg));
+  const tied = myCities.filter((aid) => dmg(aid) === best);
+  if (tied.length > 1) { s.pendingPick = { chooser: holder, stage: 'earthquakeSite', victim: holder, count: 1, candidates: tied, before, overviewBefore }; return true; }
+  resolveEarthquake(s, holder, tied[0]!);
+  return false;
 }
 
 /** The flood plain (§30.51) where the victim has the most unit points, or null. */
@@ -1273,25 +1295,6 @@ function startSlaveRevolt(s: GameState, holder: PlayerId, before: ReturnType<typ
   s.log.push(`${holder} suffers Slave Revolt: ${lock} tokens withheld from city support (§30.42).`);
   return reduceForSupport(s, holder, lock, { mode: 'slaverevolt', before, overviewBefore });
 }
-
-/** Civil Disorder (§30.71): all but three cities reduced; the count drops by one
- *  for each of Music / Drama / Law / Democracy (§30.712) and rises by one for each
- *  of Military / Roadbuilding (§30.713/.714), cumulative. */
-
-function applyCalamity(s: GameState, calId: string, holder: PlayerId, rng: Rng): void {
-  const cal = calamityById.get(calId);
-  if (!cal) return;
-  // City-reduction (Superstition/Civil Disorder/Iconoclasm) and unit-loss
-  // (Famine/Epidemic/Flood/Civil War) primaries are handled interactively in
-  // runCalamity (the victim chooses which to lose). Only the fully-auto calamities
-  // are applied here.
-  switch (calId) {
-    case 'volcano': return applyVolcanoEarthquake(s, holder);
-    case 'barbarianhordes': return applyBarbarians(s, holder, rng);
-    default: s.log.push(`${holder} suffers ${cal.name} (effect not modeled).`);
-  }
-}
-
 
 // ---- Calamity special cases ----------------------------------------------
 
@@ -1560,6 +1563,40 @@ function applyPick(s: GameState, pk: PendingPick, areas: string[]): void {
     finalizePick(s, 'flood', victim, before, overviewBefore);
     return;
   }
+  if (pk.stage === 'barbarian') {
+    const rng = Rng.fromState(s.rngState);
+    const chosen = areas[0]!;
+    const m = pk.march!;
+    const vis = new Set(m.visited);
+    s.pendingPick = undefined;
+    if (m.here === null) {
+      (s.areas[chosen] ??= { tokens: {} }).tokens[BARBARIAN] = (s.areas[chosen]!.tokens[BARBARIAN] ?? 0) + 15;
+      s.log.push(`Barbarian Hordes (15) descend on ${areaName(chosen)}.`);
+      resolveAreaCombat(s, chosen, rng);
+    } else {
+      const barbs = s.areas[m.here]!.tokens[BARBARIAN] ?? 0;
+      const limit = areaById.get(m.here)?.sustains ?? 0;
+      marchBarbarianStep(s, m.here, chosen, barbs - limit, limit, rng);
+    }
+    vis.add(chosen);
+    const paused = marchBarbarians(s, victim, chosen, vis, rng, before, overviewBefore);
+    s.rngState = rng.serialize();
+    if (paused) return; // another tie — pendingPick already set
+    s.log.push(`${victim} is ravaged by Barbarian Hordes.`);
+    finalizePick(s, 'barbarianhordes', victim, before, overviewBefore);
+    return;
+  }
+  if (pk.stage === 'volcanoSite') {
+    const group = VOLCANO_GROUPS.find((g) => g.includes(areas[0]!)) ?? [areas[0]!];
+    resolveEruption(s, victim, group);
+    finalizePick(s, 'volcano', victim, before, overviewBefore);
+    return;
+  }
+  if (pk.stage === 'earthquakeSite') {
+    resolveEarthquake(s, victim, areas[0]!);
+    finalizePick(s, 'volcano', victim, before, overviewBefore);
+    return;
+  }
   if (pk.stage === 'piracyPrimary') {
     for (const aid of areas) razeCityToPirate(s, aid);
     s.pendingPick = undefined;
@@ -1584,42 +1621,72 @@ function damageTo(s: GameState, aid: string, primary: PlayerId): number {
  *  over the area limit marches to the adjacent area that hurts the victim most,
  *  fighting each step, until no surplus remains. Survivors persist on the board
  *  (§30.5235). Razing a city by Barbarians yields no pillage/card (§24.53). */
-function applyBarbarians(s: GameState, primary: PlayerId, rng: Rng): void {
-  if (primary === 'crete') { s.log.push(`Crete is immune to Barbarian Hordes (§30.527).`); return; }
-  const civ = civById.get(primary);
-  const startAreas = (civ?.startAreas ?? []).filter((aid) => areaById.has(aid));
-  if (startAreas.length === 0) { s.log.push(`${primary} has no start area for Barbarians to land.`); return; }
-  // Land where they damage the victim most; else an empty start area (§30.5211).
-  const occupied = startAreas.filter((aid) => damageTo(s, aid, primary) > 0);
-  let here = (occupied.length ? occupied : startAreas)
-    .sort((x, y) => damageTo(s, y, primary) - damageTo(s, x, primary))[0]!;
-  (s.areas[here] ??= { tokens: {} }).tokens[BARBARIAN] = (s.areas[here]!.tokens[BARBARIAN] ?? 0) + 15;
-  s.log.push(`Barbarian Hordes (15) descend on ${areaName(here)}.`);
-  resolveAreaCombat(s, here, rng);
+/** §30.5251: who breaks a Barbarian movement tie — the player who traded the card,
+ *  else the player with the most units in stock. */
+function barbarianChooser(s: GameState, primary: PlayerId): PlayerId {
+  const t = s.calamityTradedFrom['barbarianhordes'];
+  if (t && isPlayer(s, t)) return t;
+  return [...s.seating].sort((a, b) => player(s, b).stock - player(s, a).stock)[0]!;
+}
 
-  const visited = new Set<string>([here]);
-  let guard = 0;
+/** Move the surplus Barbarians from `here` to `next` (the rest settle), then
+ *  resolve the resulting combat. */
+function marchBarbarianStep(s: GameState, here: string, next: string, surplus: number, limit: number, rng: Rng): void {
+  s.areas[here]!.tokens[BARBARIAN] = limit;
+  (s.areas[next] ??= { tokens: {} }).tokens[BARBARIAN] = (s.areas[next]!.tokens[BARBARIAN] ?? 0) + surplus;
+  s.log.push(`Barbarians march from ${areaName(here)} to ${areaName(next)} (${surplus}).`);
+  resolveAreaCombat(s, next, rng);
+}
+
+/** March surplus Barbarians toward the greatest damage to `primary` (§30.5231-.5241),
+ *  pausing for the §30.5251 chooser on an exact damage tie. Returns true if paused
+ *  (pendingPick set + RNG serialized); false when the horde has settled. */
+function marchBarbarians(s: GameState, primary: PlayerId, start: string, visited: Set<string>, rng: Rng, before: ReturnType<typeof snapAreas>, overviewBefore: string): boolean {
+  let here = start, guard = 0;
   while (guard++ < 30) {
-    const a = s.areas[here]!;
-    const barbs = a.tokens[BARBARIAN] ?? 0;
+    const barbs = s.areas[here]!.tokens[BARBARIAN] ?? 0;
     const limit = areaById.get(here)?.sustains ?? 0;
     const surplus = barbs - limit;
     if (surplus <= 0 || barbs <= 0) break;
-    // March the surplus to the adjacent area that damages the victim most
-    // (§30.5241 — prefer the victim's own areas), avoiding re-treading.
-    const dests = neighbors(here)
-      .filter((n) => !areaById.get(n)?.isWater && !visited.has(n))
-      .sort((x, y) => damageTo(s, y, primary) - damageTo(s, x, primary));
-    const next = dests[0];
-    if (next == null || damageTo(s, next, primary) === 0) break; // nowhere worth going
-    a.tokens[BARBARIAN] = limit; // the rest stay behind (settle)
-    (s.areas[next] ??= { tokens: {} }).tokens[BARBARIAN] = (s.areas[next]!.tokens[BARBARIAN] ?? 0) + surplus;
-    s.log.push(`Barbarians march from ${areaName(here)} to ${areaName(next)} (${surplus}).`);
-    here = next;
+    const dests = neighbors(here).filter((n) => !areaById.get(n)?.isWater && !visited.has(n));
+    if (dests.length === 0) break;
+    const best = Math.max(...dests.map((d) => damageTo(s, d, primary)));
+    if (best === 0) break; // §30.5241: nowhere worth going
+    const tied = dests.filter((d) => damageTo(s, d, primary) === best);
+    if (tied.length > 1) {
+      s.rngState = rng.serialize();
+      s.pendingPick = { chooser: barbarianChooser(s, primary), stage: 'barbarian', victim: primary, count: 1, candidates: tied, march: { here, visited: [...visited] }, before, overviewBefore };
+      return true;
+    }
+    marchBarbarianStep(s, here, tied[0]!, surplus, limit, rng);
+    here = tied[0]!;
     visited.add(here);
-    resolveAreaCombat(s, here, rng);
   }
+  return false;
+}
+
+/** Barbarian Hordes (§30.52): place 15 tokens in the start area causing the most
+ *  damage (§30.5211) and march them (§30.523), pausing for the §30.5251 chooser on
+ *  any exact tie. Returns true if it paused. */
+function startBarbarians(s: GameState, primary: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string, rng: Rng): boolean {
+  if (primary === 'crete') { s.log.push(`Crete is immune to Barbarian Hordes (§30.527).`); return false; }
+  const startAreas = (civById.get(primary)?.startAreas ?? []).filter((aid) => areaById.has(aid));
+  if (startAreas.length === 0) { s.log.push(`${primary} has no start area for Barbarians to land.`); return false; }
+  const occupied = startAreas.filter((aid) => damageTo(s, aid, primary) > 0);
+  const pool = occupied.length ? occupied : startAreas;
+  const best = Math.max(...pool.map((aid) => damageTo(s, aid, primary)));
+  const tied = pool.filter((aid) => damageTo(s, aid, primary) === best);
+  if (tied.length > 1) {
+    s.pendingPick = { chooser: barbarianChooser(s, primary), stage: 'barbarian', victim: primary, count: 1, candidates: tied, march: { here: null, visited: [] }, before, overviewBefore };
+    return true;
+  }
+  const landing = tied[0]!;
+  (s.areas[landing] ??= { tokens: {} }).tokens[BARBARIAN] = (s.areas[landing]!.tokens[BARBARIAN] ?? 0) + 15;
+  s.log.push(`Barbarian Hordes (15) descend on ${areaName(landing)}.`);
+  resolveAreaCombat(s, landing, rng);
+  if (marchBarbarians(s, primary, landing, new Set([landing]), rng, before, overviewBefore)) return true;
   s.log.push(`${primary} is ravaged by Barbarian Hordes.`);
+  return false;
 }
 
 /** Epidemic (§30.61): primary loses 16 (Medicine -8, Roadbuilding +5) and orders

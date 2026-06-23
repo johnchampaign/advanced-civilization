@@ -999,6 +999,9 @@ function PickControls({ state, legal, onApply }: { state: GameState; legal: Acti
   const ok = sel.length === need;
   const prompt = pk.stage === 'treachery' ? `Choose ${pk.chooser === pk.victim ? 'which of your cities is lost' : `which of ${nationName(pk.victim)}'s cities to seize`}`
     : pk.stage === 'floodCity' ? 'Choose which of your coastal cities the Flood takes'
+    : pk.stage === 'volcanoSite' ? 'Two volcanoes would do equal damage — choose which erupts (§30.211)'
+    : pk.stage === 'earthquakeSite' ? 'Choose which of your cities the earthquake destroys (§30.212)'
+    : pk.stage === 'barbarian' ? `Barbarians have an equal-damage choice — pick where they ${pk.march?.here == null ? 'land' : 'march'} (§30.5251)`
     : pk.stage === 'piracyPrimary' ? `Choose which of ${pk.chooser === pk.victim ? 'your' : nationName(pk.victim) + "'s"} coastal cities the pirates seize`
     : 'Choose other players’ coastal cities for the pirates (one each)';
   return (

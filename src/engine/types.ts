@@ -249,7 +249,10 @@ export interface PendingPick {
   /** The player making the selection (trader or primary victim). */
   chooser: PlayerId;
   /** What is being picked, to drive the effect + any chaining. */
-  stage: 'treachery' | 'floodCity' | 'piracyPrimary' | 'piracySecondary';
+  stage: 'treachery' | 'floodCity' | 'piracyPrimary' | 'piracySecondary' | 'volcanoSite' | 'earthquakeSite' | 'barbarian';
+  /** Barbarian-march context (§30.5251): `here` is the area to march FROM (null on
+   *  the initial placement choice); `visited` are areas already occupied. */
+  march?: { here: string | null; visited: string[] };
   /** The primary victim of the calamity (context / chaining). */
   victim: PlayerId;
   /** The player who traded the card to the victim, if any (§29.61). */

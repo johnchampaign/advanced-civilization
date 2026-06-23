@@ -531,6 +531,21 @@ describe('Flood & Volcano geography (§30.51 / §30.21)', () => {
     expect(populationCount(s, 'egypt')).toBe(0); // Vesuvius wipes campania + neapolis
   });
 
+  it('Volcano: an exact site-damage tie is broken by the primary victim (§30.211)', () => {
+    const safe = land.find((a) => !['campania', 'neapolis', 'milazzo', 'syracus', 'thera'].includes(a.id))!.id;
+    let s = scenario({
+      tokens: { egypt: { [safe]: 4 } }, // support for the surviving city
+      cities: { egypt: ['campania', 'milazzo'] }, // one city in each of two volcanoes ⇒ equal damage
+      hands: { egypt: { 'calamity:volcano': 1 } },
+    });
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    expect(s.pendingPick?.stage).toBe('volcanoSite');
+    expect(adapter.currentActor(s)).toBe('egypt'); // the primary chooses
+    s = adapter.applyAction(s, { type: 'pickAreas', areas: ['campania'] }, 'egypt'); // erupt Vesuvius
+    expect(s.areas['campania']?.city).toBeUndefined(); // erupted
+    expect(s.areas['milazzo']?.city).toBe('egypt'); // the other volcano spared
+  });
+
   it('volcano-site data matches the three §4.41 volcanoes (guards the engine grouping)', () => {
     const ids = areas.filter((a) => a.isVolcanoSite).map((a) => a.id).sort();
     expect(ids).toEqual(['campania', 'milazzo', 'neapolis', 'syracus', 'thera'].sort());
@@ -575,6 +590,23 @@ describe('§30.52 Barbarian Hordes', () => {
     });
     s = resolve(s);
     expect(populationCount(s, 'crete')).toBe(12); // untouched
+  });
+
+  it('an exact placement-damage tie is broken by the §30.5251 chooser', () => {
+    // egypt has equal token strength in two of its start areas ⇒ a tie.
+    let s = scenario({
+      tokens: { egypt: { thebes: 3, 'upper-egypt': 3 } },
+      hands: { egypt: { 'calamity:barbarianhordes': 1 } },
+    });
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    expect(s.pendingPick?.stage).toBe('barbarian');
+    expect(s.pendingPick?.march?.here).toBeNull(); // initial placement choice
+    expect(new Set(s.pendingPick?.candidates)).toEqual(new Set(['thebes', 'upper-egypt']));
+    // No trader ⇒ the player with the most stock chooses; babylon (nothing on board) leads.
+    expect(adapter.currentActor(s)).toBe('babylon');
+    s = adapter.applyAction(s, { type: 'pickAreas', areas: ['thebes'] }, 'babylon');
+    expect(populationCount(s, 'egypt')).toBeLessThan(6); // the horde landed and fought
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
   });
 });
 

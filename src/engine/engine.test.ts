@@ -422,12 +422,13 @@ describe('advance refinements (§32.261/.631/.251)', () => {
     blocked.areas[b] = { tokens: {}, city: 'babylon' };
     expect(() => adapter.applyAction(blocked, { type: 'move', moves: [{ from: a, to: c, count: 2, via: b }] }, 'egypt')).toThrow();
 
-    // §32.251: tokens that arrived by road may not then board a ship the same phase.
+    // §23.51/§32.251: tokens that arrived overland (incl. by road) may not then
+    // board a ship the same phase.
     const s = base();
     expect(() => adapter.applyAction(s, { type: 'move', moves: [
       { from: a, to: c, count: 2, via: b },
       { from: c, to: a, count: 1, byShip: true },
-    ] }, 'egypt')).toThrow(/road into .* board a ship/);
+    ] }, 'egypt')).toThrow(/board a ship/);
   });
 });
 

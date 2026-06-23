@@ -244,7 +244,7 @@ function growthCaps(s: GameState, id: PlayerId): Record<string, number> {
  *  limited stock where they choose (interactive), via `placeTokens`. */
 function setupPopulationExpansion(s: GameState): void {
   s.expansion = { remaining: {}, caps: {} };
-  for (const id of s.seating) {
+  for (const id of astOrder(s)) { // §20.3: population increases in A.S.T. order
     const p = player(s, id);
     const caps = growthCaps(s, id);
     const needed = Object.values(caps).reduce((a, b) => a + b, 0);
@@ -345,11 +345,34 @@ function runConflict(s: GameState): void {
   // player may temporarily over-stack an area to gather the tokens a city needs.
   const rng = Rng.fromState(s.rngState);
   const combats: CombatEvent[] = [];
+  const conflictAreas: string[] = [];
   for (const [aid, a] of Object.entries(s.areas)) {
     const owners = Object.keys(a.tokens).filter((o) => (a.tokens[o] ?? 0) > 0);
     const enemyAtCity = a.city != null && owners.some((o) => o !== a.city);
-    if (owners.length >= 2 || enemyAtCity) resolveAreaCombat(s, aid, rng, combats);
+    if (owners.length >= 2 || enemyAtCity) conflictAreas.push(aid);
   }
+  const before: Record<string, ReturnType<typeof forcesIn>> = {};
+  const modifiers: Record<string, string[]> = {};
+  const note: Record<string, string[]> = {};
+  for (const aid of conflictAreas) { before[aid] = forcesIn(s, aid); modifiers[aid] = combatModifiers(s, aid); note[aid] = []; }
+  // §24.41/§24.32: resolve ALL token-vs-token combat first. Eliminated tokens return
+  // to stock (§24.12), which a defender may then draw on to replace an attacked city
+  // with the maximum tokens — so city assaults are resolved only afterwards.
+  for (const aid of conflictAreas) {
+    const a = s.areas[aid]!;
+    if (Object.keys(a.tokens).filter((o) => (a.tokens[o] ?? 0) > 0).length >= 2) {
+      const limit = a.city ? 0 : (areaById.get(aid)?.sustains ?? 0);
+      const l0 = s.log.length; resolveTokenCombat(s, aid, limit); note[aid]!.push(...s.log.slice(l0));
+    }
+  }
+  for (const aid of conflictAreas) {
+    const a = s.areas[aid]!;
+    if (a.city) {
+      const attackers = Object.keys(a.tokens).filter((o) => o !== a.city && (a.tokens[o] ?? 0) > 0);
+      if (attackers.length === 1) { const l0 = s.log.length; resolveCityAssault(s, aid, attackers[0]!, rng); note[aid]!.push(...s.log.slice(l0)); }
+    }
+  }
+  for (const aid of conflictAreas) combats.push({ area: aid, before: before[aid]!, after: forcesIn(s, aid), modifiers: modifiers[aid]!, note: note[aid]!.join(' ') });
   s.lastCombats = combats; // surfaced for the step-through combat modal
   s.rngState = rng.serialize();
 }
@@ -1956,14 +1979,16 @@ export function normalize(s: GameState): void {
 function applyMovement(s: GameState, actor: PlayerId, moves: { from: string; to: string; count: number; via?: string; byShip?: boolean }[]): void {
   const p = player(s, actor);
   const road = has(p, 'roadbuilding');
-  // §32.251: tokens that arrived via a road move may not then board a ship this
-  // phase. Track the areas a road move deposited tokens into.
-  const roadDest = new Set<string>();
+  // §23.3/§23.51: a token may not move overland and then board a ship in the same
+  // phase. Track how many of an area's tokens arrived there overland this phase, so
+  // only the tokens that were already present (or arrived by ship) may embark.
+  const arrivedOverland: Record<string, number> = {};
   for (const m of moves) {
     const from = s.areas[m.from];
     if (!from || (from.tokens[actor] ?? 0) < m.count) throw new Error(`illegal move: not enough tokens in ${m.from}`);
     if (m.byShip) {
-      if (roadDest.has(m.from)) throw new Error(`illegal move: cannot road into ${m.from} then board a ship there (§32.251)`);
+      const embarkable = (from.tokens[actor] ?? 0) - (arrivedOverland[m.from] ?? 0);
+      if (m.count > embarkable) throw new Error(`tokens that moved overland into ${m.from} this phase may not then board a ship (§23.51)`);
       // Naval transport (§23.5): a ship at `from` carries up to 5 tokens to a
       // coastal `to` within range, then relocates there.
       if ((from.ships?.[actor] ?? 0) <= 0) throw new Error(`no ship in ${m.from} to embark`);
@@ -1990,7 +2015,7 @@ function applyMovement(s: GameState, actor: PlayerId, moves: { from: string; to:
     setTokens(s, m.from, actor, (from.tokens[actor] ?? 0) - m.count);
     const to = (s.areas[m.to] ??= { tokens: {} });
     to.tokens[actor] = (to.tokens[actor] ?? 0) + m.count;
-    if (!adjacent && roadReachable) roadDest.add(m.to); // §32.251: no ship from here after
+    arrivedOverland[m.to] = (arrivedOverland[m.to] ?? 0) + m.count; // §23.51: these can't then embark
   }
 }
 
@@ -2008,6 +2033,11 @@ function applyBuildCity(s: GameState, actor: PlayerId, area: string, useTreasury
   // at least half the tokens must be on-board (so treasury covers at most half).
   const architecture = has(p, 'architecture') && !p.builtWithTreasuryThisTurn;
   const treasuryUsed = architecture ? Math.min(useTreasury, Math.floor(required / 2), p.treasury) : 0;
+  // §32.631/§25.3: Architecture (treasury assist) may not build in an area holding
+  // another player's tokens or Barbarians.
+  if (treasuryUsed > 0 && Object.entries(a.tokens).some(([o, n]) => o !== actor && (n ?? 0) > 0)) {
+    throw new Error('Architecture cannot build a city where another player or Barbarians have tokens (§25.3)');
+  }
   if (onBoard + treasuryUsed < required) throw new Error(`build city: need ${required} tokens in ${area}`);
   // Consume tokens: prefer on-board, then treasury (architecture). All 6 tokens
   // that form the city return to stock — no piece is ever removed (§11.1); only

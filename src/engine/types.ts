@@ -220,6 +220,28 @@ export interface SecondaryLoss {
   areas?: string[];
 }
 
+/** A pending "this player selects which cities" decision, used where the rules
+ *  name a specific chooser: Treachery (§30.221, the trader picks the victim's
+ *  city), Flood with no flood-plain units (§30.514, the primary picks a coastal
+ *  city), and Piracy (§30.911 trader picks the primary's cities, §30.912 primary
+ *  picks the secondaries'). */
+export interface PendingPick {
+  /** The player making the selection (trader or primary victim). */
+  chooser: PlayerId;
+  /** What is being picked, to drive the effect + any chaining. */
+  stage: 'treachery' | 'floodCity' | 'piracyPrimary' | 'piracySecondary';
+  /** The primary victim of the calamity (context / chaining). */
+  victim: PlayerId;
+  /** The player who traded the card to the victim, if any (§29.61). */
+  trader?: PlayerId;
+  /** How many cities to pick (an upper bound; fewer if fewer are available). */
+  count: number;
+  /** The area ids the chooser may pick from. */
+  candidates: string[];
+  before: Record<string, { city?: PlayerId; tokens: Record<PlayerId, number> }>;
+  overviewBefore: string;
+}
+
 /** A queue of secondary-victim losses awaiting each victim's own which-units
  *  choice, after the primary victim has directed the amounts. */
 export interface PendingSecondary {
@@ -363,6 +385,8 @@ export interface GameState {
   /** A queue of secondary-victim losses (§30.311/.512/.611/.818) awaiting each
    *  victim's choice of which units/cities to surrender. */
   pendingSecondary?: PendingSecondary;
+  /** A pending city-selection by a named chooser (Treachery/Flood/Piracy). */
+  pendingPick?: PendingPick;
   /** The most recent conflict phase's combats, one per area, for a step-through
    *  modal. Overwritten each conflict phase; empty if none. */
   lastCombats?: CombatEvent[];
@@ -514,6 +538,12 @@ export interface CivilWarKeepAction {
   faction: 1 | 2;
 }
 
+/** A chooser selects cities for a Treachery/Flood/Piracy pending pick. */
+export interface PickAreasAction {
+  type: 'pickAreas';
+  areas: string[];
+}
+
 export interface ResolveCalamityAction {
   type: 'resolveCalamity';
   calamityId: string;
@@ -536,6 +566,7 @@ export type Action =
   | ChooseDiscardAction
   | CivilWarSelectAction
   | CivilWarKeepAction
+  | PickAreasAction
   | PlaceTokensAction
   | MoveAction
   | BuildShipsAction

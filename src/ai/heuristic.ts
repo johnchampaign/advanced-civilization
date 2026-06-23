@@ -58,6 +58,10 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
         if (cwSelect) return cwSelect;
         const cwKeep = actions.find((a) => a.type === 'civilWarKeep');
         if (cwKeep) return cwKeep;
+        // §30.221/.514/.91: city selections (Treachery/Flood/Piracy) — take the
+        // engine's suggested pick (self-loss = cheapest; adversarial = leaders).
+        const pick = actions.find((a) => a.type === 'pickAreas');
+        if (pick) return pick;
         // §29.64: directing secondary losses — take the engine's leader-targeting
         // suggestion (the strategic choice: hit the current front-runner).
         const alloc = actions.find((a) => a.type === 'allocateLoss');

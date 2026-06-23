@@ -794,6 +794,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
   if (phase === 'calamity' && state.pendingUnitLoss?.holder === actor) return <UnitLossControls state={state} legal={legal} onApply={onApply} />;
   if (phase === 'calamity' && state.pendingAllocation?.holder === actor) return <AllocationControls state={state} legal={legal} onApply={onApply} />;
   if (phase === 'calamity' && state.pendingCivilWar && (state.pendingCivilWar.stage === 'beneficiarySelect' ? state.pendingCivilWar.beneficiary : state.pendingCivilWar.victim) === actor) return <CivilWarControls key={state.pendingCivilWar.stage} state={state} legal={legal} onApply={onApply} />;
+  if (phase === 'calamity' && state.pendingPick?.chooser === actor) return <PickControls key={state.pendingPick.stage} state={state} legal={legal} onApply={onApply} />;
   if (phase === 'calamity') return <ConversionControls state={state} legal={legal} onApply={onApply} />;
   if (phase === 'acquireAdvances') return <AdvancePicker state={state} actor={actor} onApply={onApply} />;
   if (phase === 'trade') return <TradeControls state={state} actor={actor} onApply={onApply} />;
@@ -953,6 +954,47 @@ function CivilWarControls({ state, legal, onApply }: { state: GameState; legal: 
         <div style={{ display: 'flex', gap: 4 }}>
           {sugg && <button className="civ-btn" style={{ fontSize: 11 }} onClick={() => { setTok({ ...sugg.tokens }); setCities([...(sugg.cities ?? [])]); }}>Suggest</button>}
           <button className="civ-btn" disabled={!ok} onClick={() => onApply({ type: 'civilWarSelect', tokens: tok, cities })}>Confirm faction</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** §30.221/.514/.91: a named chooser (trader or primary victim) selects which
+ *  cities are affected by Treachery / Flood / Piracy. */
+function PickControls({ state, legal, onApply }: { state: GameState; legal: Action[]; onApply: (a: Action) => void }) {
+  const pk = state.pendingPick!;
+  const suggested = (legal.find((a) => a.type === 'pickAreas') as Extract<Action, { type: 'pickAreas' }> | undefined)?.areas ?? [];
+  const need = suggested.length;
+  const [sel, setSel] = useState<string[]>([]);
+  const ownerOf = (aid: string) => state.areas[aid]?.city as string | undefined;
+  const toggle = (aid: string) => setSel((s) => {
+    if (s.includes(aid)) return s.filter((x) => x !== aid);
+    if (s.length >= need) return s;
+    // §30.912: at most one city per owner for the Piracy secondary step.
+    if (pk.stage === 'piracySecondary' && s.some((x) => ownerOf(x) === ownerOf(aid))) return s;
+    return [...s, aid];
+  });
+  const ok = sel.length === need;
+  const prompt = pk.stage === 'treachery' ? `Choose ${pk.chooser === pk.victim ? 'which of your cities is lost' : `which of ${nationName(pk.victim)}'s cities to seize`}`
+    : pk.stage === 'floodCity' ? 'Choose which of your coastal cities the Flood takes'
+    : pk.stage === 'piracyPrimary' ? `Choose which of ${pk.chooser === pk.victim ? 'your' : nationName(pk.victim) + "'s"} coastal cities the pirates seize`
+    : 'Choose other players’ coastal cities for the pirates (one each)';
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span className="civ-lbl">⚓ {prompt} — pick <b>{need}</b>:</span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {pk.candidates.map((aid) => (
+          <button key={aid} className={`civ-btn ${sel.includes(aid) ? 'on' : ''}`} style={{ fontSize: 11, borderLeft: `5px solid ${nationColor(ownerOf(aid) ?? '')}` }} onClick={() => toggle(aid)}>
+            {sel.includes(aid) ? '✓ ' : ''}{areaById.get(aid)?.name ?? aid}{ownerOf(aid) && ownerOf(aid) !== pk.victim ? ` (${nationName(ownerOf(aid)!)})` : ''}
+          </button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <span className="civ-lbl" style={{ color: ok ? '#7caa6a' : '#caa05a' }}>{sel.length} / {need} chosen</span>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {suggested.length > 0 && <button className="civ-btn" style={{ fontSize: 11 }} onClick={() => setSel([...suggested])}>Suggest</button>}
+          <button className="civ-btn" disabled={!ok} onClick={() => onApply({ type: 'pickAreas', areas: sel })}>Confirm</button>
         </div>
       </div>
     </div>

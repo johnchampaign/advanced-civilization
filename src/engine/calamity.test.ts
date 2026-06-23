@@ -40,8 +40,8 @@ function resolve(s: GameState): GameState {
     const actor = adapter.currentActor(s);
     if (!actor) break;
     if (s.phase === 'trade') { s = adapter.applyAction(s, { type: 'pass' }, actor); continue; }
-    if (s.pendingCityChoice || s.pendingUnitLoss || s.pendingAllocation || s.pendingCivilWar) {
-      const kinds = ['chooseCities', 'chooseUnits', 'allocateLoss', 'civilWarSelect', 'civilWarKeep'];
+    if (s.pendingCityChoice || s.pendingUnitLoss || s.pendingAllocation || s.pendingCivilWar || s.pendingPick) {
+      const kinds = ['chooseCities', 'chooseUnits', 'allocateLoss', 'civilWarSelect', 'civilWarKeep', 'pickAreas'];
       const suggested = adapter.legalActions(s, actor).find((a) => kinds.includes(a.type));
       s = adapter.applyAction(s, suggested ?? { type: 'pass' }, actor); continue;
     }
@@ -133,6 +133,21 @@ describe('§30.22 Treachery', () => {
     });
     s = resolve(s);
     expect(s.areas[land[1]!.id]?.city).toBe('babylon'); // the city defected to the trader
+  });
+
+  it('the trader chooses WHICH of the victim’s cities defects (§30.221)', () => {
+    let s = scenario({
+      tokens: { egypt: { [land[0]!.id]: 2 }, babylon: { [land[3]!.id]: 2 } }, // support for each kept city
+      cities: { egypt: [land[1]!.id, land[2]!.id] },
+      hands: { egypt: { 'calamity:treachery': 1 } },
+      tradedFrom: { treachery: 'babylon' },
+    });
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    expect(s.pendingPick?.stage).toBe('treachery');
+    expect(adapter.currentActor(s)).toBe('babylon'); // the trader selects
+    s = adapter.applyAction(s, { type: 'pickAreas', areas: [land[2]!.id] }, 'babylon'); // picks the second city
+    expect(s.areas[land[2]!.id]?.city).toBe('babylon'); // the chosen city defected
+    expect(s.areas[land[1]!.id]?.city).toBe('egypt'); // the other stayed with egypt
   });
 
   it('a traded card whose trader has no spare city ELIMINATES the city, not reduces it (§30.221)', () => {
@@ -619,6 +634,33 @@ describe('§30.91 Piracy', () => {
     // Pirate cities now stand on those coasts.
     expect(s.areas[coastal[0]!.id]!.city).toBe('__pirate__');
     expect(s.areas[coastal[0]!.id]!.pirateCity).toBe(true);
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
+  });
+
+  it('the trader picks the victim’s cities, then the primary picks the secondaries’ (§30.911-912)', () => {
+    const c0 = coastal[0]!.id, c1 = coastal[1]!.id, c2 = coastal[2]!.id, c3 = coastal[3]!.id;
+    let s = scenario({
+      players: ['egypt', 'babylon', 'crete'],
+      cities: { egypt: [c0, c1], babylon: [c2], crete: [c3] },
+      tokens: { crete: { [land[7]!.id]: 2 } }, // crete keeps its (un-pirated) city supported
+      hands: { egypt: { 'calamity:piracy': 1 } },
+      tradedFrom: { piracy: 'crete' }, // crete traded it ⇒ exempt as a secondary (§30.912)
+    });
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    // §30.911: the trader (crete) selects the victim's two coastal cities.
+    expect(s.pendingPick?.stage).toBe('piracyPrimary');
+    expect(adapter.currentActor(s)).toBe('crete');
+    s = adapter.applyAction(s, { type: 'pickAreas', areas: [c0, c1] }, 'crete');
+    expect(s.areas[c0]?.pirateCity).toBe(true);
+    expect(s.areas[c1]?.pirateCity).toBe(true);
+    // §30.912: the primary (egypt) selects the secondary victims' cities — crete is
+    // exempt as the trader, so only babylon's coast is a candidate.
+    expect(s.pendingPick?.stage).toBe('piracySecondary');
+    expect(adapter.currentActor(s)).toBe('egypt');
+    expect(s.pendingPick?.candidates).toEqual([c2]);
+    s = adapter.applyAction(s, { type: 'pickAreas', areas: [c2] }, 'egypt');
+    expect(s.areas[c2]?.pirateCity).toBe(true);
+    expect(s.areas[c3]?.city).toBe('crete'); // the trader's coast is untouched
     expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
   });
 });

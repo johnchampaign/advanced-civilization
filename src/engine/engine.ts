@@ -53,6 +53,7 @@ import {
   type PendingAllocation,
   type PendingCityChoice,
   type PendingCivilWar,
+  type PendingPick,
   type PendingSecondary,
   type PendingUnitLoss,
   type Phase,
@@ -731,13 +732,14 @@ function startPrimary(s: GameState, calId: string, holder: PlayerId, before: Ret
       if (pts > 0) { s.pendingUnitLoss = { calamityId: 'flood', holder, points: pts, cityWorth: 5, mode: 'remove', areas: region, before, overviewBefore }; return true; }
       return false;
     }
-    applyFloodNoFloodplain(s, holder);
-    return false;
+    return startFloodCity(s, holder, before, overviewBefore); // §30.514: the victim picks a coastal city
   }
   if (calId === 'civilwar') {
     return startCivilWar(s, holder, before, overviewBefore); // §30.41 multi-step split (pauses if a war occurs)
   }
-  applyCalamity(s, calId, holder, rng); // fully-auto calamities
+  if (calId === 'treachery') return startTreachery(s, holder, before, overviewBefore); // §30.22: the trader picks the city
+  if (calId === 'piracy') return startPiracy(s, holder, before, overviewBefore); // §30.91: trader/primary pick coastal cities
+  applyCalamity(s, calId, holder, rng); // fully-auto calamities (Volcano, Slave Revolt, Barbarians)
   return false;
 }
 
@@ -1182,7 +1184,16 @@ function applyVolcanoEarthquake(s: GameState, holder: PlayerId): void {
   const eng = has(player(s, holder), 'engineering');
   const erupting = VOLCANO_GROUPS.filter((g) => g.some((aid) => s.areas[aid]?.city === holder));
   if (erupting.length) {
-    const damage = (g: readonly string[]) => g.reduce((m, aid) => { const a = s.areas[aid]; return m + (a ? Object.values(a.tokens).reduce((x, y) => x + y, 0) + (a.city ? 5 : 0) : 0); }, 0);
+    // §30.211: choose the site causing the greatest damage to the primary and
+    // secondary victims — count only players' pieces (neutral Barbarians/Pirates
+    // don't count toward "damage").
+    const damage = (g: readonly string[]) => g.reduce((m, aid) => {
+      const a = s.areas[aid]; if (!a) return m;
+      let pts = 0;
+      for (const [o, n] of Object.entries(a.tokens)) if (isPlayer(s, o)) pts += n;
+      if (a.city && isPlayer(s, a.city)) pts += 5;
+      return m + pts;
+    }, 0);
     const g = erupting.slice().sort((x, y) => damage(y) - damage(x))[0]!;
     destroyAllInAreas(s, g);
     s.log.push(`${holder} suffers a Volcanic Eruption — all units in ${g.map(areaName).join(' & ')} are destroyed (§30.211).`);
@@ -1223,19 +1234,6 @@ function floodAllocationSpec(s: GameState, holder: PlayerId, region: string[]): 
   return Object.keys(caps).length ? { calamityId: 'flood', holder, kind: 'unitPoints', pool: 10, caps, cityWorth: 5 } : null;
 }
 
-/** §30.514: a victim with no flood-plain units loses one coastal city (Engineering
- *  reduces it rather than eliminating, §30.515). */
-function applyFloodNoFloodplain(s: GameState, holder: PlayerId): void {
-  if (has(player(s, holder), 'engineering')) {
-    const before = cityCount(s, holder);
-    reduceCities(s, holder, 1, true);
-    s.log.push(cityCount(s, holder) < before ? `${holder}'s Flood reduces one coastal city (Engineering, §30.515).` : `${holder} is unaffected by Flood.`);
-  } else {
-    const did = eliminateOneCoastalCity(s, holder);
-    s.log.push(did ? `${holder} loses a coastal city to Flood (§30.514).` : `${holder} is unaffected by Flood (no units on a flood plain).`);
-  }
-}
-
 /** Slave Revolt (§30.42): 15 tokens can't support cities (Mining +5, Enlightenment
  *  −5, cancelling if both, §30.423); cities are reduced one at a time until the
  *  rest are supportable by the remaining (unlocked) tokens. */
@@ -1270,8 +1268,6 @@ function applyCalamity(s: GameState, calId: string, holder: PlayerId, rng: Rng):
     case 'volcano': return applyVolcanoEarthquake(s, holder);
     case 'slaverevolt': return applySlaveRevolt(s, holder);
     case 'barbarianhordes': return applyBarbarians(s, holder, rng);
-    case 'piracy': return applyPiracy(s, holder);
-    case 'treachery': return applyTreachery(s, holder);
     default: s.log.push(`${holder} suffers ${cal.name} (effect not modeled).`);
   }
 }
@@ -1440,6 +1436,144 @@ function validateCivilWarSelect(s: GameState, cw: PendingCivilWar, sel: UnitSet,
   for (const aid of sel.cities) if (!avail.cities.includes(aid)) throw new Error(`${areaName(aid)} is not an available city to select`);
   const pts = unitSetPoints(sel);
   if (pts < target || pts - target >= 5) throw new Error(`select ${target} unit points for this faction (§30.412)`);
+}
+
+// ---- Player-directed city picks (Treachery §30.22 / Flood §30.514 / Piracy §30.91)
+// The rules name a specific chooser for these city selections; we pause for that
+// player (human-prompted, else AI heuristic) rather than auto-picking.
+
+const citiesOf = (s: GameState, owner: PlayerId) => Object.keys(s.areas).filter((a) => s.areas[a]!.city === owner);
+const coastalCitiesOf = (s: GameState, owner: PlayerId) => citiesOf(s, owner).filter((a) => isCoastal2(a));
+
+/** Turn one specific city into a neutral pirate city (§30.91). */
+function razeCityToPirate(s: GameState, aid: string): void {
+  const a = s.areas[aid]; if (!a || !a.city || !isPlayer(s, a.city)) return;
+  player(s, a.city).citiesAvailable += 1;
+  delete a.city; a.city = PIRATE; a.pirateCity = true;
+  s.log.push(`The city in ${areaName(aid)} is taken by pirates (§30.91).`);
+}
+
+/** §30.22 Treachery: the trader (or the victim, if drawn) picks one of the
+ *  victim's cities. */
+function startTreachery(s: GameState, victim: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string): boolean {
+  const cities = citiesOf(s, victim);
+  if (!cities.length) { s.log.push(`${victim} suffers Treachery but holds no city.`); return false; }
+  const t = s.calamityTradedFrom['treachery'];
+  const trader = t && t !== victim && isPlayer(s, t) ? t : undefined;
+  s.pendingPick = { chooser: trader ?? victim, stage: 'treachery', victim, trader, count: 1, candidates: cities, before, overviewBefore };
+  return true;
+}
+
+/** §30.514 Flood with no flood-plain units: the primary picks a coastal city. */
+function startFloodCity(s: GameState, victim: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string): boolean {
+  const cities = coastalCitiesOf(s, victim);
+  if (!cities.length) { s.log.push(`${victim} is unaffected by Flood (no units on a flood plain).`); return false; }
+  s.pendingPick = { chooser: victim, stage: 'floodCity', victim, count: 1, candidates: cities, before, overviewBefore };
+  return true;
+}
+
+/** §30.911 Piracy: the trader (or victim, if drawn) picks the victim's coastal
+ *  cities; then the secondary step (§30.912). */
+function startPiracy(s: GameState, victim: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string): boolean {
+  const t = s.calamityTradedFrom['piracy'];
+  const trader = t && t !== victim && isPlayer(s, t) ? t : undefined;
+  const cities = coastalCitiesOf(s, victim);
+  if (cities.length) {
+    s.pendingPick = { chooser: trader ?? victim, stage: 'piracyPrimary', victim, trader, count: Math.min(2, cities.length), candidates: cities, before, overviewBefore };
+    return true;
+  }
+  return setupPiracySecondary(s, victim, trader, before, overviewBefore);
+}
+
+/** §30.912 Piracy: the primary victim picks up to two OTHER players' coastal
+ *  cities (≤1 each). Returns false (no pick) if none are available. */
+function setupPiracySecondary(s: GameState, victim: PlayerId, trader: PlayerId | undefined, before: ReturnType<typeof snapAreas>, overviewBefore: string): boolean {
+  const candidates: string[] = [];
+  for (const o of s.seating) { if (o === victim || o === trader) continue; candidates.push(...coastalCitiesOf(s, o)); }
+  if (!candidates.length) return false;
+  const owners = new Set(candidates.map((a) => s.areas[a]!.city));
+  s.pendingPick = { chooser: victim, stage: 'piracySecondary', victim, trader, count: Math.min(2, owners.size), candidates, before, overviewBefore };
+  return true;
+}
+
+/** How many cities the chooser must select for the current pick. */
+function requiredPickCount(s: GameState, pk: PendingPick): number {
+  if (pk.stage === 'piracySecondary') return Math.min(pk.count, new Set(pk.candidates.map((a) => s.areas[a]!.city)).size);
+  return Math.min(pk.count, pk.candidates.length);
+}
+
+/** Sensible default selection (AI & UI suggestion): a self-loss picks the cheapest
+ *  city (a city-site rebuilds for 6, not 12); an adversarial pick takes the most
+ *  damaging — non-site cities, and for the Piracy secondary the leaders' cities. */
+function suggestPick(s: GameState, pk: PendingPick): string[] {
+  const need = requiredPickCount(s, pk);
+  const selfLoss = pk.chooser === pk.victim && pk.stage !== 'piracySecondary';
+  if (pk.stage === 'piracySecondary') {
+    const byOwner = new Map<PlayerId, string[]>();
+    for (const a of pk.candidates) { const o = s.areas[a]!.city as PlayerId; (byOwner.get(o) ?? byOwner.set(o, []).get(o)!).push(a); }
+    const owners = [...byOwner.keys()].sort((x, y) => victoryScore(s, y) - victoryScore(s, x));
+    return owners.slice(0, need).map((o) => byOwner.get(o)![0]!);
+  }
+  const ranked = [...pk.candidates].sort((x, y) => {
+    const sx = areaById.get(x)?.isCitySite ? 0 : 1, sy = areaById.get(y)?.isCitySite ? 0 : 1;
+    return selfLoss ? sx - sy : sy - sx; // self: city-sites first (cheapest); adversarial: non-sites first
+  });
+  return ranked.slice(0, need);
+}
+
+function validatePick(s: GameState, pk: PendingPick, areas: string[]): void {
+  const need = requiredPickCount(s, pk);
+  if (areas.length !== need) throw new Error(`pick exactly ${need} cit${need === 1 ? 'y' : 'ies'} (§30)`);
+  for (const aid of areas) if (!pk.candidates.includes(aid)) throw new Error(`${areaName(aid)} is not a valid choice here`);
+  if (pk.stage === 'piracySecondary') {
+    const owners = areas.map((a) => s.areas[a]!.city);
+    if (new Set(owners).size !== owners.length) throw new Error('each secondary victim may lose only one city (§30.912)');
+  }
+}
+
+/** Finalize a calamity resolved via a pick: record the event and resume. */
+function finalizePick(s: GameState, calamityId: string, victim: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string): void {
+  s.pendingPick = undefined;
+  pushCalamityEvent(s, calamityId, victim, before, overviewBefore, true);
+  runCalamity(s);
+  if (!s.calamityActive) setupCalamityConversion(s);
+}
+
+/** Apply a validated city pick and chain/finalize the calamity. */
+function applyPick(s: GameState, pk: PendingPick, areas: string[]): void {
+  const { victim, trader, before, overviewBefore } = pk;
+  if (pk.stage === 'treachery') {
+    const aid = areas[0]!; const a = s.areas[aid]!;
+    delete a.city; player(s, victim).citiesAvailable += 1;
+    if (trader && player(s, trader).citiesAvailable > 0) {
+      a.city = trader; player(s, trader).citiesAvailable -= 1;
+      s.log.push(`${victim} suffers Treachery: the city in ${areaName(aid)} defects to ${trader} (§30.221).`);
+    } else if (trader) {
+      s.log.push(`${victim} suffers Treachery: the city in ${areaName(aid)} is destroyed — ${trader} had no city to install (§30.221).`);
+    } else {
+      const place = Math.min(areaLimitFor(s, aid, victim), player(s, victim).stock);
+      if (place > 0) { a.tokens[victim] = (a.tokens[victim] ?? 0) + place; player(s, victim).stock -= place; }
+      s.log.push(`${victim} suffers Treachery: the city in ${areaName(aid)} is reduced (§30.222).`);
+    }
+    finalizePick(s, 'treachery', victim, before, overviewBefore);
+    return;
+  }
+  if (pk.stage === 'floodCity') {
+    const aid = areas[0]!;
+    if (has(player(s, victim), 'engineering')) { reduceSpecificCity(s, victim, aid); s.log.push(`${victim}'s Flood reduces the coastal city in ${areaName(aid)} (Engineering, §30.515).`); }
+    else { delete s.areas[aid]!.city; player(s, victim).citiesAvailable += 1; s.log.push(`${victim} loses the coastal city in ${areaName(aid)} to Flood (§30.514).`); }
+    finalizePick(s, 'flood', victim, before, overviewBefore);
+    return;
+  }
+  if (pk.stage === 'piracyPrimary') {
+    for (const aid of areas) razeCityToPirate(s, aid);
+    s.pendingPick = undefined;
+    if (!setupPiracySecondary(s, victim, trader, before, overviewBefore)) finalizePick(s, 'piracy', victim, before, overviewBefore);
+    return;
+  }
+  // piracySecondary
+  for (const aid of areas) razeCityToPirate(s, aid);
+  finalizePick(s, 'piracy', victim, before, overviewBefore);
 }
 
 /** Damage a horde could inflict on `primary` by entering `aid` (§30.5231 — tokens
@@ -2038,6 +2172,8 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
     if (state.pendingAllocation) return state.pendingAllocation.holder;
     // A Civil War step is the victim's, except the beneficiary's selection (§30.4123).
     if (state.pendingCivilWar) return civilWarActor(state.pendingCivilWar);
+    // A Treachery/Flood/Piracy city pick is its named chooser's (§30.221/.514/.91).
+    if (state.pendingPick) return state.pendingPick.chooser;
     if (state.phase === 'trade') {
       const n = state.negotiation;
       if (tradePhaseEnded(state)) return null;
@@ -2240,6 +2376,15 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         resumeAfterChoice(s, 'civilwar', victim, before, overviewBefore);
         break;
       }
+      case 'pickAreas': {
+        const pk = s.pendingPick;
+        if (!pk) throw new Error('no city selection is pending');
+        if (actor !== pk.chooser) throw new Error(`it is not ${actor}'s city selection (§30)`);
+        const areas = [...new Set(action.areas)];
+        validatePick(s, pk, areas);
+        applyPick(s, pk, areas); // applies the effect, then chains or finalizes
+        break;
+      }
       case 'chooseDiscard': {
         const d = s.pendingDiscard;
         if (!d) throw new Error('no hand-limit discard is pending');
@@ -2377,6 +2522,10 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
           }
           const sel = suggestCivilWarSelect(state);
           return [{ type: 'civilWarSelect', tokens: sel.tokens, cities: sel.cities }];
+        }
+        // §30.221/.514/.91: a named chooser selects cities — offer the default pick.
+        if (state.pendingPick && state.pendingPick.chooser === actor) {
+          return [{ type: 'pickAreas', areas: suggestPick(state, state.pendingPick) }];
         }
         // §29/§32.941: a Monotheism holder may convert one adjacent enemy area.
         if (has(p, 'monotheism') && !p.convertedThisTurn) {

@@ -406,15 +406,27 @@ const EPOCH_COLOR: Record<string, string> = {
   stone: '#8a5bb0', earlyBronze: '#3aa0d8', lateBronze: '#46b35a', earlyIron: '#e8c84a', lateIron: '#e07a3a',
 };
 
+/** §33.21-.25: a plain-language summary of an epoch's entry requirements. */
+function epochRequirement(r: { cities?: number; cards?: number; cardGroups?: number; perSpaceCardValue?: boolean }): string {
+  const parts: string[] = [];
+  if (r.cities) parts.push(`${r.cities} cit${r.cities === 1 ? 'y' : 'ies'} in play`);
+  if (r.cards) parts.push(`${r.cards} advance cards`);
+  if (r.cardGroups) parts.push(r.cardGroups >= 5 ? 'a card from all 5 groups' : `cards from ${r.cardGroups} groups`);
+  if (r.perSpaceCardValue) parts.push('the card-value points shown on each space');
+  return parts.length ? parts.join(' · ') : 'no requirement (start)';
+}
+
 function AstView({ state }: { state: GameState }) {
   return (
     <div style={{ padding: 16, color: '#eee' }}>
       <h2 style={{ marginTop: 0 }}>Archaeological Succession Table</h2>
-      <div style={{ display: 'flex', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
+      <div className="civ-lbl" style={{ color: '#ffd23f', fontWeight: 800, marginBottom: 4 }}>To enter each age you must have (§33):</div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         {epochs.map((e) => (
-          <span key={e.id} style={{ fontSize: 12 }}>
-            <span style={{ display: 'inline-block', width: 12, height: 12, background: EPOCH_COLOR[e.id], marginRight: 4 }} />{e.name}
-          </span>
+          <div key={e.id} style={{ borderLeft: `5px solid ${EPOCH_COLOR[e.id]}`, background: 'rgba(0,0,0,0.22)', borderRadius: 4, padding: '5px 9px', minWidth: 120 }}>
+            <div style={{ fontWeight: 800, fontSize: 12 }}>{e.name}</div>
+            <div style={{ fontSize: 11, color: '#cdc4ad' }}>{epochRequirement(e.requirements)}</div>
+          </div>
         ))}
       </div>
       <table style={{ borderCollapse: 'collapse', fontSize: 11 }}>

@@ -908,7 +908,10 @@ function applyAllocation(s: GameState, a: PendingAllocation, allocation: Record<
     } else {
       let actual = amt;
       if (a.calamityId === 'epidemic') { if (has(player(s, v), 'medicine')) actual -= 5; if (has(player(s, v), 'roadbuilding')) actual += 5; }
-      const removed = removeUnitPoints(s, v, Math.max(0, actual), a.cityWorth);
+      // Flood (§30.512) confines the loss to the affected flood plain.
+      const removed = a.areas
+        ? removeUnitPointsInAreas(s, v, a.areas, Math.max(0, actual), a.cityWorth)
+        : removeUnitPoints(s, v, Math.max(0, actual), a.cityWorth);
       if (removed > 0) s.log.push(`${v} is a secondary victim of ${a.calamityId} (-${removed}, directed by ${a.holder}).`);
     }
   }
@@ -972,7 +975,8 @@ function applyChosenUnits(s: GameState, u: PendingUnitLoss, choice: { tokens: Re
     for (const [aid, n] of Object.entries(choice.tokens)) { if (n > 0) { setTokens(s, aid, u.holder, (s.areas[aid]!.tokens[u.holder] ?? 0) - n); player(s, u.holder).stock += n; } }
     for (const aid of choice.cities) reduceSpecificCity(s, u.holder, aid);
     s.log.push(`${u.holder} suffers ${calamityById.get(u.calamityId)?.name ?? u.calamityId} (-${u.points} unit point${u.points === 1 ? '' : 's'}).`);
-    if (u.calamityId === 'flood' && u.areas) floodSecondary(s, u.holder, u.areas);
+    // Flood's secondary loss (§30.512) is directed by the primary — set up as an
+    // interactive allocation in the chooseUnits handler, not applied here.
   } else {
     const ben = u.beneficiary!;
     for (const [aid, n] of Object.entries(choice.tokens)) {
@@ -1153,22 +1157,20 @@ function bestFloodRegion(s: GameState, holder: PlayerId): string[] | null {
   return best;
 }
 
-/** §30.512: after the primary's flood loss, order 10 unit points among rivals on
- *  the SAME flood plain (Engineering caps each at 7, §30.515; trader exempt). */
-function floodSecondary(s: GameState, holder: PlayerId, region: string[]): void {
+/** §30.512: the primary victim divides 10 unit points of secondary loss among
+ *  rivals on the SAME flood plain (each rival capped at its points there, or 7
+ *  with Engineering §30.515; the trader is exempt §29.61). Returns the directable
+ *  allocation, or null if no rival has units on the flood plain. */
+function floodAllocationSpec(s: GameState, holder: PlayerId, region: string[]): AllocationSpec | null {
   const trader = s.calamityTradedFrom['flood'];
-  let pool = 10;
-  const others = s.seating
-    .filter((o) => o !== holder && o !== trader && unitPointsInAreas(s, o, region) > 0)
-    .sort((x, y) => unitPointsInAreas(s, y, region) - unitPointsInAreas(s, x, region));
-  for (const v of others) {
-    if (pool <= 0) break;
-    const cap = has(player(s, v), 'engineering') ? 7 : pool;
-    const take = Math.min(pool, cap, unitPointsInAreas(s, v, region));
-    const r = removeUnitPointsInAreas(s, v, region, take);
-    pool -= take;
-    if (r > 0) s.log.push(`${v} is a secondary victim of Flood (-${r}).`);
+  const caps: Record<PlayerId, number> = {};
+  for (const v of s.seating) {
+    if (v === holder || v === trader) continue;
+    const onPlain = unitPointsInAreas(s, v, region);
+    if (onPlain <= 0) continue;
+    caps[v] = Math.min(onPlain, has(player(s, v), 'engineering') ? 7 : 10);
   }
+  return Object.keys(caps).length ? { calamityId: 'flood', holder, kind: 'unitPoints', pool: 10, caps, cityWorth: 5 } : null;
 }
 
 /** §30.514: a victim with no flood-plain units loses one coastal city (Engineering
@@ -1232,14 +1234,21 @@ function applyTreachery(s: GameState, holder: PlayerId): void {
   const aid = Object.keys(s.areas).find((a) => s.areas[a]!.city === holder);
   if (!aid) { s.log.push(`${holder} suffers Treachery but holds no city.`); return; }
   const a = s.areas[aid]!;
+  const traded = !!(trader && trader !== holder && isPlayer(s, trader));
   delete a.city; player(s, holder).citiesAvailable += 1;
-  if (trader && trader !== holder && isPlayer(s, trader) && player(s, trader).citiesAvailable > 0) {
-    a.city = trader; player(s, trader).citiesAvailable -= 1;
+  if (traded && player(s, trader!).citiesAvailable > 0) {
+    // §30.221: the city defects to the player who traded the card.
+    a.city = trader!; player(s, trader!).citiesAvailable -= 1;
     s.log.push(`${holder} suffers Treachery: the city in ${areaName(aid)} defects to ${trader} (§30.221).`);
+  } else if (traded) {
+    // §30.221: traded, but the beneficiary has no spare city — the city is
+    // ELIMINATED (removed from play, no tokens left in its place).
+    s.log.push(`${holder} suffers Treachery: the city in ${areaName(aid)} is destroyed — ${trader} had no city to install (§30.221).`);
   } else {
+    // §30.222: drawn and not traded — the city is merely REDUCED to tokens.
     const place = Math.min(areaLimitFor(s, aid, holder), player(s, holder).stock);
     if (place > 0) { a.tokens[holder] = (a.tokens[holder] ?? 0) + place; player(s, holder).stock -= place; }
-    s.log.push(`${holder} suffers Treachery: lost the city in ${areaName(aid)} (§30.222).`);
+    s.log.push(`${holder} suffers Treachery: the city in ${areaName(aid)} is reduced (§30.222).`);
   }
 }
 
@@ -2114,8 +2123,15 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         if (actor !== u.holder) throw new Error('only the affected player chooses which units to give up (§29.63)');
         validateUnits(s, u, action);
         applyChosenUnits(s, u, action);
+        const { calamityId, holder, before, overviewBefore, areas } = u;
         s.pendingUnitLoss = undefined;
-        resumeAfterChoice(s, u.calamityId, u.holder, u.before, u.overviewBefore);
+        // §30.512: after the primary's Flood loss, the primary directs 10 points of
+        // secondary loss on the same flood plain — pause for that allocation.
+        if (calamityId === 'flood' && areas) {
+          const spec = floodAllocationSpec(s, holder, areas);
+          if (spec) { s.pendingAllocation = { ...spec, areas, before, overviewBefore }; break; }
+        }
+        resumeAfterChoice(s, calamityId, holder, before, overviewBefore);
         break;
       }
       case 'civilWarSelect': {

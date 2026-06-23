@@ -151,6 +151,9 @@ export interface PendingAllocation {
   caps: Record<PlayerId, number>;
   /** Unit-point value of a city for this calamity (Epidemic 4, else 5). */
   cityWorth: number;
+  /** If set, losses are confined to these areas (Flood §30.512 — the same flood
+   *  plain the primary victim was hit on). */
+  areas?: string[];
   /** Board snapshot at the calamity's start, to diff into the event after the
    *  allocation is applied (resume context). */
   before: Record<string, { city?: PlayerId; tokens: Record<PlayerId, number> }>;

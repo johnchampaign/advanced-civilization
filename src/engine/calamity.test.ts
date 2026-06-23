@@ -123,6 +123,43 @@ describe('§30.41 Civil War', () => {
   });
 });
 
+describe('§30.22 Treachery', () => {
+  it('a traded card hands one of the victim’s cities to the trader (§30.221)', () => {
+    let s = scenario({
+      tokens: { babylon: { [land[2]!.id]: 2 } }, // babylon can support the annexed city (§26.3)
+      cities: { egypt: [land[1]!.id] },
+      hands: { egypt: { 'calamity:treachery': 1 } },
+      tradedFrom: { treachery: 'babylon' },
+    });
+    s = resolve(s);
+    expect(s.areas[land[1]!.id]?.city).toBe('babylon'); // the city defected to the trader
+  });
+
+  it('a traded card whose trader has no spare city ELIMINATES the city, not reduces it (§30.221)', () => {
+    let s = scenario({
+      tokens: { egypt: { [land[0]!.id]: 2 } },
+      cities: { egypt: [land[1]!.id] },
+      hands: { egypt: { 'calamity:treachery': 1 } },
+      tradedFrom: { treachery: 'babylon' },
+    });
+    s.players['babylon']!.citiesAvailable = 0; // babylon cannot install a city
+    s = resolve(s);
+    expect(s.areas[land[1]!.id]?.city).toBeUndefined(); // city destroyed
+    expect(s.areas[land[1]!.id]?.tokens['egypt'] ?? 0).toBe(0); // NOT reduced to tokens
+    expect(s.areas[land[1]!.id]?.tokens['babylon'] ?? 0).toBe(0); // babylon gained nothing
+  });
+
+  it('a drawn (untraded) card merely reduces the city to tokens (§30.222)', () => {
+    let s = scenario({
+      cities: { egypt: [land[1]!.id] },
+      hands: { egypt: { 'calamity:treachery': 1 } },
+    });
+    s = resolve(s);
+    expect(s.areas[land[1]!.id]?.city).toBeUndefined();
+    expect(s.areas[land[1]!.id]?.tokens['egypt'] ?? 0).toBeGreaterThan(0); // reduced, not eliminated
+  });
+});
+
 describe('advance modifiers on calamities (§30/§32)', () => {
   const cityAreas = [land[1]!.id, land[2]!.id, land[3]!.id, land[4]!.id, land[5]!.id, land[6]!.id];
 
@@ -363,6 +400,30 @@ describe('Flood & Volcano geography (§30.51 / §30.21)', () => {
   it('Flood removes up to 17 unit points from the flood plain, 7 with Engineering (§30.511/.515)', () => {
     expect(floodPop([])).toBe(3); // 20 − 17
     expect(floodPop(['engineering'])).toBe(13); // 20 − 7
+  });
+
+  it('Flood: the primary directs 10 points of secondary loss on the same flood plain (§30.512)', () => {
+    const tokens: Record<string, number> = {};
+    for (const aid of nile.slice(0, 4)) tokens[aid] = 4; // egypt: 16 pts on the Nile
+    let s = scenario({
+      tokens: { egypt: tokens, babylon: { [nile[4]!]: 12 } }, // babylon: 12 pts on the same plain
+      hands: { egypt: { 'calamity:flood': 1 } },
+    });
+    s = resolve(s); // egypt sheds 16; then directs the 10-point secondary loss onto babylon
+    expect(populationCount(s, 'egypt')).toBe(0); // lost its 16 (capped at 17)
+    expect(populationCount(s, 'babylon')).toBe(2); // directed to lose 10 of its 12 on the plain
+  });
+
+  it('Flood: a secondary victim with Engineering loses at most 7 on the flood plain (§30.515)', () => {
+    const tokens: Record<string, number> = {};
+    for (const aid of nile.slice(0, 4)) tokens[aid] = 4;
+    let s = scenario({
+      tokens: { egypt: tokens, babylon: { [nile[4]!]: 12 } },
+      hands: { egypt: { 'calamity:flood': 1 } },
+    });
+    s.players['babylon']!.advances = ['engineering'];
+    s = resolve(s);
+    expect(populationCount(s, 'babylon')).toBe(5); // capped at 7 → 12 − 7
   });
 
   it('Flood with no flood-plain units eliminates a coastal city (§30.514)', () => {

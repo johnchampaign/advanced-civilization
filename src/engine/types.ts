@@ -204,6 +204,29 @@ export interface UnitSet {
   cities: string[];
 }
 
+/** One secondary victim's directed loss, resolved by that victim choosing which
+ *  of their own units/cities to give up (§30.311/.512/.611/.818). */
+export interface SecondaryLoss {
+  victim: PlayerId;
+  kind: 'unitPoints' | 'cities';
+  /** Unit points (or whole cities) the primary directed this victim to lose. */
+  amount: number;
+  cityWorth: number;
+  /** Flood (§30.512): confined to the affected flood plain. */
+  areas?: string[];
+}
+
+/** A queue of secondary-victim losses awaiting each victim's own which-units
+ *  choice, after the primary victim has directed the amounts. */
+export interface PendingSecondary {
+  calamityId: string;
+  /** The primary victim who directed the losses (the event is attributed here). */
+  primary: PlayerId;
+  queue: SecondaryLoss[];
+  before: Record<string, { city?: PlayerId; tokens: Record<PlayerId, number> }>;
+  overviewBefore: string;
+}
+
 /** §30.41 Civil War — a multi-step split resolved interactively:
  *   1. `victimSelect`  — the victim picks 15 (+Music/Drama/Democracy) unit points
  *      for the first faction (§30.4121-4122); skipped if the victim holds
@@ -333,6 +356,9 @@ export interface GameState {
   /** Set while a Civil War (§30.41) is being resolved through its interactive
    *  faction-selection and keep steps. */
   pendingCivilWar?: PendingCivilWar;
+  /** A queue of secondary-victim losses (§30.311/.512/.611/.818) awaiting each
+   *  victim's choice of which units/cities to surrender. */
+  pendingSecondary?: PendingSecondary;
   /** The most recent conflict phase's combats, one per area, for a step-through
    *  modal. Overwritten each conflict phase; empty if none. */
   lastCombats?: CombatEvent[];

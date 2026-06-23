@@ -273,8 +273,32 @@ describe('interactive secondary-victim allocation (§29.64)', () => {
     expect(() => adapter.applyAction(s, { type: 'allocateLoss', allocation: { babylon: 10 } }, 'egypt')).toThrow(); // must direct the full 20
     s = adapter.applyAction(s, { type: 'allocateLoss', allocation: { babylon: 10, crete: 10 } }, 'egypt'); // egypt's chosen split
     expect(s.pendingAllocation).toBeUndefined();
+    // §30.611: each secondary victim now chooses which of their own units to lose.
+    expect(adapter.currentActor(s)).toBe('babylon');
+    while (s.pendingUnitLoss) {
+      const v = adapter.currentActor(s)!;
+      s = adapter.applyAction(s, adapter.legalActions(s, v).find((a) => a.type === 'chooseUnits')!, v);
+    }
     expect(populationCount(s, 'babylon')).toBe(20);
     expect(populationCount(s, 'crete')).toBe(20);
+  });
+
+  it('a secondary victim chooses which of their OWN units to lose (§30.311)', () => {
+    let s = scenario({
+      players: ['egypt', 'babylon'],
+      tokens: { egypt: { [land[0]!.id]: 20 }, babylon: { [land[1]!.id]: 5, [land[2]!.id]: 5 } },
+      hands: { egypt: { 'calamity:famine': 1 } },
+    });
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    while (s.pendingUnitLoss) s = adapter.applyAction(s, adapter.legalActions(s, 'egypt').find((a) => a.type === 'chooseUnits')!, 'egypt'); // egypt's own loss
+    s = adapter.applyAction(s, { type: 'allocateLoss', allocation: { babylon: 8 } }, 'egypt'); // egypt directs 8 (the §30.311 cap)
+    // §30.311: babylon — not egypt — decides which of its units go.
+    expect(adapter.currentActor(s)).toBe('babylon');
+    expect(s.pendingUnitLoss?.points).toBe(8);
+    s = adapter.applyAction(s, { type: 'chooseUnits', tokens: { [land[1]!.id]: 5, [land[2]!.id]: 3 }, cities: [] }, 'babylon');
+    expect(s.areas[land[1]!.id]?.tokens['babylon'] ?? 0).toBe(0); // babylon's chosen split is honoured
+    expect(s.areas[land[2]!.id]?.tokens['babylon']).toBe(2);
+    expect(s.pendingSecondary).toBeUndefined(); // queue drained; calamity finalized
   });
 
   it('the engine suggests directing losses at the leader first (§29.64)', () => {

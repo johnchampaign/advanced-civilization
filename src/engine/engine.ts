@@ -53,9 +53,11 @@ import {
   type PendingAllocation,
   type PendingCityChoice,
   type PendingCivilWar,
+  type PendingSecondary,
   type PendingUnitLoss,
   type Phase,
   type PlayerId,
+  type SecondaryLoss,
   type UnitSet,
 } from './types.js';
 
@@ -897,24 +899,48 @@ function validateAllocation(a: PendingAllocation, allocation: Record<PlayerId, n
   if (sum !== maxAllocatable(a)) throw new Error(`must direct ${maxAllocatable(a)} (got ${sum}) — §29.64`);
 }
 
-/** Apply a chosen secondary allocation: each rival loses the ordered amount
- *  (Epidemic adjusts per-victim for Medicine/Roadbuilding). */
-function applyAllocation(s: GameState, a: PendingAllocation, allocation: Record<PlayerId, number>): void {
+/** Turn a primary's directed allocation into a queue of per-victim losses. The
+ *  Epidemic per-victim Medicine/Roadbuilding adjustment (§30.613-.614) is folded
+ *  into each amount here. Each victim then chooses their OWN units (§30.311/.512/
+ *  .611/.818) — they are not auto-removed. */
+function secondaryLossesFromAllocation(s: GameState, a: PendingAllocation, allocation: Record<PlayerId, number>): SecondaryLoss[] {
+  const out: SecondaryLoss[] = [];
   for (const [v, amt] of Object.entries(allocation)) {
     if (amt <= 0) continue;
     if (a.kind === 'cities') {
-      reduceCities(s, v, amt, false);
-      s.log.push(`${v} loses ${amt} city(ies) to ${a.calamityId} (directed by ${a.holder}).`);
+      out.push({ victim: v, kind: 'cities', amount: amt, cityWorth: a.cityWorth });
     } else {
       let actual = amt;
       if (a.calamityId === 'epidemic') { if (has(player(s, v), 'medicine')) actual -= 5; if (has(player(s, v), 'roadbuilding')) actual += 5; }
-      // Flood (§30.512) confines the loss to the affected flood plain.
-      const removed = a.areas
-        ? removeUnitPointsInAreas(s, v, a.areas, Math.max(0, actual), a.cityWorth)
-        : removeUnitPoints(s, v, Math.max(0, actual), a.cityWorth);
-      if (removed > 0) s.log.push(`${v} is a secondary victim of ${a.calamityId} (-${removed}, directed by ${a.holder}).`);
+      out.push({ victim: v, kind: 'unitPoints', amount: Math.max(0, actual), cityWorth: a.cityWorth, areas: a.areas });
     }
   }
+  return out;
+}
+
+/** Drive the secondary-victim queue: pause for the next victim's own which-units
+ *  choice (§30.311/.512/.611/.818), skipping any with nothing to lose. When the
+ *  queue is empty, finalize the calamity event and resume the calamity phase. */
+function startNextSecondary(s: GameState): void {
+  const ps = s.pendingSecondary!;
+  while (ps.queue.length) {
+    const head = ps.queue[0]!;
+    if (head.kind === 'cities') {
+      const n = Math.min(head.amount, cityCount(s, head.victim));
+      if (n > 0) { s.pendingCityChoice = { calamityId: ps.calamityId, holder: head.victim, count: n, before: ps.before, overviewBefore: ps.overviewBefore }; return; }
+    } else {
+      const avail = head.areas ? unitPointsInAreas(s, head.victim, head.areas) : boardUnitPoints(s, head.victim);
+      const points = Math.min(head.amount, avail);
+      if (points > 0) { s.pendingUnitLoss = { calamityId: ps.calamityId, holder: head.victim, points, cityWorth: head.cityWorth, mode: 'remove', areas: head.areas, before: ps.before, overviewBefore: ps.overviewBefore }; return; }
+    }
+    ps.queue.shift(); // this victim has nothing to lose — skip
+  }
+  // All secondary victims resolved — finalize and resume.
+  const { calamityId, primary, before, overviewBefore } = ps;
+  s.pendingSecondary = undefined;
+  pushCalamityEvent(s, calamityId, primary, before, overviewBefore, true);
+  runCalamity(s);
+  if (!s.calamityActive) setupCalamityConversion(s);
 }
 
 const grainCards = (p: { hand: Record<string, number> }) => p.hand['grain'] ?? 0;
@@ -2097,11 +2123,11 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         if (!a) throw new Error('no secondary-victim allocation is pending');
         if (actor !== a.holder) throw new Error('only the primary victim directs these losses (§29.64)');
         validateAllocation(a, action.allocation);
-        applyAllocation(s, a, action.allocation);
-        pushCalamityEvent(s, a.calamityId, a.holder, a.before, a.overviewBefore, true); // interactive: the holder directed it
+        // §30.311/.512/.611/.818: the primary directed the amounts; each secondary
+        // victim now chooses which of their own units/cities to surrender.
+        s.pendingSecondary = { calamityId: a.calamityId, primary: a.holder, queue: secondaryLossesFromAllocation(s, a, action.allocation), before: a.before, overviewBefore: a.overviewBefore };
         s.pendingAllocation = undefined;
-        runCalamity(s); // resume the rest of the calamity phase
-        if (!s.calamityActive) setupCalamityConversion(s);
+        startNextSecondary(s); // pause for the first secondary victim's choice (or finalize)
         break;
       }
       case 'chooseCities': {
@@ -2114,7 +2140,13 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         reduceChosenCities(s, actor, areas);
         s.log.push(`${actor} reduces ${areas.map(areaName).join(', ')} (${calamityById.get(c.calamityId)?.name ?? c.calamityId}).`);
         s.pendingCityChoice = undefined;
-        resumeAfterChoice(s, c.calamityId, c.holder, c.before, c.overviewBefore);
+        // A secondary victim (Iconoclasm §30.818) just chose — advance the queue.
+        if (s.pendingSecondary && s.pendingSecondary.queue[0]?.victim === actor) {
+          s.pendingSecondary.queue.shift();
+          startNextSecondary(s);
+        } else {
+          resumeAfterChoice(s, c.calamityId, c.holder, c.before, c.overviewBefore);
+        }
         break;
       }
       case 'chooseUnits': {
@@ -2125,6 +2157,13 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         applyChosenUnits(s, u, action);
         const { calamityId, holder, before, overviewBefore, areas } = u;
         s.pendingUnitLoss = undefined;
+        // A secondary victim (Famine/Epidemic/Flood §30.311/.611/.512) just chose
+        // which of their own units to lose — advance the queue.
+        if (s.pendingSecondary && s.pendingSecondary.queue[0]?.victim === holder) {
+          s.pendingSecondary.queue.shift();
+          startNextSecondary(s);
+          break;
+        }
         // §30.512: after the primary's Flood loss, the primary directs 10 points of
         // secondary loss on the same flood plain — pause for that allocation.
         if (calamityId === 'flood' && areas) {

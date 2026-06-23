@@ -793,6 +793,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
   if (phase === 'calamity' && state.pendingCityChoice?.holder === actor) return <CityChoiceControls state={state} legal={legal} onApply={onApply} />;
   if (phase === 'calamity' && state.pendingUnitLoss?.holder === actor) return <UnitLossControls state={state} legal={legal} onApply={onApply} />;
   if (phase === 'calamity' && state.pendingAllocation?.holder === actor) return <AllocationControls state={state} legal={legal} onApply={onApply} />;
+  if (phase === 'calamity' && state.pendingCivilWar && (state.pendingCivilWar.stage === 'beneficiarySelect' ? state.pendingCivilWar.beneficiary : state.pendingCivilWar.victim) === actor) return <CivilWarControls key={state.pendingCivilWar.stage} state={state} legal={legal} onApply={onApply} />;
   if (phase === 'calamity') return <ConversionControls state={state} legal={legal} onApply={onApply} />;
   if (phase === 'acquireAdvances') return <AdvancePicker state={state} actor={actor} onApply={onApply} />;
   if (phase === 'trade') return <TradeControls state={state} actor={actor} onApply={onApply} />;
@@ -874,6 +875,84 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
         <div style={{ display: 'flex', gap: 4 }}>
           {sugg && <button className="civ-btn" style={{ fontSize: 11 }} onClick={suggest}>Suggest</button>}
           <button className="civ-btn" disabled={!ok} onClick={submit}>{keepMode ? 'Keep this faction' : 'Lose these'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** §30.41 Civil War: the multi-step split. Two selection steps (the victim picks
+ *  its share of the first faction, then the beneficiary seizes more of the
+ *  victim's units), then the victim chooses which faction to keep. */
+function CivilWarControls({ state, legal, onApply }: { state: GameState; legal: Action[]; onApply: (a: Action) => void }) {
+  const cw = state.pendingCivilWar!;
+  const factionDesc = (f: { tokens: Record<string, number>; cities: string[] }) => {
+    const toks = Object.values(f.tokens).reduce((t, n) => t + n, 0);
+    const parts: string[] = [];
+    if (toks) parts.push(`${toks} token${toks === 1 ? '' : 's'}`);
+    if (f.cities.length) parts.push(`${f.cities.length} cit${f.cities.length === 1 ? 'y' : 'ies'} (${f.cities.map((a) => areaById.get(a)?.name ?? a).join(', ')})`);
+    return parts.join(' + ') || 'nothing';
+  };
+  const fpts = (f: { tokens: Record<string, number>; cities: string[] }) => Object.values(f.tokens).reduce((t, n) => t + n, 0) + f.cities.length * 5;
+  // Hooks must run unconditionally — declared before the victimKeep early return
+  // (unused there). Selection state for the two faction-selection steps.
+  const [tok, setTok] = useState<Record<string, number>>({});
+  const [cities, setCities] = useState<string[]>([]);
+
+  // ---- Final step: choose which faction to keep (§30.415) ----
+  if (cw.stage === 'victimKeep') {
+    const f1 = fpts(cw.faction1), f2 = fpts(cw.faction2!);
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span className="civ-lbl">Your nation has split in two (§30.415). Choose which faction to <b>keep playing</b>; <b style={{ color: nationColor(cw.beneficiary) }}>{nationName(cw.beneficiary)}</b> annexes the other:</span>
+        <button className="civ-btn" onClick={() => onApply({ type: 'civilWarKeep', faction: 1 })}>Keep the first faction — <b>{f1} pts</b> ({factionDesc(cw.faction1)})</button>
+        <button className="civ-btn" onClick={() => onApply({ type: 'civilWarKeep', faction: 2 })}>Keep the second faction — <b>{f2} pts</b> ({factionDesc(cw.faction2!)})</button>
+      </div>
+    );
+  }
+
+  // ---- Selection step: pick units totalling the step's target ----
+  const victimSelect = cw.stage === 'victimSelect';
+  const target = victimSelect ? cw.victimPoints : cw.beneficiaryPoints;
+  // The victim's units still available to select (beneficiary can't re-pick the victim's own share).
+  const tokensAvail: Record<string, number> = {}; const citiesAvail: string[] = [];
+  for (const [aid, a] of Object.entries(state.areas)) { if ((a.tokens[cw.victim] ?? 0) > 0) tokensAvail[aid] = a.tokens[cw.victim]!; if (a.city === cw.victim) citiesAvail.push(aid); }
+  if (!victimSelect) {
+    for (const [aid, n] of Object.entries(cw.faction1.tokens)) { tokensAvail[aid] = (tokensAvail[aid] ?? 0) - n; if (tokensAvail[aid]! <= 0) delete tokensAvail[aid]; }
+    const taken = new Set(cw.faction1.cities);
+    for (let i = citiesAvail.length - 1; i >= 0; i--) if (taken.has(citiesAvail[i]!)) citiesAvail.splice(i, 1);
+  }
+  const inv = Object.keys(tokensAvail).map((aid) => ({ aid, tokens: tokensAvail[aid]!, city: false }))
+    .concat(citiesAvail.map((aid) => ({ aid, tokens: 0, city: true })));
+  const total = Object.values(tok).reduce((t, n) => t + n, 0) + cities.length * 5;
+  const ok = total >= target && total - target < 5;
+  const setT = (aid: string, max: number, d: number) => setTok((s) => ({ ...s, [aid]: Math.max(0, Math.min(max, (s[aid] ?? 0) + d)) }));
+  const sugg = legal.find((x) => x.type === 'civilWarSelect') as Extract<Action, { type: 'civilWarSelect' }> | undefined;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span className="civ-lbl">⚔ Civil War (§30.41){victimSelect ? '' : ` — you are ${nationName(cw.beneficiary)}, the beneficiary`}</span>
+      <span className="civ-lbl">{victimSelect
+        ? <>Select <b>{target}</b> unit points of your own to form the first faction (§30.4121). Keep your weakest here — you'll choose which faction to keep at the end.</>
+        : <>Seize <b>{target}</b> of <b style={{ color: nationColor(cw.victim) }}>{nationName(cw.victim)}</b>'s units to complete the first faction (§30.4123) — take their strongest.</>}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: '30vh', overflowY: 'auto' }}>
+        {inv.map((x) => (
+          <div key={x.aid + (x.city ? ':c' : '')} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 110, color: nationColor(cw.victim) }}>{areaById.get(x.aid)?.name ?? x.aid}</span>
+            {!x.city && <>
+              <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setT(x.aid, x.tokens, -1)}>−</button>
+              <b style={{ width: 36, textAlign: 'center' }}>{tok[x.aid] ?? 0}/{x.tokens}</b>
+              <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setT(x.aid, x.tokens, +1)}>+</button>
+              <span className="civ-lbl" style={{ color: '#9a8d6a' }}>tokens</span>
+            </>}
+            {x.city && <button className={`civ-btn ${cities.includes(x.aid) ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => setCities((c) => c.includes(x.aid) ? c.filter((y) => y !== x.aid) : [...c, x.aid])}>{cities.includes(x.aid) ? '✓ ' : ''}city (5)</button>}
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <span className="civ-lbl" style={{ color: ok ? '#7caa6a' : '#caa05a' }}>{total} / {target} points</span>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {sugg && <button className="civ-btn" style={{ fontSize: 11 }} onClick={() => { setTok({ ...sugg.tokens }); setCities([...(sugg.cities ?? [])]); }}>Suggest</button>}
+          <button className="civ-btn" disabled={!ok} onClick={() => onApply({ type: 'civilWarSelect', tokens: tok, cities })}>Confirm faction</button>
         </div>
       </div>
     </div>

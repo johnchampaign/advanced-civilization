@@ -52,6 +52,12 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
         // §29.63: choosing which units to lose/cede — take the cheapest-first default.
         const unitChoice = actions.find((a) => a.type === 'chooseUnits');
         if (unitChoice) return unitChoice;
+        // §30.41 Civil War: faction selection (victim offers cheapest / beneficiary
+        // grabs strongest) and which faction to keep — take the engine's suggestion.
+        const cwSelect = actions.find((a) => a.type === 'civilWarSelect');
+        if (cwSelect) return cwSelect;
+        const cwKeep = actions.find((a) => a.type === 'civilWarKeep');
+        if (cwKeep) return cwKeep;
         // §29.64: directing secondary losses — take the engine's leader-targeting
         // suggestion (the strategic choice: hit the current front-runner).
         const alloc = actions.find((a) => a.type === 'allocateLoss');

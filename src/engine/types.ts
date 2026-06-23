@@ -194,6 +194,40 @@ export interface PendingDiscard {
   count: number;
 }
 
+/** A set of a player's board units (tokens per area + whole cities), used to
+ *  describe a Civil War faction (§30.412). */
+export interface UnitSet {
+  tokens: Record<string, number>;
+  cities: string[];
+}
+
+/** §30.41 Civil War — a multi-step split resolved interactively:
+ *   1. `victimSelect`  — the victim picks 15 (+Music/Drama/Democracy) unit points
+ *      for the first faction (§30.4121-4122); skipped if the victim holds
+ *      Philosophy (§30.4124).
+ *   2. `beneficiarySelect` — the beneficiary picks an additional 20 of the
+ *      victim's units to complete the first faction (§30.4123); 15 under
+ *      Philosophy and it forms the entire first faction.
+ *   3. `victimKeep` — after Military removal (§30.414), the victim chooses which
+ *      faction to keep; the beneficiary annexes the other (§30.415). */
+export interface PendingCivilWar {
+  victim: PlayerId;
+  beneficiary: PlayerId;
+  stage: 'victimSelect' | 'beneficiarySelect' | 'victimKeep';
+  /** Unit points the victim selects for the first faction (0 under Philosophy). */
+  victimPoints: number;
+  /** Unit points the beneficiary adds to complete the first faction. */
+  beneficiaryPoints: number;
+  philosophy: boolean;
+  military: boolean;
+  /** The first faction, accumulated across the two selection steps. */
+  faction1: UnitSet;
+  /** The second faction (everything else), fixed once the first is complete. */
+  faction2?: UnitSet;
+  before: Record<string, { city?: PlayerId; tokens: Record<PlayerId, number> }>;
+  overviewBefore: string;
+}
+
 /** A force present in an area, for the combat step-through display. */
 export interface CombatForce { id: PlayerId; tokens: number; city: boolean }
 
@@ -293,6 +327,9 @@ export interface GameState {
   /** Set when a player over the 8-card hand limit must choose which surplus
    *  commodity cards to discard (§31.71); resolved by a `chooseDiscard` action. */
   pendingDiscard?: PendingDiscard;
+  /** Set while a Civil War (§30.41) is being resolved through its interactive
+   *  faction-selection and keep steps. */
+  pendingCivilWar?: PendingCivilWar;
   /** The most recent conflict phase's combats, one per area, for a step-through
    *  modal. Overwritten each conflict phase; empty if none. */
   lastCombats?: CombatEvent[];
@@ -428,6 +465,22 @@ export interface ChooseDiscardAction {
   cards: string[];
 }
 
+/** §30.4121-4123: select units (tokens per area + whole cities) of the victim's
+ *  nation to add to the Civil War's first faction. Used for both the victim's
+ *  and the beneficiary's selection step. */
+export interface CivilWarSelectAction {
+  type: 'civilWarSelect';
+  tokens: Record<string, number>;
+  cities: string[];
+}
+
+/** §30.415: the victim decides which faction (1 = first, 2 = second) to keep
+ *  playing; the beneficiary annexes the other. */
+export interface CivilWarKeepAction {
+  type: 'civilWarKeep';
+  faction: 1 | 2;
+}
+
 export interface ResolveCalamityAction {
   type: 'resolveCalamity';
   calamityId: string;
@@ -448,6 +501,8 @@ export type Action =
   | ChooseCitiesAction
   | ChooseUnitsAction
   | ChooseDiscardAction
+  | CivilWarSelectAction
+  | CivilWarKeepAction
   | PlaceTokensAction
   | MoveAction
   | BuildShipsAction

@@ -52,9 +52,11 @@ import {
   type GameState,
   type PendingAllocation,
   type PendingCityChoice,
+  type PendingCivilWar,
   type PendingUnitLoss,
   type Phase,
   type PlayerId,
+  type UnitSet,
 } from './types.js';
 
 const AUTO_PHASES: Set<Phase> = new Set([
@@ -724,9 +726,7 @@ function startPrimary(s: GameState, calId: string, holder: PlayerId, before: Ret
     return false;
   }
   if (calId === 'civilwar') {
-    const war = computeCivilWar(s, holder);
-    if (war) { s.pendingUnitLoss = { calamityId: 'civilwar', holder, points: war.loss, cityWorth: 5, mode: 'cede', beneficiary: war.beneficiary, before, overviewBefore }; return true; }
-    return false;
+    return startCivilWar(s, holder, before, overviewBefore); // §30.41 multi-step split (pauses if a war occurs)
   }
   applyCalamity(s, calId, holder, rng); // fully-auto calamities
   return false;
@@ -1253,33 +1253,134 @@ function boardUnitPoints(s: GameState, id: PlayerId): number {
 }
 
 
-/** Civil War (§30.41): the primary victim's nation splits; the first faction
- *  defects to the player with the most reserve unit points (stock token = 1,
- *  unplaced city = 5). No war if the victim holds the most reserves (§30.411) or
- *  the nation is too small to leave a second faction (§30.413). Faction size is
- *  15 + Music/Drama (5 each) + Democracy (10) + the beneficiary's 20, or 15 if
- *  the victim holds Philosophy (§30.4121-4124). Military removes 5 from each
- *  faction (§30.414). */
-/** Compute a Civil War (§30.41): who the defecting faction goes to and how many
- *  unit points the primary must cede. Returns null (and logs) if it fizzles
- *  (§30.411) or the nation is too small to split (§30.413). The primary KEEPS a
- *  first faction of 15 (+5 Music, +5 Drama, +10 Democracy), so those advances
- *  shrink the loss; Philosophy fixes the ceded faction at 15 (§30.4124). */
-function computeCivilWar(s: GameState, primary: PlayerId): { beneficiary: PlayerId; loss: number } | null {
-  const pp = player(s, primary);
-  const reserves = (id: PlayerId) => player(s, id).stock + 5 * player(s, id).citiesAvailable;
+// ---- Civil War (§30.41) --------------------------------------------------
+// The victim's nation splits into two factions. The FIRST faction is selected
+// jointly: the victim picks 15 (+Music/Drama/Democracy) unit points (§30.4121-2),
+// then the beneficiary adds 20 of the victim's units (§30.4123) — or, under
+// Philosophy, the beneficiary alone picks the whole 15-point first faction
+// (§30.4124). The rest is the second faction (§30.413). Military removes 5 from
+// each (§30.414). Finally the victim chooses which faction to keep; the
+// beneficiary annexes the other, overflowing to the next player with the most
+// stock if it runs out of pieces (§30.415).
+
+const cwReserves = (s: GameState, id: PlayerId) => player(s, id).stock + 5 * player(s, id).citiesAvailable;
+
+/** §30.411: the beneficiary is the rival with the most unit points in stock
+ *  (token = 1, unplaced city = 5). Returns null if the victim holds the most
+ *  (no Civil War). */
+function civilWarBeneficiary(s: GameState, victim: PlayerId): PlayerId | null {
   let beneficiary: PlayerId | null = null, best = -1;
-  for (const o of s.seating) { if (o === primary) continue; const v = reserves(o); if (v > best) { best = v; beneficiary = o; } }
-  if (beneficiary == null || reserves(primary) >= best) {
-    s.log.push(`${primary}'s Civil War fizzles — it holds the most reserves (§30.411).`);
-    return null;
+  for (const o of s.seating) { if (o === victim) continue; const v = cwReserves(s, o); if (v > best) { best = v; beneficiary = o; } }
+  if (beneficiary == null || cwReserves(s, victim) >= best) return null;
+  return beneficiary;
+}
+
+const unitSetPoints = (set: UnitSet) => Object.values(set.tokens).reduce((t, n) => t + n, 0) + set.cities.length * 5;
+
+/** Pick ~`points` unit points from `inv`. `valuable` grabs cities first (the
+ *  beneficiary wants the victim's best); otherwise tokens first (cheapest). */
+function pickUnits(inv: UnitSet, points: number, valuable: boolean): UnitSet {
+  const tokens: Record<string, number> = {}; const cities: string[] = []; let got = 0;
+  const takeCities = () => { for (const aid of inv.cities) { if (got >= points) break; cities.push(aid); got += 5; } };
+  const takeTokens = () => { for (const aid of Object.keys(inv.tokens)) { let n = inv.tokens[aid]!; while (n > 0 && got < points) { tokens[aid] = (tokens[aid] ?? 0) + 1; n--; got++; } } };
+  if (valuable) { takeCities(); takeTokens(); } else { takeTokens(); takeCities(); }
+  return { tokens, cities };
+}
+
+/** The victim's board units NOT already in `set`. */
+function subtractSet(inv: UnitSet, set: UnitSet): UnitSet {
+  const tokens: Record<string, number> = {};
+  for (const [aid, n] of Object.entries(inv.tokens)) { const rem = n - (set.tokens[aid] ?? 0); if (rem > 0) tokens[aid] = rem; }
+  const taken = new Set(set.cities);
+  return { tokens, cities: inv.cities.filter((aid) => !taken.has(aid)) };
+}
+
+/** §30.414: Military removes `points` unit points from a faction (cheapest-first:
+ *  tokens before cities), returning the victim's pieces to stock and shrinking
+ *  the faction set accordingly. */
+function militaryReduceFaction(s: GameState, victim: PlayerId, set: UnitSet, points: number): void {
+  let need = points;
+  for (const aid of Object.keys(set.tokens)) {
+    while (need > 0 && (set.tokens[aid] ?? 0) > 0) {
+      setTokens(s, aid, victim, (s.areas[aid]!.tokens[victim] ?? 0) - 1);
+      player(s, victim).stock += 1; set.tokens[aid]! -= 1; need -= 1;
+      if (set.tokens[aid] === 0) delete set.tokens[aid];
+    }
   }
-  const board = boardUnitPoints(s, primary);
+  while (need > 0 && set.cities.length) {
+    const aid = set.cities.shift()!;
+    if (s.areas[aid]?.city === victim) { delete s.areas[aid]!.city; player(s, victim).citiesAvailable += 1; }
+    need -= 5;
+  }
+}
+
+/** §30.415: the beneficiary replaces the victim's units in `set` with its own,
+ *  overflowing to the next player with the most stock if it runs out. */
+function annexFaction(s: GameState, victim: PlayerId, beneficiary: PlayerId, set: UnitSet): void {
+  const takerForToken = () => [beneficiary, ...s.seating.filter((o) => o !== victim && o !== beneficiary).sort((a, b) => player(s, b).stock - player(s, a).stock)].find((o) => player(s, o).stock > 0) ?? null;
+  const takerForCity = () => [beneficiary, ...s.seating.filter((o) => o !== victim && o !== beneficiary).sort((a, b) => player(s, b).citiesAvailable - player(s, a).citiesAvailable)].find((o) => player(s, o).citiesAvailable > 0) ?? null;
+  for (const [aid, n] of Object.entries(set.tokens)) {
+    for (let i = 0; i < n; i++) {
+      setTokens(s, aid, victim, (s.areas[aid]!.tokens[victim] ?? 0) - 1); player(s, victim).stock += 1;
+      const taker = takerForToken();
+      if (taker) { s.areas[aid]!.tokens[taker] = (s.areas[aid]!.tokens[taker] ?? 0) + 1; player(s, taker).stock -= 1; }
+    }
+  }
+  for (const aid of set.cities) {
+    if (s.areas[aid]?.city !== victim) continue;
+    delete s.areas[aid]!.city; player(s, victim).citiesAvailable += 1;
+    const taker = takerForCity();
+    if (taker) { s.areas[aid]!.city = taker; player(s, taker).citiesAvailable -= 1; }
+  }
+}
+
+/** Begin a Civil War (§30.41): determine the beneficiary and faction sizes, then
+ *  pause for the first selection step. Returns true if it paused, false if it
+ *  fizzles (victim richest in stock §30.411, or no second faction §30.413). */
+function startCivilWar(s: GameState, victim: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string): boolean {
+  const beneficiary = civilWarBeneficiary(s, victim);
+  if (beneficiary == null) { s.log.push(`${victim}'s Civil War fizzles — it holds the most reserves (§30.411).`); return false; }
+  const pp = player(s, victim);
   const philosophy = has(pp, 'philosophy');
-  const firstFaction = philosophy ? 15 : Math.min(board, 15 + (has(pp, 'music') ? 5 : 0) + (has(pp, 'drama') ? 5 : 0) + (has(pp, 'democracy') ? 10 : 0));
-  const loss = philosophy ? Math.min(15, board) : board - firstFaction;
-  if (loss <= 0) { s.log.push(`${primary}'s Civil War: nation too small to split — no effect (§30.413).`); return null; }
-  return { beneficiary, loss };
+  const victimPoints = philosophy ? 0 : 15 + (has(pp, 'music') ? 5 : 0) + (has(pp, 'drama') ? 5 : 0) + (has(pp, 'democracy') ? 10 : 0);
+  const beneficiaryPoints = philosophy ? 15 : 20;
+  const board = boardUnitPoints(s, victim);
+  // §30.413: the first faction can't be the whole nation — there must be a second.
+  if (board <= victimPoints + beneficiaryPoints) { s.log.push(`${victim}'s Civil War: nation too small to leave a second faction — no effect (§30.413).`); return false; }
+  s.pendingCivilWar = {
+    victim, beneficiary, stage: philosophy ? 'beneficiarySelect' : 'victimSelect',
+    victimPoints, beneficiaryPoints, philosophy, military: has(pp, 'military'),
+    faction1: { tokens: {}, cities: [] }, before, overviewBefore,
+  };
+  return true;
+}
+
+/** The default/suggested selection for the current Civil War step. */
+function suggestCivilWarSelect(s: GameState): UnitSet {
+  const cw = s.pendingCivilWar!;
+  if (cw.stage === 'victimSelect') return pickUnits(unitInventory(s, cw.victim), cw.victimPoints, false); // victim offers cheapest
+  // beneficiarySelect: grab the victim's best from what the victim hasn't already put up.
+  const remaining = subtractSet(unitInventory(s, cw.victim), cw.faction1);
+  return pickUnits(remaining, cw.beneficiaryPoints, true);
+}
+
+/** The actor whose decision the Civil War is waiting on. */
+function civilWarActor(cw: PendingCivilWar): PlayerId {
+  return cw.stage === 'beneficiarySelect' ? cw.beneficiary : cw.victim;
+}
+
+/** Validate a Civil War faction selection: only the victim's available units, and
+ *  totalling the step's target (a city's worth of overshoot allowed when a token
+ *  selection can't land exactly). */
+function validateCivilWarSelect(s: GameState, cw: PendingCivilWar, sel: UnitSet, target: number): void {
+  const avail = cw.stage === 'victimSelect' ? unitInventory(s, cw.victim) : subtractSet(unitInventory(s, cw.victim), cw.faction1);
+  for (const [aid, n] of Object.entries(sel.tokens)) {
+    if (n < 0) throw new Error('negative token count');
+    if (n > (avail.tokens[aid] ?? 0)) throw new Error(`${cw.victim} has no such units to select in ${areaName(aid)}`);
+  }
+  for (const aid of sel.cities) if (!avail.cities.includes(aid)) throw new Error(`${areaName(aid)} is not an available city to select`);
+  const pts = unitSetPoints(sel);
+  if (pts < target || pts - target >= 5) throw new Error(`select ${target} unit points for this faction (§30.412)`);
 }
 
 /** Damage a horde could inflict on `primary` by entering `aid` (§30.5231 — tokens
@@ -1874,6 +1975,8 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
     if (state.pendingCityChoice) return state.pendingCityChoice.holder;
     if (state.pendingUnitLoss) return state.pendingUnitLoss.holder;
     if (state.pendingAllocation) return state.pendingAllocation.holder;
+    // A Civil War step is the victim's, except the beneficiary's selection (§30.4123).
+    if (state.pendingCivilWar) return civilWarActor(state.pendingCivilWar);
     if (state.phase === 'trade') {
       const n = state.negotiation;
       if (tradePhaseEnded(state)) return null;
@@ -2015,6 +2118,47 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         resumeAfterChoice(s, u.calamityId, u.holder, u.before, u.overviewBefore);
         break;
       }
+      case 'civilWarSelect': {
+        const cw = s.pendingCivilWar;
+        if (!cw) throw new Error('no Civil War is pending');
+        if (cw.stage === 'victimKeep') throw new Error('the Civil War factions are already selected');
+        if (actor !== civilWarActor(cw)) throw new Error(`it is not ${actor}'s Civil War selection`);
+        const target = cw.stage === 'victimSelect' ? cw.victimPoints : cw.beneficiaryPoints;
+        const sel: UnitSet = { tokens: { ...action.tokens }, cities: [...new Set(action.cities)] };
+        validateCivilWarSelect(s, cw, sel, target);
+        if (cw.stage === 'victimSelect') {
+          cw.faction1 = sel;
+          cw.stage = 'beneficiarySelect';
+          s.log.push(`${cw.victim} chooses ${unitSetPoints(sel)} unit points for the first Civil War faction (§30.4121).`);
+        } else {
+          for (const [aid, n] of Object.entries(sel.tokens)) cw.faction1.tokens[aid] = (cw.faction1.tokens[aid] ?? 0) + n;
+          cw.faction1.cities.push(...sel.cities);
+          cw.faction2 = subtractSet(unitInventory(s, cw.victim), cw.faction1);
+          s.log.push(`${cw.beneficiary} adds ${unitSetPoints(sel)} of ${cw.victim}'s units to the first faction (§30.4123).`);
+          if (cw.military) {
+            militaryReduceFaction(s, cw.victim, cw.faction1, 5);
+            militaryReduceFaction(s, cw.victim, cw.faction2, 5);
+            s.log.push(`Military makes ${cw.victim}'s Civil War bloodier — 5 unit points removed from each faction (§30.414).`);
+          }
+          cw.stage = 'victimKeep';
+        }
+        break; // pause continues for the next step's actor
+      }
+      case 'civilWarKeep': {
+        const cw = s.pendingCivilWar;
+        if (!cw) throw new Error('no Civil War is pending');
+        if (cw.stage !== 'victimKeep') throw new Error('the Civil War factions are not yet selected');
+        if (actor !== cw.victim) throw new Error('only the victim chooses which faction to keep (§30.415)');
+        if (action.faction !== 1 && action.faction !== 2) throw new Error('choose faction 1 or 2');
+        const annexed = action.faction === 1 ? cw.faction2! : cw.faction1;
+        const kept = action.faction === 1 ? cw.faction1 : cw.faction2!;
+        annexFaction(s, cw.victim, cw.beneficiary, annexed);
+        s.log.push(`${cw.victim} keeps the ${action.faction === 1 ? 'first' : 'second'} faction (${unitSetPoints(kept)} pts); ${cw.beneficiary} annexes the other (${unitSetPoints(annexed)} pts) (§30.415).`);
+        const { victim, before, overviewBefore } = cw;
+        s.pendingCivilWar = undefined;
+        resumeAfterChoice(s, 'civilwar', victim, before, overviewBefore);
+        break;
+      }
       case 'chooseDiscard': {
         const d = s.pendingDiscard;
         if (!d) throw new Error('no hand-limit discard is pending');
@@ -2143,6 +2287,15 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         // Offer the leader-targeting default; the UI may submit a custom split.
         if (state.pendingAllocation && state.pendingAllocation.holder === actor) {
           return [{ type: 'allocateLoss', allocation: suggestAllocation(state, state.pendingAllocation) }];
+        }
+        // §30.41 Civil War: each step is its actor's; offer a sensible default.
+        if (state.pendingCivilWar && civilWarActor(state.pendingCivilWar) === actor) {
+          const cw = state.pendingCivilWar;
+          if (cw.stage === 'victimKeep') {
+            return [{ type: 'civilWarKeep', faction: unitSetPoints(cw.faction1) >= unitSetPoints(cw.faction2!) ? 1 : 2 }];
+          }
+          const sel = suggestCivilWarSelect(state);
+          return [{ type: 'civilWarSelect', tokens: sel.tokens, cities: sel.cities }];
         }
         // §29/§32.941: a Monotheism holder may convert one adjacent enemy area.
         if (has(p, 'monotheism') && !p.convertedThisTurn) {

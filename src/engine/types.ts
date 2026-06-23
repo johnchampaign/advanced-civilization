@@ -214,6 +214,9 @@ export interface CalamityEvent {
   /** Board overview (per player: cities/tokens) before and after this calamity. */
   overviewBefore: string;
   overviewAfter: string;
+  /** True if the holder made an interactive choice resolving it (city/unit/allocation)
+   *  — the UI skips replaying these to that player, who already saw them inline. */
+  interactive?: boolean;
 }
 
 export interface GameState {

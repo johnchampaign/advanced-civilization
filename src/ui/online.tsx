@@ -103,7 +103,7 @@ export function OnlineGame({ gameId, token }: { gameId: string; token: string })
     <>
       <div ref={boardRef} style={{ flex: 1, position: 'relative', overflow: 'auto', background: '#0d3a4a' }}>
         <CombatModal events={s.lastCombats ?? []} you={you} />
-        <CalamityModal events={s.lastCalamities ?? []} you={you} />
+        <CalamityModal events={s.phase === 'calamity' ? [] : (s.lastCalamities ?? [])} you={you} />
         {view === 'map'
           ? <Board
               state={inMovement ? planner.previewState : s}

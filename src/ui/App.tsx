@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Rng } from 'digital-boardgame-framework';
 import { adapter, createGame } from '../engine/index.js';
 import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent } from '../engine/index.js';
-import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, civById, commodityById, epochs, ADVANCE_EFFECTS } from '../data/index.js';
+import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, civById, commodityById, epochs, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
 import { handValue, creditTowards, commoditySetValue } from '../engine/helpers.js';
 import { submitStandaloneReport, fetchMyReports, resolutionNote, type MyReport } from '../client/api.js';
@@ -69,7 +69,9 @@ export default function App() {
     <>
       <div ref={boardRef} style={{ flex: 1, position: 'relative', overflow: 'auto', background: '#0d3a4a' }}>
         <CombatModal events={state.lastCombats ?? []} you={focus} />
-        <CalamityModal events={state.lastCalamities ?? []} you={focus} />
+        {/* Replay calamities only once the phase is fully resolved (interactive
+            choices happen inline during the phase, not via this replay). */}
+        <CalamityModal events={state.phase === 'calamity' ? [] : (state.lastCalamities ?? [])} you={focus} />
         {view === 'map'
           ? <Board
               state={inMovement ? planner.previewState : state}
@@ -769,7 +771,8 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
   const setT = (aid: string, max: number, d: number) => setTok((s) => ({ ...s, [aid]: Math.max(0, Math.min(max, (s[aid] ?? 0) + d)) }));
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span className="civ-lbl"><b>{(state.lastCalamities ?? []).find((e) => e.calamityId === u.calamityId)?.calamity ?? u.calamityId}</b> (§29.63) — choose units to <b>{verb}</b> totalling <b>{required}</b> point{required === 1 ? '' : 's'}{u.areas ? ' (on the flood plain)' : ''}:</span>
+      {CALAMITY_DESC[u.calamityId] && <span className="civ-lbl" style={{ color: '#cfc7b4' }}>⚠ {CALAMITY_DESC[u.calamityId]}</span>}
+      <span className="civ-lbl">Choose units to <b>{verb}</b> totalling <b>{required}</b> point{required === 1 ? '' : 's'}{u.areas ? ' (on the flood plain)' : ''}:</span>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: '30vh', overflowY: 'auto' }}>
         {inv.map((x) => (
           <div key={x.aid} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -800,10 +803,10 @@ function CityChoiceControls({ state, legal, onApply }: { state: GameState; legal
   const suggested = (legal.find((x) => x.type === 'chooseCities') as Extract<Action, { type: 'chooseCities' }> | undefined)?.areas ?? [];
   const [sel, setSel] = useState<string[]>(suggested);
   const toggle = (aid: string) => setSel((s) => (s.includes(aid) ? s.filter((x) => x !== aid) : s.length < c.count ? [...s, aid] : s));
-  const calName = (state.lastCalamities ?? []).find((e) => e.calamityId === c.calamityId)?.calamity ?? c.calamityId;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span className="civ-lbl"><b>{calName}</b> (§30) — choose <b>{c.count}</b> of your cit{c.count === 1 ? 'y' : 'ies'} to reduce:</span>
+      {CALAMITY_DESC[c.calamityId] && <span className="civ-lbl" style={{ color: '#cfc7b4' }}>⚠ {CALAMITY_DESC[c.calamityId]}</span>}
+      <span className="civ-lbl">Choose <b>{c.count}</b> of your cit{c.count === 1 ? 'y' : 'ies'} to reduce:</span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
         {cities.map((aid) => (
           <button key={aid} className={`civ-btn ${sel.includes(aid) ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => toggle(aid)}>
@@ -838,7 +841,8 @@ function AllocationControls({ state, legal, onApply }: { state: GameState; legal
   });
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span className="civ-lbl"><b>{a.calamityId}</b> (§29.64) — you must direct <b>{maxTotal} {unit}</b> of loss onto rival nations (max {a.kind === 'cities' ? '' : `${a.pool === 20 ? 8 : 10} `}per nation):</span>
+      <span className="civ-lbl" style={{ color: '#e6b85a' }}>§29.64 — as the victim you direct the secondary losses:</span>
+      <span className="civ-lbl">Direct <b>{maxTotal} {unit}</b> of loss onto rival nations (max {a.kind === 'cities' ? '' : `${a.pool === 20 ? 8 : 10} `}per nation):</span>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         {rivals.map((v) => (
           <div key={v} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1227,7 +1231,9 @@ const stepHead = (kicker: string, title: string, titleColor: string, sub?: React
  *  overview, each behind an Acknowledge (§29). */
 export function CalamityModal({ events, you }: { events: CalamityEvent[]; you?: PlayerId }) {
   const pages: ReactNode[] = [];
-  for (const e of events) {
+  // Skip your OWN calamities that you resolved interactively (you saw those step
+  // by step inline as you chose) — only replay what you didn't actively handle.
+  for (const e of events.filter((e) => !(e.holder === you && e.interactive))) {
     const mine = e.holder === you;
     const nm = nationName(e.holder);
     const head = (kicker: string) => stepHead(`Calamity · ${kicker}`, `⚠ ${e.calamity}`, mine ? '#ff6b5a' : '#fff',

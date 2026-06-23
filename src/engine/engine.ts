@@ -673,7 +673,7 @@ function nextHeldCalamity(s: GameState): { calamityId: string; holder: PlayerId 
 }
 
 /** Record one calamity's outcome (before→now diff) for the step-through modal. */
-function pushCalamityEvent(s: GameState, calamityId: string, holder: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string): void {
+function pushCalamityEvent(s: GameState, calamityId: string, holder: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string, interactive = false): void {
   (s.lastCalamities ??= []).push({
     calamity: calamityById.get(calamityId)?.name ?? calamityId,
     calamityId,
@@ -682,6 +682,7 @@ function pushCalamityEvent(s: GameState, calamityId: string, holder: PlayerId, b
     steps: calamitySteps(s, before, holder),
     overviewBefore,
     overviewAfter: boardOverview(s),
+    interactive,
   });
 }
 
@@ -733,17 +734,17 @@ function startPrimary(s: GameState, calId: string, holder: PlayerId, before: Ret
 
 /** After a calamity's primary effect is settled, either pause for the secondary
  *  allocation (§29.64) or finalize the event and move on. Returns true if paused. */
-function finishPrimary(s: GameState, calId: string, holder: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string): boolean {
+function finishPrimary(s: GameState, calId: string, holder: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string, interactive: boolean): boolean {
   const alloc = secondaryAllocationFor(s, calId, holder);
   if (alloc) { s.pendingAllocation = { ...alloc, before, overviewBefore }; return true; }
-  pushCalamityEvent(s, calId, holder, before, overviewBefore);
+  pushCalamityEvent(s, calId, holder, before, overviewBefore, interactive);
   return false;
 }
 
 /** After an interactive primary choice (city or unit), continue the calamity
  *  phase: pause for any secondary allocation, else resolve the rest. */
 function resumeAfterChoice(s: GameState, calId: string, holder: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string): void {
-  if (finishPrimary(s, calId, holder, before, overviewBefore)) return; // paused for allocation
+  if (finishPrimary(s, calId, holder, before, overviewBefore, true)) return; // paused for allocation
   runCalamity(s);
   if (!s.calamityActive) setupCalamityConversion(s);
 }
@@ -761,7 +762,7 @@ function runCalamity(s: GameState): void {
     const lvl = calamityById.get(calamityId)?.level;
     if (lvl && s.trade.stacks[lvl]) s.trade.stacks[lvl]!.unshift(`calamity:${calamityId}`);
     if (startPrimary(s, calamityId, holder, before, overviewBefore, rng)) { s.rngState = rng.serialize(); return; }
-    if (finishPrimary(s, calamityId, holder, before, overviewBefore)) { s.rngState = rng.serialize(); return; }
+    if (finishPrimary(s, calamityId, holder, before, overviewBefore, false)) { s.rngState = rng.serialize(); return; }
   }
   // All calamities resolved.
   s.calamityActive = false;
@@ -1963,7 +1964,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         if (actor !== a.holder) throw new Error('only the primary victim directs these losses (§29.64)');
         validateAllocation(a, action.allocation);
         applyAllocation(s, a, action.allocation);
-        pushCalamityEvent(s, a.calamityId, a.holder, a.before, a.overviewBefore); // finalize this calamity's event
+        pushCalamityEvent(s, a.calamityId, a.holder, a.before, a.overviewBefore, true); // interactive: the holder directed it
         s.pendingAllocation = undefined;
         runCalamity(s); // resume the rest of the calamity phase
         if (!s.calamityActive) setupCalamityConversion(s);

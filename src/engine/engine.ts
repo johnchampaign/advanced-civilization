@@ -55,6 +55,7 @@ import {
   type PendingCivilWar,
   type PendingPick,
   type PendingSecondary,
+  type PendingSupport,
   type PendingUnitLoss,
   type Phase,
   type PlayerId,
@@ -204,7 +205,7 @@ function resolveTaxRevolt(s: GameState, owner: PlayerId, n: number): void {
       .sort((x, y) => reserves(y) - reserves(x))[0];
     delete s.areas[aid]!.city; player(s, owner).citiesAvailable += 1;
     if (taker) {
-      s.areas[aid]!.city = taker; player(s, taker).citiesAvailable -= 1;
+      s.areas[aid]!.city = taker; player(s, taker).citiesAvailable -= 1; markCityAcquired(s, taker, aid);
       s.log.push(`The revolting city in ${areaName(aid)} is taken over by ${taker} (§19.32).`);
     } else {
       const place = Math.min(areaLimitFor(s, aid, owner), player(s, owner).stock);
@@ -553,32 +554,55 @@ function runRemoveSurplus(s: GameState): void {
   checkCitySupport(s);
 }
 
-/** §26.31 / §26.5: every player must have two on-board tokens for each city in
- *  play. A player short of support reduces cities one at a time (§26.41: the
- *  city is replaced by the maximum tokens its area allows, drawn from stock,
- *  which can then support the remaining cities) until support is met or no
- *  cities remain. Called after surplus removal and again after calamities. */
+/** §26.32: record that `owner` built or acquired the city in `aid` this turn, so
+ *  it is reduced before older cities when support is short. Cleared at rollover. */
+function markCityAcquired(s: GameState, owner: PlayerId, aid: string): void {
+  const p = player(s, owner);
+  (p.citiesBuiltThisTurn ??= []);
+  if (!p.citiesBuiltThisTurn.includes(aid)) p.citiesBuiltThisTurn.push(aid);
+}
+
+/** §26.32: the cities a player may reduce now — newly-built ones first (these
+ *  must be reduced before older cities), otherwise any of their cities. */
+function supportCandidates(s: GameState, id: PlayerId): string[] {
+  const all = Object.keys(s.areas).filter((a) => s.areas[a]!.city === id);
+  const newest = (player(s, id).citiesBuiltThisTurn ?? []).filter((a) => s.areas[a]?.city === id);
+  return newest.length ? newest : all;
+}
+
+type SupportCtx = { mode: 'support' | 'slaverevolt'; before?: ReturnType<typeof snapAreas>; overviewBefore?: string };
+
+/** §26.31/.32/.5: reduce `id`'s cities until support is met (on-board tokens minus
+ *  any withheld `lock` ≥ two per city). When the player has a real choice of which
+ *  city to reduce, PAUSE for their decision (§26.32); when forced (one candidate),
+ *  reduce directly. A reduced city is replaced by the max tokens its area allows
+ *  (§26.41), which can then support the rest. Returns true if it paused. */
+function reduceForSupport(s: GameState, id: PlayerId, lock: number, ctx: SupportCtx): boolean {
+  let guard = 0;
+  while (guard++ < 100) {
+    const cities = cityCount(s, id);
+    if (cities === 0) return false;
+    if (populationCount(s, id) - lock >= 2 * cities) return false;
+    const cands = supportCandidates(s, id);
+    if (cands.length === 0) return false;
+    if (cands.length > 1) { s.pendingSupport = { holder: id, candidates: cands, lock, ...ctx }; return true; }
+    reduceSpecificCity(s, id, cands[0]!);
+    s.log.push(`${id} lacked city support — reduced the city in ${areaName(cands[0]!)} (§26.32).`);
+  }
+  return false;
+}
+
+/** §26.31 / §26.5: every player must have two on-board tokens per city. Pauses for
+ *  the first player who must choose which city to reduce; resumes via chooseCities. */
 function checkCitySupport(s: GameState): void {
   for (const id of s.seating) {
-    let guard = 0;
-    while (guard++ < 100) {
-      const cities = cityCount(s, id);
-      if (cities === 0) break;
-      const boardTokens = populationCount(s, id);
-      if (boardTokens >= 2 * cities) break;
-      // Reduce one city. Replace it with the max tokens its area allows.
-      const cityAreas = Object.keys(s.areas).filter((aid) => s.areas[aid]!.city === id);
-      if (cityAreas.length === 0) break;
-      const aid = cityAreas[0]!;
-      const p = player(s, id);
-      delete s.areas[aid]!.city;
-      p.citiesAvailable += 1;
-      const limit = areaLimitFor(s, aid, id);
-      const place = Math.min(limit, p.stock);
-      if (place > 0) { s.areas[aid]!.tokens[id] = (s.areas[aid]!.tokens[id] ?? 0) + place; p.stock -= place; }
-      s.log.push(`${id} lacked city support — reduced the city in ${areaName(aid)}.`);
-    }
+    if (reduceForSupport(s, id, 0, { mode: 'support' })) return;
   }
+}
+
+/** §26.32 default: reduce the cheapest city to rebuild (a city-site needs 6, not 12). */
+function suggestSupportReduce(s: GameState, sup: PendingSupport): string {
+  return [...sup.candidates].sort((x, y) => (areaById.get(x)?.isCitySite ? 0 : 1) - (areaById.get(y)?.isCitySite ? 0 : 1))[0]!;
 }
 
 function runTradeAcquisition(s: GameState): void {
@@ -739,7 +763,8 @@ function startPrimary(s: GameState, calId: string, holder: PlayerId, before: Ret
   }
   if (calId === 'treachery') return startTreachery(s, holder, before, overviewBefore); // §30.22: the trader picks the city
   if (calId === 'piracy') return startPiracy(s, holder, before, overviewBefore); // §30.91: trader/primary pick coastal cities
-  applyCalamity(s, calId, holder, rng); // fully-auto calamities (Volcano, Slave Revolt, Barbarians)
+  if (calId === 'slaverevolt') return startSlaveRevolt(s, holder, before, overviewBefore); // §30.42: the victim picks which cities (§26.32)
+  applyCalamity(s, calId, holder, rng); // fully-auto calamities (Volcano, Barbarians)
   return false;
 }
 
@@ -1237,20 +1262,16 @@ function floodAllocationSpec(s: GameState, holder: PlayerId, region: string[]): 
 /** Slave Revolt (§30.42): 15 tokens can't support cities (Mining +5, Enlightenment
  *  −5, cancelling if both, §30.423); cities are reduced one at a time until the
  *  rest are supportable by the remaining (unlocked) tokens. */
-function applySlaveRevolt(s: GameState, holder: PlayerId): void {
+/** Slave Revolt (§30.42): withhold 15 tokens (Mining +5, Enlightenment −5,
+ *  cancelling §30.423) from city support, then reduce cities one at a time — the
+ *  victim chooses which (newly-built first, §26.32). Returns true if it paused for
+ *  that choice; false if it resolved immediately (the event is then finalized by
+ *  the caller). */
+function startSlaveRevolt(s: GameState, holder: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string): boolean {
   const p = player(s, holder);
-  let lock = 15 + (has(p, 'mining') ? 5 : 0) - (has(p, 'enlightenment') ? 5 : 0);
-  lock = Math.max(0, lock);
-  let reduced = 0, guard = 0;
-  while (guard++ < 100) {
-    const cities = cityCount(s, holder);
-    if (cities === 0) break;
-    const supportable = Math.max(0, populationCount(s, holder) - lock);
-    if (supportable >= 2 * cities) break;
-    reduceCities(s, holder, 1, false);
-    reduced += 1;
-  }
-  s.log.push(`${holder} suffers Slave Revolt: ${lock} tokens withheld from city support → ${reduced} cit${reduced === 1 ? 'y' : 'ies'} reduced.`);
+  const lock = Math.max(0, 15 + (has(p, 'mining') ? 5 : 0) - (has(p, 'enlightenment') ? 5 : 0));
+  s.log.push(`${holder} suffers Slave Revolt: ${lock} tokens withheld from city support (§30.42).`);
+  return reduceForSupport(s, holder, lock, { mode: 'slaverevolt', before, overviewBefore });
 }
 
 /** Civil Disorder (§30.71): all but three cities reduced; the count drops by one
@@ -1266,37 +1287,11 @@ function applyCalamity(s: GameState, calId: string, holder: PlayerId, rng: Rng):
   // are applied here.
   switch (calId) {
     case 'volcano': return applyVolcanoEarthquake(s, holder);
-    case 'slaverevolt': return applySlaveRevolt(s, holder);
     case 'barbarianhordes': return applyBarbarians(s, holder, rng);
     default: s.log.push(`${holder} suffers ${cal.name} (effect not modeled).`);
   }
 }
 
-/** Treachery (§30.22): one of the primary's cities is taken over by the player who
- *  traded the card to them (§30.221); if it was drawn (not traded), the city is
- *  instead reduced (§30.222). */
-function applyTreachery(s: GameState, holder: PlayerId): void {
-  const trader = s.calamityTradedFrom['treachery'];
-  const aid = Object.keys(s.areas).find((a) => s.areas[a]!.city === holder);
-  if (!aid) { s.log.push(`${holder} suffers Treachery but holds no city.`); return; }
-  const a = s.areas[aid]!;
-  const traded = !!(trader && trader !== holder && isPlayer(s, trader));
-  delete a.city; player(s, holder).citiesAvailable += 1;
-  if (traded && player(s, trader!).citiesAvailable > 0) {
-    // §30.221: the city defects to the player who traded the card.
-    a.city = trader!; player(s, trader!).citiesAvailable -= 1;
-    s.log.push(`${holder} suffers Treachery: the city in ${areaName(aid)} defects to ${trader} (§30.221).`);
-  } else if (traded) {
-    // §30.221: traded, but the beneficiary has no spare city — the city is
-    // ELIMINATED (removed from play, no tokens left in its place).
-    s.log.push(`${holder} suffers Treachery: the city in ${areaName(aid)} is destroyed — ${trader} had no city to install (§30.221).`);
-  } else {
-    // §30.222: drawn and not traded — the city is merely REDUCED to tokens.
-    const place = Math.min(areaLimitFor(s, aid, holder), player(s, holder).stock);
-    if (place > 0) { a.tokens[holder] = (a.tokens[holder] ?? 0) + place; player(s, holder).stock -= place; }
-    s.log.push(`${holder} suffers Treachery: the city in ${areaName(aid)} is reduced (§30.222).`);
-  }
-}
 
 // ---- Calamity special cases ----------------------------------------------
 
@@ -1385,7 +1380,7 @@ function annexFaction(s: GameState, victim: PlayerId, beneficiary: PlayerId, set
     if (s.areas[aid]?.city !== victim) continue;
     delete s.areas[aid]!.city; player(s, victim).citiesAvailable += 1;
     const taker = takerForCity();
-    if (taker) { s.areas[aid]!.city = taker; player(s, taker).citiesAvailable -= 1; }
+    if (taker) { s.areas[aid]!.city = taker; player(s, taker).citiesAvailable -= 1; markCityAcquired(s, taker, aid); }
   }
 }
 
@@ -1546,7 +1541,7 @@ function applyPick(s: GameState, pk: PendingPick, areas: string[]): void {
     const aid = areas[0]!; const a = s.areas[aid]!;
     delete a.city; player(s, victim).citiesAvailable += 1;
     if (trader && player(s, trader).citiesAvailable > 0) {
-      a.city = trader; player(s, trader).citiesAvailable -= 1;
+      a.city = trader; player(s, trader).citiesAvailable -= 1; markCityAcquired(s, trader, aid);
       s.log.push(`${victim} suffers Treachery: the city in ${areaName(aid)} defects to ${trader} (§30.221).`);
     } else if (trader) {
       s.log.push(`${victim} suffers Treachery: the city in ${areaName(aid)} is destroyed — ${trader} had no city to install (§30.221).`);
@@ -1707,7 +1702,7 @@ function applyConvert(s: GameState, holder: PlayerId, aid: string): void {
   if (hadCity) { delete a.city; player(s, victim).citiesAvailable += 1; }
   // Replace with the holder's own units.
   if (tokens > 0) { setTokens(s, aid, holder, tokens); player(s, holder).stock -= tokens; }
-  if (hadCity) { a.city = holder; player(s, holder).citiesAvailable -= 1; }
+  if (hadCity) { a.city = holder; player(s, holder).citiesAvailable -= 1; markCityAcquired(s, holder, aid); }
   player(s, holder).convertedThisTurn = true;
   s.log.push(`${holder} converts ${areaName(aid)} from ${victim} by Monotheism (§32.94)${hadCity ? ' (city)' : ''}${tokens > 0 ? ` (${tokens} tokens)` : ''}.`);
 }
@@ -1740,24 +1735,6 @@ function removeTokensFromBoard(s: GameState, owner: PlayerId, unitPoints: number
     setTokens(s, aid, owner, t - take);
     returnLostToStock(s, owner, take);
     remaining -= take;
-  }
-}
-
-/** §26.41: reduce up to `n` of a player's cities. A reduced city is REPLACED by
- *  the maximum tokens its area allows (Agriculture §32.241 gives +1), drawn from
- *  stock — those tokens can then support the player's remaining cities. */
-function reduceCities(s: GameState, owner: PlayerId, n: number, coastalOnly: boolean): void {
-  let remaining = n;
-  const p = player(s, owner);
-  for (const [aid, a] of Object.entries(s.areas)) {
-    if (remaining <= 0) break;
-    if (a.city !== owner) continue;
-    if (coastalOnly && !isCoastal(aid)) continue;
-    delete a.city;
-    p.citiesAvailable += 1;
-    const place = Math.min(areaLimitFor(s, aid, owner), p.stock);
-    if (place > 0) { a.tokens[owner] = (a.tokens[owner] ?? 0) + place; p.stock -= place; }
-    remaining -= 1;
   }
 }
 
@@ -1863,6 +1840,7 @@ export function normalize(s: GameState): void {
     if (AUTO_PHASES.has(s.phase)) {
       runAutoPhase(s);
       if (s.pendingDiscard) return; // §31.71: paused for a hand-limit discard choice
+      if (s.pendingSupport) return; // §26.32: paused for a city-support reduction choice
       const np = nextPhase(s.phase);
       if (np === 'taxation') {
         // Turn rollover.
@@ -1870,7 +1848,7 @@ export function normalize(s: GameState): void {
         s.turn += 1;
         s.censusOrder = s.activeOrder = censusOrder(s);
         s.actedThisPhase = [];
-        for (const id of s.seating) { player(s, id).convertedThisTurn = false; player(s, id).builtWithTreasuryThisTurn = false; player(s, id).grainLockedThisTurn = 0; } // §32.941/.631/.312 once-per-turn
+        for (const id of s.seating) { player(s, id).convertedThisTurn = false; player(s, id).builtWithTreasuryThisTurn = false; player(s, id).grainLockedThisTurn = 0; player(s, id).citiesBuiltThisTurn = []; } // §32.941/.631/.312/.26.32 once-per-turn
       }
       enterPhase(s, np);
       continue;
@@ -1961,6 +1939,7 @@ function applyBuildCity(s: GameState, actor: PlayerId, area: string, useTreasury
   if (treasuryUsed > 0) p.builtWithTreasuryThisTurn = true; // §32.631 one per turn
   a.city = actor;
   p.citiesAvailable -= 1;
+  markCityAcquired(s, actor, area); // §26.32: newly built — reduced first if unsupported
   s.log.push(`${actor} built a city in ${areaName(area)}${treasuryUsed > 0 ? ` (Architecture: ${treasuryUsed} from treasury)` : ''}.`);
 }
 
@@ -2117,6 +2096,9 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
     // A pending hand-limit discard can arise during the auto astAdjustment phase,
     // so it must be checked before the auto-phase short-circuit.
     if (state.pendingDiscard) return state.pendingDiscard.holder;
+    // A city-support reduction (§26.32) can arise during the auto removeSurplus
+    // phase, so it must be checked before the auto-phase short-circuit too.
+    if (state.pendingSupport) return state.pendingSupport.holder;
     if (AUTO_PHASES.has(state.phase)) return null;
     // A pending city-choice / unit-loss / secondary allocation is the victim's.
     if (state.pendingCityChoice) return state.pendingCityChoice.holder;
@@ -2245,6 +2227,27 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         break;
       }
       case 'chooseCities': {
+        // §26.32: a city-support reduction (normal support or Slave Revolt) — the
+        // player picks one city to reduce, newly-built ones first.
+        if (s.pendingSupport && s.pendingSupport.holder === actor) {
+          const sup = s.pendingSupport;
+          const areas = [...new Set(action.areas)];
+          if (areas.length !== 1) throw new Error('reduce exactly one city for support (§26.32)');
+          if (!sup.candidates.includes(areas[0]!)) throw new Error('newly-built cities must be reduced first (§26.32)');
+          reduceSpecificCity(s, actor, areas[0]!);
+          s.log.push(`${actor} reduces the city in ${areaName(areas[0]!)} for support (§26.32).`);
+          const { holder, lock, mode, before, overviewBefore } = sup;
+          s.pendingSupport = undefined;
+          if (mode === 'slaverevolt') {
+            if (reduceForSupport(s, holder, lock, { mode, before, overviewBefore })) break; // another choice
+            pushCalamityEvent(s, 'slaverevolt', holder, before!, overviewBefore!, true); // §30.42 done
+            runCalamity(s);
+            if (!s.calamityActive) setupCalamityConversion(s);
+          } else {
+            checkCitySupport(s); // continue the support sweep for the remaining players
+          }
+          break;
+        }
         const c = s.pendingCityChoice;
         if (!c) throw new Error('no city reduction is pending');
         if (actor !== c.holder) throw new Error('only the primary victim chooses which cities to reduce (§30)');
@@ -2370,6 +2373,11 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
     // is the over-limit player's; offer the cheapest-first default. Not a 'pass'.
     if (state.pendingDiscard && state.pendingDiscard.holder === actor) {
       return [{ type: 'chooseDiscard', cards: suggestDiscard(state, actor, state.pendingDiscard.count) }];
+    }
+    // §26.32: a pending city-support reduction (may arise in the auto removeSurplus
+    // phase) — offer the cheapest city to reduce. Not a 'pass'.
+    if (state.pendingSupport && state.pendingSupport.holder === actor) {
+      return [{ type: 'chooseCities', areas: [suggestSupportReduce(state, state.pendingSupport)] }];
     }
     const out: Action[] = [{ type: 'pass' }];
     switch (state.phase) {

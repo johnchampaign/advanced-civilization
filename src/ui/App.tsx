@@ -723,6 +723,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
 }) {
   const pass = legal.find((a) => a.type === 'pass');
   if (state.pendingDiscard?.holder === actor) return <DiscardControls state={state} onApply={onApply} />;
+  if (state.pendingSupport?.holder === actor) return <SupportControls state={state} legal={legal} onApply={onApply} />;
   if (phase === 'taxation') {
     const rates = legal.filter((a) => a.type === 'setTaxRate') as Extract<Action, { type: 'setTaxRate' }>[];
     const cities = Object.values(state.areas).filter((a) => a.city === actor).length;
@@ -955,6 +956,26 @@ function CivilWarControls({ state, legal, onApply }: { state: GameState; legal: 
           {sugg && <button className="civ-btn" style={{ fontSize: 11 }} onClick={() => { setTok({ ...sugg.tokens }); setCities([...(sugg.cities ?? [])]); }}>Suggest</button>}
           <button className="civ-btn" disabled={!ok} onClick={() => onApply({ type: 'civilWarSelect', tokens: tok, cities })}>Confirm faction</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** §26.32: short of city support (or hit by Slave Revolt §30.42) — choose which
+ *  city to reduce, newly-built cities first. */
+function SupportControls({ state, legal, onApply }: { state: GameState; legal: Action[]; onApply: (a: Action) => void }) {
+  const sup = state.pendingSupport!;
+  const suggested = (legal.find((a) => a.type === 'chooseCities') as Extract<Action, { type: 'chooseCities' }> | undefined)?.areas[0];
+  const cities = Object.values(state.areas).filter((a) => a.city === sup.holder).length;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span className="civ-lbl">{sup.mode === 'slaverevolt' ? '⛓ Slave Revolt' : '🏛 City support'} — you can't support all your cities ({cities}). Reduce one{sup.candidates.length < cities ? ' of your newly-built cities (§26.32)' : ''}:</span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {sup.candidates.map((aid) => (
+          <button key={aid} className={`civ-btn ${suggested === aid ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => onApply({ type: 'chooseCities', areas: [aid] })}>
+            {areaById.get(aid)?.name ?? aid}{areaById.get(aid)?.isCitySite ? ' (site)' : ''}
+          </button>
+        ))}
       </div>
     </div>
   );

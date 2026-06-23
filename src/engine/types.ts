@@ -119,6 +119,9 @@ export interface PlayerState {
    *  up and may not be spent on civilization cards until next turn. Count locked
    *  this turn (cleared at turn rollover). */
   grainLockedThisTurn?: number;
+  /** §26.32: area ids of cities built or acquired THIS turn — these must be the
+   *  first reduced when short of city support. Cleared at turn rollover. */
+  citiesBuiltThisTurn?: string[];
 }
 
 /** Contents of a single map area. An area is held by at most one nation's
@@ -218,6 +221,23 @@ export interface SecondaryLoss {
   cityWorth: number;
   /** Flood (§30.512): confined to the affected flood plain. */
   areas?: string[];
+}
+
+/** §26.32: a player short of city support must reduce a city of their choice,
+ *  newly-built cities first. Also drives Slave Revolt's reductions (§30.42), which
+ *  withhold `lock` tokens from support. Resolved one city at a time (a `chooseCities`
+ *  of exactly one area from `candidates`), re-checking until support is met. */
+export interface PendingSupport {
+  holder: PlayerId;
+  /** The cities the player may reduce now (newly-built ones, else all). */
+  candidates: string[];
+  /** Tokens withheld from support (Slave Revolt §30.421; 0 for normal support). */
+  lock: number;
+  /** 'support' = §26.3/§29.8 check; 'slaverevolt' = the §30.42 calamity. */
+  mode: 'support' | 'slaverevolt';
+  /** Slave Revolt context, to finalize the calamity event when reductions finish. */
+  before?: Record<string, { city?: PlayerId; tokens: Record<PlayerId, number> }>;
+  overviewBefore?: string;
 }
 
 /** A pending "this player selects which cities" decision, used where the rules
@@ -387,6 +407,8 @@ export interface GameState {
   pendingSecondary?: PendingSecondary;
   /** A pending city-selection by a named chooser (Treachery/Flood/Piracy). */
   pendingPick?: PendingPick;
+  /** A pending city-support reduction the player must direct (§26.32 / §30.42). */
+  pendingSupport?: PendingSupport;
   /** The most recent conflict phase's combats, one per area, for a step-through
    *  modal. Overwritten each conflict phase; empty if none. */
   lastCombats?: CombatEvent[];

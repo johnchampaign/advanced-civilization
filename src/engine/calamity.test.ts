@@ -40,7 +40,7 @@ function resolve(s: GameState): GameState {
     const actor = adapter.currentActor(s);
     if (!actor) break;
     if (s.phase === 'trade') { s = adapter.applyAction(s, { type: 'pass' }, actor); continue; }
-    if (s.pendingCityChoice || s.pendingUnitLoss || s.pendingAllocation || s.pendingCivilWar || s.pendingPick) {
+    if (s.pendingCityChoice || s.pendingUnitLoss || s.pendingAllocation || s.pendingCivilWar || s.pendingPick || s.pendingSupport) {
       const kinds = ['chooseCities', 'chooseUnits', 'allocateLoss', 'civilWarSelect', 'civilWarKeep', 'pickAreas'];
       const suggested = adapter.legalActions(s, actor).find((a) => kinds.includes(a.type));
       s = adapter.applyAction(s, suggested ?? { type: 'pass' }, actor); continue;
@@ -270,6 +270,27 @@ describe('advance modifiers on calamities (§30/§32)', () => {
     expect(slaveRevoltCitiesLeft(['enlightenment'])).toBeGreaterThanOrEqual(none);
     expect(slaveRevoltCitiesLeft(['mining'])).toBeLessThanOrEqual(none);
     expect(slaveRevoltCitiesLeft(['mining'])).toBeLessThan(5); // it does bite
+  });
+
+  it('Slave Revolt reduces newly-built cities first, then the victim chooses (§30.42/§26.32)', () => {
+    let s = scenario({
+      tokens: { egypt: { [land[0]!.id]: 17 } }, // 17 on board; lock 15 ⇒ 2 support tokens (supports 1 city)
+      cities: { egypt: [land[1]!.id, land[2]!.id, land[3]!.id] },
+      hands: { egypt: { 'calamity:slaverevolt': 1 } },
+    });
+    s.players['egypt']!.stock = 0; // reductions place no tokens ⇒ clean support arithmetic
+    s.players['egypt']!.citiesBuiltThisTurn = [land[3]!.id]; // land[3] was built this turn
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    // §26.32: the newly-built city is reduced first (forced), then a genuine choice
+    // remains between the two older cities.
+    expect(s.areas[land[3]!.id]?.city).toBeUndefined();
+    expect(s.pendingSupport?.mode).toBe('slaverevolt');
+    expect(new Set(s.pendingSupport?.candidates)).toEqual(new Set([land[1]!.id, land[2]!.id]));
+    // egypt keeps land[1], reduces land[2].
+    s = adapter.applyAction(s, { type: 'chooseCities', areas: [land[2]!.id] }, 'egypt');
+    expect(s.areas[land[2]!.id]?.city).toBeUndefined(); // the chosen city went
+    expect(s.areas[land[1]!.id]?.city).toBe('egypt'); // the other was kept
+    expect(s.pendingSupport).toBeUndefined(); // fully resolved
   });
 
   it('Earthquake: Engineering reduces a city instead of destroying an area (§30.213)', () => {

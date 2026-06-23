@@ -28,6 +28,9 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
     // phase — take the engine's cheapest-first suggestion.
     const discard = actions.find((a) => a.type === 'chooseDiscard');
     if (discard) return discard;
+    // §26.32: a city-support reduction (can surface in the auto removeSurplus phase
+    // or during Slave Revolt) — take the engine's cheapest-city suggestion.
+    if (state.pendingSupport) { const c = actions.find((a) => a.type === 'chooseCities'); if (c) return c; }
 
     switch (state.phase) {
       case 'cityConstruction': {

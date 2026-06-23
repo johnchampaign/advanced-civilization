@@ -160,6 +160,37 @@ describe('§30.22 Treachery', () => {
   });
 });
 
+describe('§30.312 Pottery grain-card lock & §30.612 Epidemic minimums', () => {
+  it('Pottery locks the Grain cards committed against Famine until next turn (§30.312)', () => {
+    let s = scenario({
+      tokens: { egypt: { [land[0]!.id]: 20 } },
+      hands: { egypt: { 'calamity:famine': 1, grain: 4 } },
+    });
+    s.players['egypt']!.advances = ['pottery'];
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    // 3 grain (12 pts) fully negate the 10-point Famine → no unit loss; 3 grain locked.
+    expect(s.pendingUnitLoss).toBeUndefined();
+    expect(s.players['egypt']!.grainLockedThisTurn).toBe(3);
+    expect(populationCount(s, 'egypt')).toBe(20); // no loss
+  });
+
+  it('Epidemic leaves ≥1 token per area and turns an eliminated city into one token (§30.612)', () => {
+    let s = scenario({
+      tokens: { egypt: { [land[0]!.id]: 10 } },
+      cities: { egypt: [land[1]!.id] },
+      hands: { egypt: { 'calamity:epidemic': 1 } },
+    });
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    expect(s.pendingUnitLoss?.calamityId).toBe('epidemic');
+    // Cannot empty an area — must leave one token (§30.612).
+    expect(() => adapter.applyAction(s, { type: 'chooseUnits', tokens: { [land[0]!.id]: 10 }, cities: [] }, 'egypt')).toThrow(/at least one/);
+    s = adapter.applyAction(s, adapter.legalActions(s, 'egypt').find((a) => a.type === 'chooseUnits')!, 'egypt');
+    expect(s.areas[land[0]!.id]?.tokens['egypt']).toBe(1); // one token left behind
+    expect(s.areas[land[1]!.id]?.city).toBeUndefined(); // city eliminated
+    expect(s.areas[land[1]!.id]?.tokens['egypt']).toBe(1); // replaced by exactly one token (city = 4 pts)
+  });
+});
+
 describe('advance modifiers on calamities (§30/§32)', () => {
   const cityAreas = [land[1]!.id, land[2]!.id, land[3]!.id, land[4]!.id, land[5]!.id, land[6]!.id];
 

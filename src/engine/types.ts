@@ -115,6 +115,10 @@ export interface PlayerState {
   convertedThisTurn?: boolean;
   /** Set once this player has used Architecture's treasury assist this turn (§32.631). */
   builtWithTreasuryThisTurn?: boolean;
+  /** §30.312: Grain cards committed to soften Famine via Pottery are placed face
+   *  up and may not be spent on civilization cards until next turn. Count locked
+   *  this turn (cleared at turn rollover). */
+  grainLockedThisTurn?: number;
 }
 
 /** Contents of a single map area. An area is held by at most one nation's

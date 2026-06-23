@@ -708,9 +708,16 @@ function startPrimary(s: GameState, calId: string, holder: PlayerId, before: Ret
   const p = player(s, holder);
   // Unit-loss calamities — the victim picks which units (§29.63).
   if (calId === 'famine' || calId === 'epidemic') {
-    const points = calId === 'famine'
-      ? Math.max(0, 10 - (has(p, 'pottery') ? 4 * grainCards(p) : 0))
-      : Math.max(0, 16 - (has(p, 'medicine') ? 8 : 0) + (has(p, 'roadbuilding') ? 5 : 0));
+    let points: number;
+    if (calId === 'famine') {
+      // §30.312: Pottery commits 1 Grain card per 4 points to soften the 10-point
+      // loss; only as many as needed are used, and they lock until next turn.
+      const grainUsed = has(p, 'pottery') ? Math.min(grainCards(p), Math.ceil(10 / 4)) : 0;
+      if (grainUsed > 0) { p.grainLockedThisTurn = (p.grainLockedThisTurn ?? 0) + grainUsed; s.log.push(`${holder} commits ${grainUsed} Grain card${grainUsed === 1 ? '' : 's'} against Famine (locked until next turn, §30.312).`); }
+      points = Math.max(0, 10 - 4 * grainUsed);
+    } else {
+      points = Math.max(0, 16 - (has(p, 'medicine') ? 8 : 0) + (has(p, 'roadbuilding') ? 5 : 0));
+    }
     if (points > 0 && boardUnitPoints(s, holder) > 0) {
       s.pendingUnitLoss = { calamityId: calId, holder, points: Math.min(points, boardUnitPoints(s, holder)), cityWorth: calId === 'epidemic' ? 4 : 5, mode: 'remove', before, overviewBefore };
       return true;
@@ -956,21 +963,29 @@ function unitInventory(s: GameState, holder: PlayerId, areas?: string[]): { toke
   return { tokens, cities };
 }
 
+/** §30.612: Epidemic must leave at least one token in each area it removes from,
+ *  so an area's removable tokens are one fewer than it holds. */
+function removableTokens(n: number, epidemic: boolean): number {
+  return epidemic ? Math.max(0, n - 1) : n;
+}
+
 /** Max unit points a player can shed (capped by what they have in scope). */
 function maxUnitLoss(s: GameState, u: PendingUnitLoss): number {
   const inv = unitInventory(s, u.holder, u.areas);
-  const tok = Object.values(inv.tokens).reduce((t, n) => t + n, 0);
+  const epi = u.calamityId === 'epidemic';
+  const tok = Object.values(inv.tokens).reduce((t, n) => t + removableTokens(n, epi), 0);
   return Math.min(u.points, tok + inv.cities.length * u.cityWorth);
 }
 
 /** Default unit sacrifice (AI & suggestion): give up the cheapest units first —
- *  tokens before cities — so cities are preserved. (This also fixes Civil War: the
- *  victim keeps its cities and cedes tokens, instead of handing over its best.) */
+ *  tokens before cities — so cities are preserved. Epidemic leaves one token per
+ *  area (§30.612). */
 function suggestUnits(s: GameState, u: PendingUnitLoss): { tokens: Record<string, number>; cities: string[] } {
   const inv = unitInventory(s, u.holder, u.areas);
+  const epi = u.calamityId === 'epidemic';
   let need = maxUnitLoss(s, u);
   const tokens: Record<string, number> = {};
-  for (const [aid, n] of Object.entries(inv.tokens).sort((a, b) => a[1] - b[1])) { if (need <= 0) break; const take = Math.min(n, need); tokens[aid] = take; need -= take; }
+  for (const [aid, n] of Object.entries(inv.tokens).sort((a, b) => a[1] - b[1])) { if (need <= 0) break; const take = Math.min(removableTokens(n, epi), need); if (take > 0) { tokens[aid] = take; need -= take; } }
   const cities: string[] = [];
   for (const aid of inv.cities) { if (need <= 0) break; cities.push(aid); need -= u.cityWorth; }
   return { tokens, cities };
@@ -980,11 +995,13 @@ function suggestUnits(s: GameState, u: PendingUnitLoss): { tokens: Record<string
  *  excess (overshoot smaller than a city's worth) and stay within what's owned. */
 function validateUnits(s: GameState, u: PendingUnitLoss, choice: { tokens: Record<string, number>; cities: string[] }): void {
   const inv = unitInventory(s, u.holder, u.areas);
+  const epi = u.calamityId === 'epidemic';
   let sum = 0;
   for (const [aid, n] of Object.entries(choice.tokens)) {
     if (n <= 0) continue;
     if (!(aid in inv.tokens)) throw new Error(`no tokens of yours in ${areaName(aid)}`);
     if (n > inv.tokens[aid]!) throw new Error(`only ${inv.tokens[aid]} tokens in ${areaName(aid)}`);
+    if (epi && n > inv.tokens[aid]! - 1) throw new Error(`Epidemic must leave at least one token in ${areaName(aid)} (§30.612)`);
     sum += n;
   }
   for (const aid of choice.cities) { if (!inv.cities.includes(aid)) throw new Error(`no city of yours in ${areaName(aid)}`); sum += u.cityWorth; }
@@ -999,7 +1016,14 @@ function validateUnits(s: GameState, u: PendingUnitLoss, choice: { tokens: Recor
 function applyChosenUnits(s: GameState, u: PendingUnitLoss, choice: { tokens: Record<string, number>; cities: string[] }): void {
   if (u.mode === 'remove') {
     for (const [aid, n] of Object.entries(choice.tokens)) { if (n > 0) { setTokens(s, aid, u.holder, (s.areas[aid]!.tokens[u.holder] ?? 0) - n); player(s, u.holder).stock += n; } }
-    for (const aid of choice.cities) reduceSpecificCity(s, u.holder, aid);
+    // §30.612: an Epidemic-eliminated city is replaced by exactly ONE token (so it
+    // counts as 4 points); other calamities replace it up to the area's limit.
+    for (const aid of choice.cities) {
+      if (u.calamityId === 'epidemic') {
+        delete s.areas[aid]!.city; player(s, u.holder).citiesAvailable += 1;
+        if (player(s, u.holder).stock > 0) { s.areas[aid]!.tokens[u.holder] = (s.areas[aid]!.tokens[u.holder] ?? 0) + 1; player(s, u.holder).stock -= 1; }
+      } else reduceSpecificCity(s, u.holder, aid);
+    }
     s.log.push(`${u.holder} suffers ${calamityById.get(u.calamityId)?.name ?? u.calamityId} (-${u.points} unit point${u.points === 1 ? '' : 's'}).`);
     // Flood's secondary loss (§30.512) is directed by the primary — set up as an
     // interactive allocation in the chooseUnits handler, not applied here.
@@ -1760,7 +1784,7 @@ export function normalize(s: GameState): void {
         s.turn += 1;
         s.censusOrder = s.activeOrder = censusOrder(s);
         s.actedThisPhase = [];
-        for (const id of s.seating) { player(s, id).convertedThisTurn = false; player(s, id).builtWithTreasuryThisTurn = false; } // §32.941/.631 once-per-turn
+        for (const id of s.seating) { player(s, id).convertedThisTurn = false; player(s, id).builtWithTreasuryThisTurn = false; player(s, id).grainLockedThisTurn = 0; } // §32.941/.631/.312 once-per-turn
       }
       enterPhase(s, np);
       continue;
@@ -1866,6 +1890,8 @@ function applyBuyAdvance(s: GameState, actor: PlayerId, advanceId: string, spend
     if (n <= 0) continue;
     if (isCalamityCard(cid)) throw new Error('calamity cards cannot be spent on advances');
     if ((p.hand[cid] ?? 0) < n) throw new Error(`not enough ${cid} cards`);
+    // §30.312: Grain locked against Famine this turn can't be spent until next turn.
+    if (cid === 'grain' && (p.hand['grain'] ?? 0) - (p.grainLockedThisTurn ?? 0) < n) throw new Error(`${p.grainLockedThisTurn} Grain card(s) are locked against Famine until next turn (§30.312)`);
   }
   if (spendTreasury > p.treasury) throw new Error('not enough treasury');
   // Compute payment value: commodity set values of spent cards + treasury + credits.

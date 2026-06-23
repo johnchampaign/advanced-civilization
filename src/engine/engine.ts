@@ -1627,19 +1627,6 @@ function applyBarbarians(s: GameState, primary: PlayerId, rng: Rng): void {
   s.log.push(`${primary} is ravaged by Barbarian Hordes.`);
 }
 
-/** Remove up to `points` unit points from a player (tokens = 1; then cities,
- *  each worth 4 under Epidemic §30.612 / up to 5 generally). Cities are reduced
- *  last. Returns points actually removed. */
-function removeUnitPoints(s: GameState, id: PlayerId, points: number, cityWorth = 5): number {
-  const before = boardUnitPoints(s, id);
-  const tokens = populationCount(s, id);
-  const tokenLoss = Math.min(tokens, points);
-  removeTokensFromBoard(s, id, tokenLoss);
-  let remaining = points - tokenLoss;
-  while (remaining > 0 && cityCount(s, id) > 0) { reduceCities(s, id, 1, false); remaining -= cityWorth; }
-  return before - boardUnitPoints(s, id);
-}
-
 /** Epidemic (§30.61): primary loses 16 (Medicine -8, Roadbuilding +5) and orders
  *  25 unit points of loss among the other players (Medicine -5, Roadbuilding +5;
  *  the trader is exempt). The primary concentrates the order on its strongest
@@ -1652,42 +1639,7 @@ function removeUnitPoints(s: GameState, id: PlayerId, points: number, cityWorth 
 
 const isCoastal2 = (aid: string) => neighbors(aid).some((n) => areaById.get(n)?.isWater);
 
-/** Turn up to `n` of a player's coastal cities into pirate cities (§30.911/.913):
- *  the player's piece returns to stock and a neutral pirate city stands there. */
-function razeCoastalCitiesToPirate(s: GameState, owner: PlayerId, n: number): number {
-  let done = 0;
-  for (const [aid, a] of Object.entries(s.areas)) {
-    if (done >= n) break;
-    if (a.city !== owner || !isCoastal2(aid)) continue;
-    delete a.city; player(s, owner).citiesAvailable += 1;
-    a.city = PIRATE; a.pirateCity = true;
-    done += 1;
-    s.log.push(`A coastal city of ${owner} in ${areaName(aid)} becomes a pirate city.`);
-  }
-  return done;
-}
-
 const PIRATE = '__pirate__';
-
-/** Piracy (§30.91): the primary victim loses two coastal cities and up to two
- *  other players lose one coastal city each (secondary victims); the player who
- *  traded Piracy to the victim may not be a secondary victim (§30.912). Lost
- *  cities become neutral pirate cities. */
-function applyPiracy(s: GameState, primary: PlayerId): void {
-  razeCoastalCitiesToPirate(s, primary, 2);
-  const trader = s.calamityTradedFrom['piracy'];
-  const eligible = s.seating
-    .filter((o) => o !== primary && o !== trader && coastalCityCount(s, o) > 0)
-    .sort((x, y) => victoryScore(s, y) - victoryScore(s, x)); // hit the leader's coasts first
-  for (const o of eligible.slice(0, 2)) razeCoastalCitiesToPirate(s, o, 1);
-  s.log.push(`${primary} suffers Piracy along the coasts.`);
-}
-
-function coastalCityCount(s: GameState, id: PlayerId): number {
-  let n = 0;
-  for (const [aid, a] of Object.entries(s.areas)) if (a.city === id && isCoastal2(aid)) n++;
-  return n;
-}
 
 // ---- Mutation primitives -------------------------------------------------
 

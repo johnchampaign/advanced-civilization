@@ -377,6 +377,18 @@ export function StatusPanel({ state, id }: { state: GameState; id: PlayerId }) {
       <Row label="ON MAP" vals={[['◾', boardTokens], ['🏛', boardCities]]} />
       <Row label="TREASURY" vals={[['💰', p.treasury]]} />
       <div className="civ-lbl">AST space {p.astSpace} · {epochs.find((e) => e.id === p.epoch)?.name}</div>
+      {(() => {
+        // Always-visible reminder of any calamity cards in hand (the player needs to
+        // know they're holding e.g. Famine — and that non-tradables can't be passed on).
+        const cals = Object.entries(p.hand).filter(([c, n]) => c.startsWith('calamity:') && n > 0).map(([c]) => c.slice(9));
+        if (!cals.length) return null;
+        return (
+          <div style={{ background: '#7a2a2a', border: '1px solid #c97', borderRadius: 3, padding: 4 }}>
+            <div className="civ-lbl" style={{ color: '#ffd2d2', fontWeight: 800 }}>⚠ CALAMITIES HELD</div>
+            {cals.map((cid) => { const c = calamityById.get(cid); return <div key={cid} style={{ fontSize: 11, color: '#fff' }}>{c?.name ?? cid}{c && !c.tradable ? ' · can’t trade away' : ' · tradable'}</div>; })}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -520,11 +532,12 @@ function GoodsView({ state, focus }: { state: GameState; focus: PlayerId }) {
         {entries.length === 0 && <span>(no cards)</span>}
         {entries.map(([c, n]) => {
           const cal = isCal(c);
+          const calData = cal ? calamityById.get(c.slice(9)) : undefined;
           const setVal = cal ? 0 : commoditySetValue(c, n);
           return (
             <div key={c} style={{ padding: 8, borderRadius: 4, background: cal ? '#7a2a2a' : '#33506a', minWidth: 90 }}>
-              <b>{cal ? `⚠ ${c.slice(9)}` : commodityById.get(c)?.name ?? c}</b><br />
-              <small>{cal ? 'calamity' : `value ${commodityById.get(c)?.value} ×${n} = ${setVal}`}</small>
+              <b>{cal ? `⚠ ${calData?.name ?? c.slice(9)}` : commodityById.get(c)?.name ?? c}</b><br />
+              <small>{cal ? (calData?.tradable ? 'calamity · tradable' : 'calamity · can’t trade away') : `value ${commodityById.get(c)?.value} ×${n} = ${setVal}`}</small>
             </div>
           );
         })}
@@ -815,11 +828,11 @@ const COMMODITY_ORDER = ['ochre', 'hides', 'iron', 'papyrus', 'salt', 'timber', 
 /** Acquire-advances panel (§31): pick an advance, then choose exactly which
  *  commodity cards to spend and how much treasury — instead of auto-paying. */
 /** §29/§32.94 Monotheism conversion picker, shown during the calamity phase. */
-/** §29.63 / §30.41: choose which of your own units to lose (Famine/Epidemic/Flood)
- *  or cede (Civil War) — tokens per area + whole cities, covering the required loss. */
+/** §29.63 / §30.31/.51/.61: choose which of your own units to lose (Famine /
+ *  Epidemic / Flood) — tokens per area + whole cities, covering the required loss.
+ *  A big running "N more points to choose" banner keeps the target unmistakable. */
 function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: Action[]; onApply: (a: Action) => void }) {
   const u = state.pendingUnitLoss!;
-  const keepMode = u.mode === 'cede'; // Civil War: you pick the faction you KEEP; the rest defect.
   const scope = u.areas ?? Object.keys(state.areas);
   const inv = scope.map((aid) => ({ aid, tokens: state.areas[aid]?.tokens[u.holder] ?? 0, city: state.areas[aid]?.city === u.holder }))
     .filter((x) => x.tokens > 0 || x.city);
@@ -828,36 +841,26 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
   const [tok, setTok] = useState<Record<string, number>>({});
   const [cities, setCities] = useState<string[]>([]);
   const avail = inv.reduce((t, x) => t + x.tokens + (x.city ? u.cityWorth : 0), 0);
-  const lose = Math.min(u.points, avail);            // points that go away (lost, or defect to the beneficiary)
-  const target = keepMode ? avail - lose : lose;     // what the selection should total: kept faction, or units lost
+  const target = Math.min(u.points, avail);
   const total = Object.values(tok).reduce((t, n) => t + n, 0) + cities.length * u.cityWorth;
-  const effectiveLost = keepMode ? avail - total : total; // points actually given up by this selection
-  const ok = effectiveLost >= lose && effectiveLost - lose < u.cityWorth;
+  const remaining = Math.max(0, target - total);
+  const ok = total >= target && total - target < u.cityWorth;
   const setT = (aid: string, max: number, d: number) => setTok((s) => ({ ...s, [aid]: Math.max(0, Math.min(max, (s[aid] ?? 0) + d)) }));
-  // The engine's suggestion is the cheapest set to GIVE UP. For keep mode, the
-  // recommended keep is its complement (hold your strongest units & cities).
   const sugg = (legal.find((x) => x.type === 'chooseUnits') as Extract<Action, { type: 'chooseUnits' }> | undefined);
-  const suggest = () => {
-    if (!sugg) return;
-    if (!keepMode) { setTok({ ...sugg.tokens }); setCities([...(sugg.cities ?? [])]); return; }
-    const giveT = sugg.tokens ?? {}; const giveC = new Set(sugg.cities ?? []);
-    const keepT: Record<string, number> = {};
-    for (const x of inv) { const k = x.tokens - (giveT[x.aid] ?? 0); if (k > 0) keepT[x.aid] = k; }
-    setTok(keepT); setCities(inv.filter((x) => x.city && !giveC.has(x.aid)).map((x) => x.aid));
-  };
-  const submit = () => {
-    if (!keepMode) { onApply({ type: 'chooseUnits', tokens: tok, cities }); return; }
-    // Cede everything NOT kept: per-area token complement + cities not kept.
-    const cededT: Record<string, number> = {};
-    for (const x of inv) { const c = x.tokens - (tok[x.aid] ?? 0); if (c > 0) cededT[x.aid] = c; }
-    onApply({ type: 'chooseUnits', tokens: cededT, cities: inv.filter((x) => x.city && !cities.includes(x.aid)).map((x) => x.aid) });
-  };
+  const calName = calamityById.get(u.calamityId)?.name ?? u.calamityId;
+  // Prominent status line (the reporters wanted the tally big and obvious, not a
+  // faint green note tucked at the bottom).
+  const banner = remaining > 0 ? `${remaining} more unit point${remaining === 1 ? '' : 's'} to choose`
+    : total > target ? `Selected — ${total} points (${total - target} over)` : `Ready — ${total} points selected`;
+  const bannerColor = remaining > 0 ? '#ffd23f' : '#7fd17f';
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {CALAMITY_DESC[u.calamityId] && <span className="civ-lbl" style={{ color: '#cfc7b4' }}>⚠ {CALAMITY_DESC[u.calamityId]}</span>}
-      {keepMode
-        ? <span className="civ-lbl">Your nation splits in two. Choose the faction you <b>keep</b> (<b>{target}</b> points); everything else defects to <b style={{ color: nationColor(u.beneficiary!) }}>{nationName(u.beneficiary!)}</b>:</span>
-        : <span className="civ-lbl">Choose units to <b>lose</b> totalling <b>{target}</b> point{target === 1 ? '' : 's'}{u.areas ? ' (on the flood plain)' : ''}:</span>}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ background: 'rgba(0,0,0,0.28)', border: `2px solid ${bannerColor}`, borderRadius: 8, padding: '8px 12px' }}>
+        <div style={{ fontWeight: 800, color: '#ffd23f', textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 12 }}>⚠ {calName} — choose units to lose{u.areas ? ' (flood plain)' : ''}</div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: bannerColor, lineHeight: 1.2 }}>{banner}</div>
+        <div style={{ fontSize: 12, color: '#cdc4ad' }}>You must give up <b>{target}</b> unit point{target === 1 ? '' : 's'} (a token = 1, a city = {u.cityWorth}).</div>
+      </div>
+      {CALAMITY_DESC[u.calamityId] && <span className="civ-lbl" style={{ color: '#cfc7b4' }}>{CALAMITY_DESC[u.calamityId]}</span>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: '30vh', overflowY: 'auto' }}>
         {inv.map((x) => (
           <div key={x.aid} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -866,18 +869,15 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
               <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setT(x.aid, x.tokens, -1)}>−</button>
               <b style={{ width: 36, textAlign: 'center' }}>{tok[x.aid] ?? 0}/{x.tokens}</b>
               <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setT(x.aid, x.tokens, +1)}>+</button>
-              <span className="civ-lbl" style={{ color: '#9a8d6a' }}>{keepMode ? 'keep' : 'tokens'}</span>
+              <span className="civ-lbl" style={{ color: '#9a8d6a' }}>tokens</span>
             </>}
-            {x.city && <button className={`civ-btn ${cities.includes(x.aid) ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => setCities((c) => c.includes(x.aid) ? c.filter((y) => y !== x.aid) : [...c, x.aid])}>{cities.includes(x.aid) ? (keepMode ? '★ ' : '✗ ') : ''}{keepMode ? 'keep city' : 'city'} ({u.cityWorth})</button>}
+            {x.city && <button className={`civ-btn ${cities.includes(x.aid) ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => setCities((c) => c.includes(x.aid) ? c.filter((y) => y !== x.aid) : [...c, x.aid])}>{cities.includes(x.aid) ? '✗ ' : ''}city ({u.cityWorth})</button>}
           </div>
         ))}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-        <span className="civ-lbl" style={{ color: ok ? '#7caa6a' : '#caa05a' }}>{keepMode ? `keeping ${total} / ${target}` : `${total} / ${target} points`}</span>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {sugg && <button className="civ-btn" style={{ fontSize: 11 }} onClick={suggest}>Suggest</button>}
-          <button className="civ-btn" disabled={!ok} onClick={submit}>{keepMode ? 'Keep this faction' : 'Lose these'}</button>
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
+        {sugg && <button className="civ-btn" style={{ fontSize: 11 }} onClick={() => { setTok({ ...sugg.tokens }); setCities([...(sugg.cities ?? [])]); }}>Suggest</button>}
+        <button className="civ-btn" disabled={!ok} onClick={() => onApply({ type: 'chooseUnits', tokens: tok, cities })}>Lose these</button>
       </div>
     </div>
   );

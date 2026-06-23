@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Rng } from 'digital-boardgame-framework';
 import { adapter, createGame } from '../engine/index.js';
 import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent } from '../engine/index.js';
-import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, civById, commodityById, epochs, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
+import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
 import { handValue, creditTowards, commoditySetValue } from '../engine/helpers.js';
 import { submitStandaloneReport, fetchMyReports, resolutionNote, type MyReport } from '../client/api.js';
@@ -14,7 +14,48 @@ const BARB = '__barbarian__';
 const PIRATE = '__pirate__';
 export type View = 'map' | 'ast' | 'census' | 'tools' | 'goods';
 
+/** Pre-game screen: the human picks which civilization to play and which AI
+ *  opponents to face, instead of always being seated as Egypt. */
+function CivSetup({ onStart, initial }: { onStart: (human: PlayerId, opponents: PlayerId[]) => void; initial: PlayerId }) {
+  const all = useMemo(() => [...civilizations].sort((a, b) => a.astOrder - b.astOrder), []);
+  const [human, setHuman] = useState<PlayerId>(initial);
+  const [opps, setOpps] = useState<PlayerId[]>(() => DEFAULT_PLAYERS.filter((p) => p !== initial).slice(0, 3));
+  const pickHuman = (id: PlayerId) => { setHuman(id); setOpps((o) => o.filter((x) => x !== id)); };
+  const toggleOpp = (id: PlayerId) => setOpps((o) => (o.includes(id) ? o.filter((x) => x !== id) : o.length < 6 ? [...o, id] : o));
+  const ok = opps.length >= 1 && opps.length <= 6;
+  const swatch = (color: string, on: boolean) => ({ borderLeft: `6px solid ${color}`, opacity: on ? 1 : 0.6, fontWeight: on ? 700 : 400 } as const);
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, color: '#eee', padding: 24, overflowY: 'auto' }}>
+      <h1 style={{ margin: 0 }}>Advanced Civilization</h1>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+        <div style={{ fontSize: 13, color: '#ffd23f', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Play as</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', maxWidth: 700 }}>
+          {all.map((c) => (
+            <button key={c.id} className={`civ-btn ${human === c.id ? 'on' : ''}`} onClick={() => pickHuman(c.id)} style={swatch(c.color, human === c.id)}>{human === c.id ? '★ ' : ''}{c.name}</button>
+          ))}
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+        <div style={{ fontSize: 13, color: '#ffd23f', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Opponents — AI ({opps.length})</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', maxWidth: 700 }}>
+          {all.filter((c) => c.id !== human).map((c) => (
+            <button key={c.id} className={`civ-btn ${opps.includes(c.id) ? 'on' : ''}`} onClick={() => toggleOpp(c.id)} style={swatch(c.color, opps.includes(c.id))}>{opps.includes(c.id) ? '✓ ' : ''}{c.name}</button>
+          ))}
+        </div>
+      </div>
+      <button className="civ-btn" disabled={!ok} style={{ fontSize: 16, padding: '10px 22px', fontWeight: 700 }} onClick={() => onStart(human, opps)}>Begin as {civById.get(human)?.name} →</button>
+      <p className="civ-lbl" style={{ color: '#aaa', maxWidth: 520, textAlign: 'center' }}>You play {civById.get(human)?.name}; the others are run by the AI. Choose 1–6 opponents.</p>
+    </div>
+  );
+}
+
 export default function App() {
+  // Pre-game civilization picker: the human chooses which civ to play (and its
+  // AI opponents) instead of always being seated as Egypt.
+  const [started, setStarted] = useState(false);
+  const [config, setConfig] = useState<{ players: PlayerId[]; human: PlayerId }>(
+    () => ({ players: DEFAULT_PLAYERS, human: DEFAULT_PLAYERS[0]! }),
+  );
   const [seats, setSeats] = useState<Record<PlayerId, 'human' | 'ai'>>(
     () => Object.fromEntries(DEFAULT_PLAYERS.map((p, i) => [p, i === 0 ? 'human' : 'ai'])) as Record<PlayerId, 'human' | 'ai'>,
   );
@@ -22,6 +63,17 @@ export default function App() {
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
   const [view, setView] = useState<View>('map');
   const rng = useRef(new Rng(7));
+
+  const startGame = useCallback((human: PlayerId, opponents: PlayerId[]) => {
+    const players = [human, ...opponents];
+    const seed = Date.now() & 0xffff;
+    rng.current = new Rng(seed);
+    setConfig({ players, human });
+    setSeats(Object.fromEntries(players.map((p) => [p, p === human ? 'human' : 'ai'])) as Record<PlayerId, 'human' | 'ai'>);
+    setState(createGame({ players, seed, maxTurns: 60 }));
+    setView('map');
+    setStarted(true);
+  }, []);
 
   const actor = adapter.currentActor(state);
   const result = adapter.result(state);
@@ -60,7 +112,10 @@ export default function App() {
     return () => clearTimeout(t);
   }, [actor, state.phase, view, inMovement, planner.origin]);
 
-  const newGame = () => { const seed = Date.now() & 0xffff; rng.current = new Rng(seed); setState(createGame({ players: DEFAULT_PLAYERS, seed, maxTurns: 60 })); setView('map'); };
+  const newGame = () => setStarted(false); // back to the civilization picker
+
+  // Gate AFTER all hooks (hooks must run unconditionally on every render).
+  if (!started) return <CivSetup onStart={startGame} initial={config.human} />;
 
   // The nation shown in the status/info panels: the current actor, else seat 0.
   const focus = actor ?? state.seating[0]!;
@@ -744,6 +799,9 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
 }
 
 const isCal = (c: string) => c.startsWith('calamity:');
+/** A card you may put in a trade offer: any commodity, or a TRADABLE calamity
+ *  (non-tradable ones — Volcano/Famine/Civil War/Flood — can't be passed, §9.1). */
+const isGivableCard = (c: string) => !isCal(c) || calamityById.get(c.slice(9))?.tradable === true;
 const cardLabel = (c: string) => (isCal(c) ? `⚠ ${c.slice(9)}` : c);
 /** Sort card ids: commodities ascending by value, calamities last. */
 const byCardValue = (a: string, b: string) => (isCal(a) ? 1000 : commodityById.get(a)?.value ?? 0) - (isCal(b) ? 1000 : commodityById.get(b)?.value ?? 0);
@@ -979,10 +1037,10 @@ function OfferBuilder({ me, submitLabel, onSubmit, wantPicker }: {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, border: '1px solid #7a4a18', borderRadius: 4, padding: 6 }}>
       <span className="civ-lbl">Your hand — click to add to the offer:</span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-        {Object.entries(me.hand).filter(([, n]) => n > 0).sort((a, b) => byCardValue(a[0], b[0])).map(([c, n]) => (
+        {Object.entries(me.hand).filter(([c, n]) => n > 0 && isGivableCard(c)).sort((a, b) => byCardValue(a[0], b[0])).map(([c, n]) => (
           <button className="civ-btn" key={c} disabled={(give[c] ?? 0) >= n} onClick={() => add(c)}>{cName(c)} ×{n - (give[c] ?? 0)}</button>
         ))}
-        {Object.keys(me.hand).length === 0 && <span className="civ-lbl">(no cards)</span>}
+        {Object.keys(me.hand).filter((c) => (me.hand[c] ?? 0) > 0 && isGivableCard(c)).length === 0 && <span className="civ-lbl">(no tradable cards)</span>}
       </div>
       {total > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

@@ -5,8 +5,8 @@ import type { LogEntry } from 'digital-boardgame-framework';
 import { adapter } from '../engine/index.js';
 import type { Action, GameState, PlayerId } from '../engine/index.js';
 import { civilizations, civById } from '../data/index.js';
-import { createCivClient, createNetworkGame, realtimeSubscribe, tokenFromInvite } from '../client/api.js';
-import { ActionList, Board, CalamityModal, CombatModal, InfoView, MovementControls, StatusPanel, legalAreas, nationFocusArea, prettyPhase, scrollBoardTo, useMovementPlanner, type View } from './App.js';
+import { createCivClient, createNetworkGame, fetchMyReports, realtimeSubscribe, resolutionNote, tokenFromInvite, type MyReport } from '../client/api.js';
+import { ActionList, Board, CalamityModal, CombatModal, InfoView, MovementControls, ReportModal, StatusPanel, legalAreas, nationFocusArea, prettyPhase, scrollBoardTo, useMovementPlanner, type View } from './App.js';
 
 const API = ''; // same-origin; Vite proxies /api -> the GameServer host
 // Placeholder so the movement-planner hook can run before the game view loads.
@@ -154,37 +154,22 @@ export function OnlineGame({ gameId, token }: { gameId: string; token: string })
 
 function BugReport({ client, view }: { client: GameClientApi<GameState, Action>; view: GameState }) {
   const [open, setOpen] = useState(false);
-  const [message, setMessage] = useState('');
-  const [severity, setSeverity] = useState<'bug' | 'rules-question' | 'feedback'>('bug');
-  const [status, setStatus] = useState<string | null>(null);
-
-  async function send() {
-    setStatus('Sending…');
-    // Attach the game's move log as the report's clientLog; the server also stores
-    // the full game snapshot automatically, so the whole game is uploaded.
+  const [mine, setMine] = useState<MyReport[]>([]);
+  const refreshMine = useCallback(() => { fetchMyReports(API).then(setMine).catch(() => {}); }, []);
+  useEffect(() => { refreshMine(); }, [refreshMine]);
+  const answered = mine.filter((r) => resolutionNote(r.resolution));
+  const send = async (message: string, severity: string) => {
+    // Attach the game's move log; the server stores the full snapshot too.
     const clientLog: LogEntry[] = view.log.map((m, i) => ({ turn: view.turn, kind: 'log', payload: m, ts: i }));
-    try {
-      const { reportId } = await client.report({ message, severity, category: 'game', clientLog, clientBuild: 'web-ui', userAgent: navigator.userAgent } as never);
-      setStatus(`Thanks! Report ${reportId} received.`);
-      setMessage('');
-    } catch (e) {
-      setStatus(`Could not send: ${(e as Error).message}`); // never a false success
-    }
-  }
-
-  if (!open) return <button className="civ-btn" onClick={() => setOpen(true)}>Report a bug</button>;
+    const { reportId } = await client.report({ message, severity, category: 'game', clientLog, clientBuild: 'web-ui', userAgent: navigator.userAgent } as never);
+    setTimeout(refreshMine, 500);
+    return reportId as string;
+  };
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <select value={severity} onChange={(e) => setSeverity(e.target.value as typeof severity)} style={{ fontSize: 11 }}>
-        <option value="bug">Bug</option><option value="rules-question">Rules question</option><option value="feedback">Feedback</option>
-      </select>
-      <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="What happened?" rows={3} style={{ fontSize: 12 }} />
-      <div style={{ display: 'flex', gap: 4 }}>
-        <button className="civ-btn" disabled={!message.trim()} onClick={send}>Send (uploads this game's log)</button>
-        <button className="civ-btn" onClick={() => { setOpen(false); setStatus(null); }}>Close</button>
-      </div>
-      {status && <span className="civ-lbl" style={{ color: '#5a2d0a' }}>{status}</span>}
-    </div>
+    <>
+      <button className="civ-btn" onClick={() => { refreshMine(); setOpen(true); }}>Report a problem{answered.length ? ` (${answered.length} ✓)` : ''}</button>
+      {open && <ReportModal mine={mine} onSend={send} onClose={() => setOpen(false)} />}
+    </>
   );
 }
 

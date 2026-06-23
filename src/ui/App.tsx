@@ -406,6 +406,15 @@ const EPOCH_COLOR: Record<string, string> = {
   stone: '#8a5bb0', earlyBronze: '#3aa0d8', lateBronze: '#46b35a', earlyIron: '#e8c84a', lateIron: '#e07a3a',
 };
 
+/** The five civilization-card groups (§33.24 needs a card from each). */
+const GROUP_COLOR: Record<string, string> = {
+  Crafts: '#d98a3a', Arts: '#c0504d', Civics: '#8064a2', Sciences: '#4f9a52', Religion: '#3a8fc7',
+};
+/** Small colored dots for an advance's group(s). */
+function GroupDots({ groups }: { groups: string[] }) {
+  return <>{groups.map((g) => <span key={g} title={g} style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: GROUP_COLOR[g] ?? '#999', marginRight: 3, verticalAlign: 'middle' }} />)}</>;
+}
+
 /** §33.21-.25: a plain-language summary of an epoch's entry requirements. */
 function epochRequirement(r: { cities?: number; cards?: number; cardGroups?: number; perSpaceCardValue?: boolean }): string {
   const parts: string[] = [];
@@ -495,7 +504,7 @@ function AdvanceTip({ id }: { id: string }) {
   return (
     <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 3, zIndex: 60, width: 270, background: '#1a160f', border: '1px solid #c79a3a', borderRadius: 6, padding: 10, boxShadow: '0 6px 24px #000', color: '#eee', fontSize: 12, lineHeight: 1.5, textAlign: 'left', whiteSpace: 'normal' }}>
       <div style={{ fontWeight: 800, color: '#ffd98a' }}>{a.name}</div>
-      <div style={{ color: '#9a8d6a' }}>{a.groups.join(' / ')} · cost {a.cost}{a.prerequisites?.length ? ` · needs ${a.prerequisites.map((p) => advanceById.get(p)?.name ?? p).join(', ')}` : ''}</div>
+      <div style={{ color: '#9a8d6a' }}><GroupDots groups={a.groups} />{a.groups.join(' / ')} · cost {a.cost}{a.prerequisites?.length ? ` · needs ${a.prerequisites.map((p) => advanceById.get(p)?.name ?? p).join(', ')}` : ''}</div>
       <div style={{ margin: '6px 0', color: '#ece4d2' }}>{ADVANCE_EFFECTS[id] ?? ''}</div>
       {credits && <div style={{ color: '#9ab8c8' }}>Credits: {credits}</div>}
     </div>
@@ -508,8 +517,8 @@ function AdvanceChip({ id, owned }: { id: string; owned: boolean }) {
   const [hover, setHover] = useState(false);
   return (
     <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      style={{ position: 'relative', padding: 6, borderRadius: 4, border: '1px solid #555', background: owned ? '#2e6b3a' : '#222', opacity: owned ? 1 : 0.6, cursor: 'help' }}>
-      <b>{a.name}</b><br /><small>{a.groups.join('/')} · {a.cost}</small>
+      style={{ position: 'relative', padding: 6, borderRadius: 4, border: '1px solid #555', borderLeft: `5px solid ${GROUP_COLOR[a.groups[0]!] ?? '#999'}`, background: owned ? '#2e6b3a' : '#222', opacity: owned ? 1 : 0.6, cursor: 'help' }}>
+      <b>{a.name}</b><br /><small><GroupDots groups={a.groups} />{a.groups.join('/')} · {a.cost}</small>
       {hover && <AdvanceTip id={id} />}
     </div>
   );
@@ -517,9 +526,21 @@ function AdvanceChip({ id, owned }: { id: string; owned: boolean }) {
 
 function ToolsView({ state, focus }: { state: GameState; focus: PlayerId }) {
   const owned = new Set(state.players[focus]!.advances);
+  // §33: cards from how many distinct groups the player owns (Iron Age needs all 5).
+  const groupNames = Object.keys(GROUP_COLOR);
+  const ownedByGroup = (g: string) => ALL_ADVANCES.filter((a) => owned.has(a.id) && (a.groups as string[]).includes(g)).length;
+  const represented = groupNames.filter((g) => ownedByGroup(g) > 0).length;
   return (
     <div style={{ padding: 16, color: '#eee' }}>
       <h2 style={{ marginTop: 0 }}>Civilization Advances — {civById.get(focus)?.name}</h2>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+        {groupNames.map((g) => (
+          <span key={g} style={{ fontSize: 12, padding: '2px 8px', borderRadius: 10, border: `1px solid ${GROUP_COLOR[g]}`, background: ownedByGroup(g) > 0 ? GROUP_COLOR[g] : 'transparent', color: ownedByGroup(g) > 0 ? '#1a1a1a' : '#cdc4ad', fontWeight: 700 }}>
+            {g} · {ownedByGroup(g)}
+          </span>
+        ))}
+        <span className="civ-lbl" style={{ color: represented >= 5 ? '#7fd17f' : '#ffd23f', fontWeight: 700 }}>{represented}/5 groups represented (Iron Age needs all 5, §33.24)</span>
+      </div>
       <div className="civ-lbl" style={{ color: '#b9ad8e', marginBottom: 8 }}>Hover any advance for its full effect, prerequisites and credits.</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6, maxWidth: 720 }}>
         {ALL_ADVANCES.map((a) => <AdvanceChip key={a.id} id={a.id} owned={owned.has(a.id)} />)}

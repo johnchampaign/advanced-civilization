@@ -421,17 +421,32 @@ describe('advance refinements (§32.261/.631/.251)', () => {
 });
 
 describe('commodity-card hand limit (§31.71)', () => {
-  it('trims a hand to 8 commodity cards after the advances phase; calamities are exempt', () => {
+  it('pauses for the player to choose which surplus cards to discard; calamities are exempt', () => {
     const s = createGame({ players: ['egypt', 'babylon'], seed: 7 });
     s.players['egypt']!.hand = { ochre: 5, gold: 5, 'calamity:flood': 1 }; // 10 commodities + 1 calamity
     s.phase = 'astAdjustment'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
-    normalize(s); // astAdjustment enforces the limit before AST movement
-    const h = s.players['egypt']!.hand;
+    normalize(s); // astAdjustment pauses for the over-limit discard choice
+
+    // §31.71: the over-limit player (egypt) must choose 2 cards to surrender.
+    expect(adapter.currentActor(s)).toBe('egypt');
+    expect(s.pendingDiscard).toEqual({ holder: 'egypt', count: 2 });
+    const offered = adapter.legalActions(s, 'egypt');
+    expect(offered).toHaveLength(1);
+    expect(offered[0]).toMatchObject({ type: 'chooseDiscard' });
+    expect((offered[0] as { cards: string[] }).cards).toEqual(['ochre', 'ochre']); // cheapest-first default
+
+    // The player may pick any 2 commodity cards (here: drop 2 gold, keep the ochre).
+    const after = adapter.applyAction(s, { type: 'chooseDiscard', cards: ['gold', 'gold'] }, 'egypt');
+    const h = after.players['egypt']!.hand;
     const commodities = Object.entries(h).filter(([c]) => !c.startsWith('calamity:')).reduce((t, [, n]) => t + n, 0);
-    expect(commodities).toBe(8); // kept 8 of 10
-    expect(h['gold']).toBe(5); // kept the valuable cards
-    expect(h['ochre']).toBe(3); // dropped 2 of the cheapest
+    expect(commodities).toBe(8); // 8 of 10 kept
+    expect(h['gold']).toBe(3); // surrendered the 2 chosen
+    expect(h['ochre']).toBe(5); // kept the ochre the player elected to keep
     expect(h['calamity:flood']).toBe(1); // calamity retained, doesn't count toward the 8
+    expect(after.pendingDiscard).toBeUndefined(); // resolved; phase resumes
+
+    // Discarding the wrong count is rejected (§31.71).
+    expect(() => adapter.applyAction(s, { type: 'chooseDiscard', cards: ['gold'] }, 'egypt')).toThrow(/exactly 2/);
   });
 });
 

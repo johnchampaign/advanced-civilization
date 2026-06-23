@@ -722,6 +722,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
   legal: Action[]; selectedArea: string | null; phase: string; onApply: (a: Action) => void; state: GameState; actor: PlayerId;
 }) {
   const pass = legal.find((a) => a.type === 'pass');
+  if (state.pendingDiscard?.holder === actor) return <DiscardControls state={state} onApply={onApply} />;
   if (phase === 'taxation') {
     const rates = legal.filter((a) => a.type === 'setTaxRate') as Extract<Action, { type: 'setTaxRate' }>[];
     const cities = Object.values(state.areas).filter((a) => a.city === actor).length;
@@ -815,22 +816,45 @@ const COMMODITY_ORDER = ['ochre', 'hides', 'iron', 'papyrus', 'salt', 'timber', 
  *  or cede (Civil War) — tokens per area + whole cities, covering the required loss. */
 function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: Action[]; onApply: (a: Action) => void }) {
   const u = state.pendingUnitLoss!;
+  const keepMode = u.mode === 'cede'; // Civil War: you pick the faction you KEEP; the rest defect.
   const scope = u.areas ?? Object.keys(state.areas);
   const inv = scope.map((aid) => ({ aid, tokens: state.areas[aid]?.tokens[u.holder] ?? 0, city: state.areas[aid]?.city === u.holder }))
     .filter((x) => x.tokens > 0 || x.city);
-  const sugg = (legal.find((x) => x.type === 'chooseUnits') as Extract<Action, { type: 'chooseUnits' }> | undefined);
-  const [tok, setTok] = useState<Record<string, number>>(sugg?.tokens ?? {});
-  const [cities, setCities] = useState<string[]>(sugg?.cities ?? []);
+  // Start with NO pre-selection (reporters disliked the auto-picked default); a
+  // Suggest button fills in the sensible play if wanted.
+  const [tok, setTok] = useState<Record<string, number>>({});
+  const [cities, setCities] = useState<string[]>([]);
   const avail = inv.reduce((t, x) => t + x.tokens + (x.city ? u.cityWorth : 0), 0);
-  const required = Math.min(u.points, avail);
+  const lose = Math.min(u.points, avail);            // points that go away (lost, or defect to the beneficiary)
+  const target = keepMode ? avail - lose : lose;     // what the selection should total: kept faction, or units lost
   const total = Object.values(tok).reduce((t, n) => t + n, 0) + cities.length * u.cityWorth;
-  const ok = total >= required && total - required < u.cityWorth;
-  const verb = u.mode === 'cede' ? `cede to ${nationName(u.beneficiary!)}` : 'lose';
+  const effectiveLost = keepMode ? avail - total : total; // points actually given up by this selection
+  const ok = effectiveLost >= lose && effectiveLost - lose < u.cityWorth;
   const setT = (aid: string, max: number, d: number) => setTok((s) => ({ ...s, [aid]: Math.max(0, Math.min(max, (s[aid] ?? 0) + d)) }));
+  // The engine's suggestion is the cheapest set to GIVE UP. For keep mode, the
+  // recommended keep is its complement (hold your strongest units & cities).
+  const sugg = (legal.find((x) => x.type === 'chooseUnits') as Extract<Action, { type: 'chooseUnits' }> | undefined);
+  const suggest = () => {
+    if (!sugg) return;
+    if (!keepMode) { setTok({ ...sugg.tokens }); setCities([...(sugg.cities ?? [])]); return; }
+    const giveT = sugg.tokens ?? {}; const giveC = new Set(sugg.cities ?? []);
+    const keepT: Record<string, number> = {};
+    for (const x of inv) { const k = x.tokens - (giveT[x.aid] ?? 0); if (k > 0) keepT[x.aid] = k; }
+    setTok(keepT); setCities(inv.filter((x) => x.city && !giveC.has(x.aid)).map((x) => x.aid));
+  };
+  const submit = () => {
+    if (!keepMode) { onApply({ type: 'chooseUnits', tokens: tok, cities }); return; }
+    // Cede everything NOT kept: per-area token complement + cities not kept.
+    const cededT: Record<string, number> = {};
+    for (const x of inv) { const c = x.tokens - (tok[x.aid] ?? 0); if (c > 0) cededT[x.aid] = c; }
+    onApply({ type: 'chooseUnits', tokens: cededT, cities: inv.filter((x) => x.city && !cities.includes(x.aid)).map((x) => x.aid) });
+  };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {CALAMITY_DESC[u.calamityId] && <span className="civ-lbl" style={{ color: '#cfc7b4' }}>⚠ {CALAMITY_DESC[u.calamityId]}</span>}
-      <span className="civ-lbl">Choose units to <b>{verb}</b> totalling <b>{required}</b> point{required === 1 ? '' : 's'}{u.areas ? ' (on the flood plain)' : ''}:</span>
+      {keepMode
+        ? <span className="civ-lbl">Your nation splits in two. Choose the faction you <b>keep</b> (<b>{target}</b> points); everything else defects to <b style={{ color: nationColor(u.beneficiary!) }}>{nationName(u.beneficiary!)}</b>:</span>
+        : <span className="civ-lbl">Choose units to <b>lose</b> totalling <b>{target}</b> point{target === 1 ? '' : 's'}{u.areas ? ' (on the flood plain)' : ''}:</span>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: '30vh', overflowY: 'auto' }}>
         {inv.map((x) => (
           <div key={x.aid} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -839,15 +863,50 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
               <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setT(x.aid, x.tokens, -1)}>−</button>
               <b style={{ width: 36, textAlign: 'center' }}>{tok[x.aid] ?? 0}/{x.tokens}</b>
               <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setT(x.aid, x.tokens, +1)}>+</button>
-              <span className="civ-lbl" style={{ color: '#9a8d6a' }}>tokens</span>
+              <span className="civ-lbl" style={{ color: '#9a8d6a' }}>{keepMode ? 'keep' : 'tokens'}</span>
             </>}
-            {x.city && <button className={`civ-btn ${cities.includes(x.aid) ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => setCities((c) => c.includes(x.aid) ? c.filter((y) => y !== x.aid) : [...c, x.aid])}>{cities.includes(x.aid) ? '✗ ' : ''}city ({u.cityWorth})</button>}
+            {x.city && <button className={`civ-btn ${cities.includes(x.aid) ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => setCities((c) => c.includes(x.aid) ? c.filter((y) => y !== x.aid) : [...c, x.aid])}>{cities.includes(x.aid) ? (keepMode ? '★ ' : '✗ ') : ''}{keepMode ? 'keep city' : 'city'} ({u.cityWorth})</button>}
           </div>
         ))}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-        <span className="civ-lbl" style={{ color: ok ? '#7caa6a' : '#caa05a' }}>{total} / {required} points</span>
-        <button className="civ-btn" disabled={!ok} onClick={() => onApply({ type: 'chooseUnits', tokens: tok, cities })}>{u.mode === 'cede' ? 'Cede these' : 'Lose these'}</button>
+        <span className="civ-lbl" style={{ color: ok ? '#7caa6a' : '#caa05a' }}>{keepMode ? `keeping ${total} / ${target}` : `${total} / ${target} points`}</span>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {sugg && <button className="civ-btn" style={{ fontSize: 11 }} onClick={suggest}>Suggest</button>}
+          <button className="civ-btn" disabled={!ok} onClick={submit}>{keepMode ? 'Keep this faction' : 'Lose these'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** §31.71: over the 8-card hand limit — choose which surplus commodity cards to
+ *  surrender (the rest are kept). */
+function DiscardControls({ state, onApply }: { state: GameState; onApply: (a: Action) => void }) {
+  const d = state.pendingDiscard!;
+  const hand = state.players[d.holder]!.hand;
+  const cards = Object.entries(hand).filter(([c, n]) => !isCal(c) && n > 0).flatMap(([c, n]) => Array<string>(n).fill(c)).sort((a, b) => byCardValue(a, b));
+  const [sel, setSel] = useState<string[]>([]); // start empty — the player picks
+  // Toggle one physical card by index (cards may repeat by name).
+  const toggle = (i: number) => setSel((s) => { const next = [...s]; const at = next.indexOf(String(i)); if (at >= 0) next.splice(at, 1); else if (next.length < d.count) next.push(String(i)); return next; });
+  const ok = sel.length === d.count;
+  const submit = () => onApply({ type: 'chooseDiscard', cards: sel.map((i) => cards[Number(i)]!) });
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span className="civ-lbl">You hold {cards.length} commodity cards — over the limit of 8 (§31.71). Choose <b>{d.count}</b> to discard; you keep the rest:</span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+        {cards.map((c, i) => (
+          <button key={i} className={`civ-btn ${sel.includes(String(i)) ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => toggle(i)}>
+            {sel.includes(String(i)) ? '✗ ' : ''}{commodityById.get(c)?.name ?? c} ({commodityById.get(c)?.value ?? '?'})
+          </button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <span className="civ-lbl" style={{ color: ok ? '#7caa6a' : '#caa05a' }}>{sel.length} / {d.count} to discard</span>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button className="civ-btn" style={{ fontSize: 11 }} onClick={() => setSel(cards.map((_, i) => String(i)).slice(0, d.count))}>Cheapest</button>
+          <button className="civ-btn" disabled={!ok} onClick={submit}>Discard these</button>
+        </div>
       </div>
     </div>
   );

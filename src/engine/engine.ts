@@ -772,29 +772,47 @@ function runCalamity(s: GameState): void {
   checkCitySupport(s); // §26.5
 }
 
-/** §31.71: after buying advances, each player may keep at most 8 commodity cards;
- *  the excess is surrendered to the bottom of its stack. (Calamity cards don't
- *  count.) We auto-keep the most valuable 8 — the only sensible choice. */
-function enforceHandLimit(s: GameState): void {
-  for (const id of s.seating) {
-    const p = player(s, id);
-    const comms = Object.entries(p.hand).filter(([c, n]) => !isCalamityCard(c) && n > 0);
-    const total = comms.reduce((t, [, n]) => t + n, 0);
-    if (total <= 8) continue;
-    const cards = comms.flatMap(([c, n]) => Array(n).fill(c)).sort((a, b) => (commodityById.get(a)?.value ?? 0) - (commodityById.get(b)?.value ?? 0));
-    const surrender = cards.slice(0, total - 8); // lowest-value first
-    for (const c of surrender) {
-      p.hand[c] = (p.hand[c] ?? 0) - 1;
-      if ((p.hand[c] ?? 0) <= 0) delete p.hand[c];
-      const stack = commodityById.get(c)?.stack;
-      if (stack && s.trade.stacks[stack]) s.trade.stacks[stack]!.unshift(c);
-    }
-    s.log.push(`${id} discards ${surrender.length} surplus commodity card${surrender.length === 1 ? '' : 's'}, keeping 8 (§31.71).`);
+/** Commodity-card count in a hand (calamities don't count toward the limit). */
+function commodityCardCount(hand: Record<string, number>): number {
+  return Object.entries(hand).reduce((t, [c, n]) => t + (!isCalamityCard(c) && n > 0 ? n : 0), 0);
+}
+
+/** §31.71 default: the lowest-value `count` commodity cards (cheapest to lose). */
+function suggestDiscard(s: GameState, holder: PlayerId, count: number): string[] {
+  const hand = player(s, holder).hand;
+  const cards = Object.entries(hand)
+    .filter(([c, n]) => !isCalamityCard(c) && n > 0)
+    .flatMap(([c, n]) => Array<string>(n).fill(c))
+    .sort((a, b) => (commodityById.get(a)?.value ?? 0) - (commodityById.get(b)?.value ?? 0));
+  return cards.slice(0, count);
+}
+
+/** Surrender the chosen commodity cards to the bottom of their stacks. */
+function applyDiscard(s: GameState, holder: PlayerId, cards: string[]): void {
+  const p = player(s, holder);
+  for (const c of cards) {
+    p.hand[c] = (p.hand[c] ?? 0) - 1;
+    if ((p.hand[c] ?? 0) <= 0) delete p.hand[c];
+    const stack = commodityById.get(c)?.stack;
+    if (stack && s.trade.stacks[stack]) s.trade.stacks[stack]!.unshift(c);
   }
+  s.log.push(`${holder} discards ${cards.length} surplus commodity card${cards.length === 1 ? '' : 's'}, keeping 8 (§31.71).`);
+}
+
+/** §31.71: after buying advances, each player may keep at most 8 commodity cards;
+ *  the excess (the player's choice) is surrendered to the bottom of its stack.
+ *  Pauses for the first over-limit player via `pendingDiscard`; returns true when
+ *  it paused so the caller stops and waits for the choice. */
+function enforceHandLimit(s: GameState): boolean {
+  for (const id of s.seating) {
+    const over = commodityCardCount(player(s, id).hand) - 8;
+    if (over > 0) { s.pendingDiscard = { holder: id, count: over }; return true; }
+  }
+  return false;
 }
 
 function runAstAdjustment(s: GameState): void {
-  enforceHandLimit(s); // §31.71: trim hands to 8 commodity cards before AST movement
+  if (enforceHandLimit(s)) return; // §31.71: pause for any over-limit discard choice first
   for (const id of s.seating) {
     const p = player(s, id);
     const cities = cityCount(s, id);
@@ -1598,6 +1616,7 @@ export function normalize(s: GameState): void {
     if (s.finished && s.phase === 'taxation') return; // game over at turn boundary
     if (AUTO_PHASES.has(s.phase)) {
       runAutoPhase(s);
+      if (s.pendingDiscard) return; // §31.71: paused for a hand-limit discard choice
       const np = nextPhase(s.phase);
       if (np === 'taxation') {
         // Turn rollover.
@@ -1847,6 +1866,9 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
 
   currentActor(state: GameState): PlayerId | null {
     if (state.finished && state.phase === 'taxation') return null;
+    // A pending hand-limit discard can arise during the auto astAdjustment phase,
+    // so it must be checked before the auto-phase short-circuit.
+    if (state.pendingDiscard) return state.pendingDiscard.holder;
     if (AUTO_PHASES.has(state.phase)) return null;
     // A pending city-choice / unit-loss / secondary allocation is the victim's.
     if (state.pendingCityChoice) return state.pendingCityChoice.holder;
@@ -1993,6 +2015,23 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         resumeAfterChoice(s, u.calamityId, u.holder, u.before, u.overviewBefore);
         break;
       }
+      case 'chooseDiscard': {
+        const d = s.pendingDiscard;
+        if (!d) throw new Error('no hand-limit discard is pending');
+        if (actor !== d.holder) throw new Error('only the over-limit player chooses what to discard (§31.71)');
+        const cards = action.cards;
+        if (cards.length !== d.count) throw new Error(`discard exactly ${d.count} surplus card${d.count === 1 ? '' : 's'} (§31.71)`);
+        const have: Record<string, number> = {};
+        for (const c of cards) {
+          if (isCalamityCard(c)) throw new Error('calamity cards do not count toward the hand limit');
+          have[c] = (have[c] ?? 0) + 1;
+          if (have[c] > (player(s, actor).hand[c] ?? 0)) throw new Error(`you do not hold that many ${c}`);
+        }
+        applyDiscard(s, actor, cards);
+        s.pendingDiscard = undefined;
+        // Continue trimming any further over-limit players, then resume the phase.
+        break;
+      }
       default:
         throw new Error(`action ${(action as Action).type} not valid here`);
     }
@@ -2005,6 +2044,11 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
   legalActions(state: GameState, actor: PlayerId): Action[] {
     if (this.currentActor(state) !== actor) return [];
     const p = player(state, actor);
+    // §31.71: a pending hand-limit discard (during the auto astAdjustment phase)
+    // is the over-limit player's; offer the cheapest-first default. Not a 'pass'.
+    if (state.pendingDiscard && state.pendingDiscard.holder === actor) {
+      return [{ type: 'chooseDiscard', cards: suggestDiscard(state, actor, state.pendingDiscard.count) }];
+    }
     const out: Action[] = [{ type: 'pass' }];
     switch (state.phase) {
       case 'taxation': {

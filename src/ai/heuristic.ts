@@ -24,6 +24,11 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
     const actions = adapter.legalActions(state, actor);
     if (actions.length === 0) return { type: 'pass' };
 
+    // §31.71: a pending hand-limit discard can surface in the auto astAdjustment
+    // phase — take the engine's cheapest-first suggestion.
+    const discard = actions.find((a) => a.type === 'chooseDiscard');
+    if (discard) return discard;
+
     switch (state.phase) {
       case 'cityConstruction': {
         // Only build a city we can actually support: after building, an area

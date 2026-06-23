@@ -187,6 +187,13 @@ export interface PendingUnitLoss {
   overviewBefore: string;
 }
 
+/** §31.71: a player over the 8-commodity-card hand limit must discard the excess
+ *  (their choice). `count` = how many surplus cards to surrender. */
+export interface PendingDiscard {
+  holder: PlayerId;
+  count: number;
+}
+
 /** A force present in an area, for the combat step-through display. */
 export interface CombatForce { id: PlayerId; tokens: number; city: boolean }
 
@@ -283,6 +290,9 @@ export interface GameState {
   /** Set when the current calamity's primary victim must choose which of their
    *  units to lose/cede (§29.63 / §30.41); resolved by a `chooseUnits` action. */
   pendingUnitLoss?: PendingUnitLoss;
+  /** Set when a player over the 8-card hand limit must choose which surplus
+   *  commodity cards to discard (§31.71); resolved by a `chooseDiscard` action. */
+  pendingDiscard?: PendingDiscard;
   /** The most recent conflict phase's combats, one per area, for a step-through
    *  modal. Overwritten each conflict phase; empty if none. */
   lastCombats?: CombatEvent[];
@@ -411,6 +421,13 @@ export interface ChooseUnitsAction {
   cities: string[];
 }
 
+/** §31.71: surrender these surplus commodity cards (one entry per card; length
+ *  must equal the pending discard count) to trim the hand to 8. */
+export interface ChooseDiscardAction {
+  type: 'chooseDiscard';
+  cards: string[];
+}
+
 export interface ResolveCalamityAction {
   type: 'resolveCalamity';
   calamityId: string;
@@ -430,6 +447,7 @@ export type Action =
   | AllocateLossAction
   | ChooseCitiesAction
   | ChooseUnitsAction
+  | ChooseDiscardAction
   | PlaceTokensAction
   | MoveAction
   | BuildShipsAction

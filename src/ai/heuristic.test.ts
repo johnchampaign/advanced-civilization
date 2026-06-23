@@ -34,10 +34,11 @@ async function runTradePhase(s0: GameState, seed = 1): Promise<GameState> {
 
 describe('AI trade negotiation (open-offer board)', () => {
   it('posts, responds to, and completes a set-building swap', async () => {
-    // egypt collects salt, babylon collects iron; each holds spares of the other's.
+    // egypt's most-valuable growing set is salt, babylon's is iron (each holds
+    // spares of what the other is collecting), so a complementary swap forms.
     const s = await runTradePhase(tradeState({
-      egypt: { salt: 3, iron: 2, ochre: 1 },
-      babylon: { iron: 3, salt: 2, hides: 1 },
+      egypt: { salt: 4, iron: 4, ochre: 2 },
+      babylon: { iron: 5, salt: 2, hides: 2 },
     }));
     // A deal was struck and both grew their collections.
     expect((s.negotiation.completed ?? []).length).toBeGreaterThan(0);

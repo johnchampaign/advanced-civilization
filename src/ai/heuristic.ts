@@ -15,7 +15,7 @@
 
 import type { PlayerController, ControllerContext } from 'digital-boardgame-framework';
 import { advanceById, areaById, calamityById, commodityById } from '../data/index.js';
-import { cardGroupsHeld, cityCount, handValue, navalDestinations, neighbors, netAdvanceCost, populationCount } from '../engine/helpers.js';
+import { cardGroupsHeld, cityCount, commoditySetValue, handValue, navalDestinations, neighbors, netAdvanceCost, populationCount } from '../engine/helpers.js';
 import type { Action, GameState, PlayerId, TradeBundle } from '../engine/types.js';
 
 export class HeuristicAI implements PlayerController<GameState, Action, PlayerId> {
@@ -239,10 +239,17 @@ function givable(hand: Record<string, number>): [string, number][] {
 function totalGivable(hand: Record<string, number>): number {
   return givable(hand).reduce((s, [, n]) => s + n, 0);
 }
-/** The commodity the player most wants more of (largest set in hand). */
+/** The commodity the player most wants more of: the one whose set value grows the
+ *  most from one more card (§28.51 — a set is n²×value, so the marginal gain is
+ *  (2n+1)×value). This favours valuable commodities and near-complete sets, rather
+ *  than just whatever you hold the most cheap cards of (e.g. ochre/hides). */
 function topCommodity(hand: Record<string, number>): string | null {
-  let best: string | null = null, bestN = 0;
-  for (const [c, n] of Object.entries(hand)) if (!isCal(c) && n > bestN) { best = c; bestN = n; }
+  let best: string | null = null, bestGain = 0;
+  for (const [c, n] of Object.entries(hand)) {
+    if (isCal(c) || n <= 0) continue;
+    const gain = commoditySetValue(c, n + 1) - commoditySetValue(c, n);
+    if (gain > bestGain) { bestGain = gain; best = c; }
+  }
   return best;
 }
 /** Cheapest commodity cards (as ids, with repeats), excluding `except`. */

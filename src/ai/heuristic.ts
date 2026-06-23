@@ -31,6 +31,9 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
     // §26.32: a city-support reduction (can surface in the auto removeSurplus phase
     // or during Slave Revolt) — take the engine's cheapest-city suggestion.
     if (state.pendingSupport) { const c = actions.find((a) => a.type === 'chooseCities'); if (c) return c; }
+    // §19.32/§30.x: a city-selection pick (e.g. tax-revolt beneficiary) can surface
+    // outside the calamity phase — take the engine's suggested pick.
+    if (state.pendingPick) { const pk = actions.find((a) => a.type === 'pickAreas'); if (pk) return pk; }
 
     switch (state.phase) {
       case 'cityConstruction': {

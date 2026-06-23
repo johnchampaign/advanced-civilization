@@ -49,29 +49,47 @@ describe('§22 ship construction', () => {
 });
 
 describe('§22.3 ship maintenance', () => {
-  it('scraps a ship the owner cannot pay for (no treasury, empty area)', () => {
+  it('scraps a ship the owner cannot pay for when finishing the phase (§22.3)', () => {
     let s = base();
     const x = coastal[0]!.id;
     s.areas[x] = { tokens: {}, ships: { egypt: 1 } }; // ship alone, no tokens to levy
     fixSupply(s); s.players['egypt']!.treasury = 0;
-    // Enter ship construction via the auto phase before it, triggering maintenance.
     s.phase = 'census'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
     normalize(s);
     expect(s.phase).toBe('shipConstruction');
-    expect(s.areas[x]!.ships?.['egypt'] ?? 0).toBe(0); // scrapped
+    while (s.phase === 'shipConstruction') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!); // §22.3 maintenance resolves as each finishes
+    expect(s.areas[x]!.ships?.['egypt'] ?? 0).toBe(0); // scrapped — couldn't pay
     expect(s.players['egypt']!.shipsAvailable).toBe(4); // returned to stock
     expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
   });
 
-  it('maintains a ship for 1 treasury token', () => {
+  it('maintains a ship for 1 treasury token when finishing the phase', () => {
     let s = base();
     const x = coastal[0]!.id;
     s.areas[x] = { tokens: { egypt: 1 }, ships: { egypt: 1 } };
     fixSupply(s); s.players['egypt']!.stock -= 5; s.players['egypt']!.treasury = 5;
     s.phase = 'census'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
     normalize(s);
+    while (s.phase === 'shipConstruction') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
     expect(s.areas[x]!.ships?.['egypt']).toBe(1); // kept
     expect(s.players['egypt']!.treasury).toBe(4); // paid 1
+  });
+
+  it('lets a player scrap a ship instead of maintaining it (§22.3)', () => {
+    let s = base();
+    const x = coastal[0]!.id;
+    s.areas[x] = { tokens: { egypt: 1 }, ships: { egypt: 1 } };
+    fixSupply(s); s.players['egypt']!.stock -= 5; s.players['egypt']!.treasury = 5; // treasury tokens come out of stock
+    s.phase = 'census'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    normalize(s);
+    const t0 = s.players['egypt']!.treasury;
+    while (adapter.currentActor(s) !== 'egypt') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    s = adapter.applyAction(s, { type: 'scrapShip', area: x }, 'egypt'); // voluntarily scrap
+    while (s.phase === 'shipConstruction') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!); // finish — no maintenance owed now
+    expect(s.areas[x]!.ships?.['egypt'] ?? 0).toBe(0); // ship gone
+    expect(s.players['egypt']!.treasury).toBe(t0); // no maintenance paid (declined, §22.3)
+    expect(s.players['egypt']!.shipsAvailable).toBe(4);
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
   });
 });
 

@@ -316,7 +316,10 @@ describe('taxation (§19 / §32.421 Coinage)', () => {
       s.phase = 'taxation'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
       setupTaxation(s);
       normalize(s); // §19.31: revolts resolve once taxation completes (population-expansion entry)
-      return s;
+      // §19.32: the beneficiary chooses which revolting cities to take — drive that pick.
+      let st: GameState = s;
+      while (st.pendingPick) { const c = adapter.currentActor(st)!; st = adapter.applyAction(st, adapter.legalActions(st, c)[0]!, c); }
+      return st;
     }
     const revolted = await run(false);
     expect(Object.values(revolted.areas).filter((a) => a.city === 'egypt').length).toBe(1); // 2 revolted
@@ -337,9 +340,11 @@ describe('taxation (§19 / §32.421 Coinage)', () => {
     setupTaxation(s);
     expect(s.pendingRevolts!['egypt']).toBe(3); // recorded during taxation, NOT yet resolved
     expect(Object.values(s.areas).filter((a) => a.city === 'egypt').length).toBe(3);
-    normalize(s); // taxation completes → revolts settle
-    expect(s.pendingRevolts).toEqual({});
-    expect(Object.values(s.areas).filter((a) => a.city === 'babylon').length).toBe(3); // taken over
+    normalize(s); // taxation completes → revolts settle (pausing for the beneficiary's pick)
+    let st: GameState = s;
+    while (st.pendingPick) { const c = adapter.currentActor(st)!; st = adapter.applyAction(st, adapter.legalActions(st, c)[0]!, c); }
+    expect(st.pendingRevolts).toEqual({});
+    expect(Object.values(st.areas).filter((a) => a.city === 'babylon').length).toBe(3); // taken over
   });
 
   it('pauses for a Coinage holder with cities to choose their rate, which collects', () => {

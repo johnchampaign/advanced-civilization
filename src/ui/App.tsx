@@ -737,6 +737,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
   const pass = legal.find((a) => a.type === 'pass');
   if (state.pendingDiscard?.holder === actor) return <DiscardControls state={state} onApply={onApply} />;
   if (state.pendingSupport?.holder === actor) return <SupportControls state={state} legal={legal} onApply={onApply} />;
+  if (state.pendingPick?.chooser === actor) return <PickControls key={state.pendingPick.stage} state={state} legal={legal} onApply={onApply} />;
   if (phase === 'taxation') {
     const rates = legal.filter((a) => a.type === 'setTaxRate') as Extract<Action, { type: 'setTaxRate' }>[];
     const cities = Object.values(state.areas).filter((a) => a.city === actor).length;
@@ -808,7 +809,6 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
   if (phase === 'calamity' && state.pendingUnitLoss?.holder === actor) return <UnitLossControls state={state} legal={legal} onApply={onApply} />;
   if (phase === 'calamity' && state.pendingAllocation?.holder === actor) return <AllocationControls state={state} legal={legal} onApply={onApply} />;
   if (phase === 'calamity' && state.pendingCivilWar && (state.pendingCivilWar.stage === 'beneficiarySelect' ? state.pendingCivilWar.beneficiary : state.pendingCivilWar.victim) === actor) return <CivilWarControls key={state.pendingCivilWar.stage} state={state} legal={legal} onApply={onApply} />;
-  if (phase === 'calamity' && state.pendingPick?.chooser === actor) return <PickControls key={state.pendingPick.stage} state={state} legal={legal} onApply={onApply} />;
   if (phase === 'calamity') return <ConversionControls state={state} legal={legal} onApply={onApply} />;
   if (phase === 'acquireAdvances') return <AdvancePicker state={state} actor={actor} onApply={onApply} />;
   if (phase === 'trade') return <TradeControls state={state} actor={actor} onApply={onApply} />;
@@ -1002,6 +1002,7 @@ function PickControls({ state, legal, onApply }: { state: GameState; legal: Acti
     : pk.stage === 'volcanoSite' ? 'Two volcanoes would do equal damage — choose which erupts (§30.211)'
     : pk.stage === 'earthquakeSite' ? 'Choose which of your cities the earthquake destroys (§30.212)'
     : pk.stage === 'barbarian' ? `Barbarians have an equal-damage choice — pick where they ${pk.march?.here == null ? 'land' : 'march'} (§30.5251)`
+    : pk.stage === 'taxRevolt' ? `${nationName(pk.victim)}'s cities are revolting — choose which to take over (§19.32)`
     : pk.stage === 'piracyPrimary' ? `Choose which of ${pk.chooser === pk.victim ? 'your' : nationName(pk.victim) + "'s"} coastal cities the pirates seize`
     : 'Choose other players’ coastal cities for the pirates (one each)';
   return (

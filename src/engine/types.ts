@@ -252,7 +252,7 @@ export interface PendingPick {
   /** The player making the selection (trader or primary victim). */
   chooser: PlayerId;
   /** What is being picked, to drive the effect + any chaining. */
-  stage: 'treachery' | 'floodCity' | 'piracyPrimary' | 'piracySecondary' | 'volcanoSite' | 'earthquakeSite' | 'barbarian';
+  stage: 'treachery' | 'floodCity' | 'piracyPrimary' | 'piracySecondary' | 'volcanoSite' | 'earthquakeSite' | 'barbarian' | 'taxRevolt';
   /** Barbarian-march context (§30.5251): `here` is the area to march FROM (null on
    *  the initial placement choice); `visited` are areas already occupied. */
   march?: { here: string | null; visited: string[] };
@@ -264,8 +264,9 @@ export interface PendingPick {
   count: number;
   /** The area ids the chooser may pick from. */
   candidates: string[];
-  before: Record<string, { city?: PlayerId; tokens: Record<PlayerId, number> }>;
-  overviewBefore: string;
+  /** Calamity snapshot for the event (absent for the non-calamity tax-revolt pick). */
+  before?: Record<string, { city?: PlayerId; tokens: Record<PlayerId, number> }>;
+  overviewBefore?: string;
 }
 
 /** A queue of secondary-victim losses awaiting each victim's own which-units
@@ -415,6 +416,11 @@ export interface GameState {
   pendingPick?: PendingPick;
   /** A pending city-support reduction the player must direct (§26.32 / §30.42). */
   pendingSupport?: PendingSupport;
+  /** §22.3: ships owing maintenance this Ship Construction phase (count per player,
+   *  snapshotted at phase entry — ships built this phase aren't maintained until
+   *  next turn). Resolved when the player finishes; lets them decline maintenance
+   *  (scrap a ship) instead. */
+  shipMaintOwed?: Record<PlayerId, number>;
   /** The most recent conflict phase's combats, one per area, for a step-through
    *  modal. Overwritten each conflict phase; empty if none. */
   lastCombats?: CombatEvent[];
@@ -459,6 +465,13 @@ export interface ResolveConflictAction {
 export interface BuildShipsAction {
   type: 'buildShips';
   builds: { area: string; count: number }[];
+}
+
+/** §22.3: scrap one of your ships in an area (return it to stock) instead of
+ *  maintaining it — e.g. to relocate it by rebuilding elsewhere this phase. */
+export interface ScrapShipAction {
+  type: 'scrapShip';
+  area: string;
 }
 
 export interface TradeAcquisitionAction {
@@ -598,6 +611,7 @@ export type Action =
   | PlaceTokensAction
   | MoveAction
   | BuildShipsAction
+  | ScrapShipAction
   | ResolveConflictAction
   | BuildCityAction
   | TradeAcquisitionAction

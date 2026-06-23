@@ -180,40 +180,43 @@ function collectTax(s: GameState, id: PlayerId, rate: number): void {
 /** §19.31-.33: resolve all recorded tax revolts once every player has paid, in
  *  A.S.T. order. Each revolting city is taken over by the highest-reserve rival
  *  with a city to spare, else it collapses to tokens. */
-function resolvePendingRevolts(s: GameState): void {
-  const pending = s.pendingRevolts;
-  if (!pending) return;
-  for (const id of astOrder(s)) {
-    const n = pending[id] ?? 0;
-    if (n > 0) resolveTaxRevolt(s, id, n);
-  }
-  s.pendingRevolts = {};
+/** §19.32: the rival with the most units in stock (token = 1, unplaced city = 5)
+ *  who still has a city piece to install. */
+function bestRevoltTaker(s: GameState, owner: PlayerId): PlayerId | null {
+  const reserves = (x: PlayerId) => player(s, x).stock + 5 * player(s, x).citiesAvailable;
+  return s.seating
+    .filter((o) => o !== owner && isPlayer(s, o) && player(s, o).citiesAvailable > 0)
+    .sort((x, y) => reserves(y) - reserves(x))[0] ?? null;
 }
 
-/** §19.32-.34: revolting cities are taken over by the player with the most units
- *  in stock (cities ×5, tokens ×1) who has a city available; if none can, the
- *  city is reduced to tokens (§19.33). */
-function resolveTaxRevolt(s: GameState, owner: PlayerId, n: number): void {
-  const reserves = (x: PlayerId) => player(s, x).stock + 5 * player(s, x).citiesAvailable;
-  let remaining = n;
-  for (const aid of Object.keys(s.areas)) {
-    if (remaining <= 0) break;
-    if (s.areas[aid]!.city !== owner) continue;
-    const taker = s.seating
-      .filter((o) => o !== owner && isPlayer(s, o) && player(s, o).citiesAvailable > 0)
-      .sort((x, y) => reserves(y) - reserves(x))[0];
-    delete s.areas[aid]!.city; player(s, owner).citiesAvailable += 1;
-    if (taker) {
-      s.areas[aid]!.city = taker; player(s, taker).citiesAvailable -= 1; markCityAcquired(s, taker, aid);
-      s.log.push(`The revolting city in ${areaName(aid)} is taken over by ${taker} (§19.32).`);
-    } else {
-      const place = Math.min(areaLimitFor(s, aid, owner), player(s, owner).stock);
-      if (place > 0) { s.areas[aid]!.tokens[owner] = (s.areas[aid]!.tokens[owner] ?? 0) + place; player(s, owner).stock -= place; }
-      s.log.push(`The revolting city in ${areaName(aid)} collapses — no one could take it over (§19.33).`);
+/** §19.3: resolve tax revolts in A.S.T. order. The beneficiary (most stock) CHOOSES
+ *  which of the revolting player's cities to take over (§19.32), so each revolt
+ *  pauses for that pick; cities no one can take are eliminated (§19.33). Returns
+ *  true if it paused for a choice. */
+function resolvePendingRevolts(s: GameState): boolean {
+  const pending = s.pendingRevolts;
+  if (!pending) return false;
+  for (const id of astOrder(s)) {
+    let n = pending[id] ?? 0;
+    while (n > 0) {
+      const taker = bestRevoltTaker(s, id);
+      if (!taker) {
+        // §19.33: no one can take the remaining revolting cities — they collapse.
+        for (const aid of citiesOf(s, id).slice(0, n)) { delete s.areas[aid]!.city; player(s, id).citiesAvailable += 1; s.log.push(`The revolting city in ${areaName(aid)} collapses — no one could take it over (§19.33).`); }
+        n = 0; break;
+      }
+      // §19.32: the beneficiary picks which of the owner's cities to seize.
+      const take = Math.min(n, player(s, taker).citiesAvailable);
+      pending[id] = n; // remaining recorded; resume continues from here
+      s.pendingPick = { chooser: taker, stage: 'taxRevolt', victim: id, count: take, candidates: citiesOf(s, id) };
+      return true;
     }
-    remaining -= 1;
+    pending[id] = 0;
   }
+  s.pendingRevolts = {};
+  return false;
 }
+
 
 /** §19 taxation. Coinage holders WITH cities choose their rate (1-3) — they're
  *  left to act; everyone else is auto-taxed at rate 2 on phase entry. */
@@ -294,20 +297,35 @@ export function militaryLast(s: GameState, order: PlayerId[]): PlayerId[] {
 /** §22.3 ship maintenance, run when the ship-construction phase begins: each ship
  *  in play costs one token (from treasury, else levied from the ship's area);
  *  unmaintained ships return to stock. Then players may build (interactive). */
-function runShipMaintenance(s: GameState): void {
-  for (const id of s.seating) {
-    const p = player(s, id);
-    for (const [aid, a] of Object.entries(s.areas)) {
-      let ships = a.ships?.[id] ?? 0;
-      while (ships > 0) {
-        if (p.treasury > 0) { p.treasury -= 1; p.stock += 1; }
-        else if ((a.tokens[id] ?? 0) > 0) { setTokens(s, aid, id, (a.tokens[id] ?? 0) - 1); p.stock += 1; }
-        else { a.ships![id] = (a.ships![id] ?? 0) - 1; p.shipsAvailable += 1; ships -= 1; s.log.push(`${id} could not maintain a ship in ${areaName(aid)}; it is scrapped.`); continue; }
-        ships -= 1;
-      }
-      if (a.ships && (a.ships[id] ?? 0) <= 0) delete a.ships[id];
-    }
+/** §22.3: snapshot how many ships each player owes maintenance on this phase (ships
+ *  in play at phase start; ships built this phase aren't maintained until next turn).
+ *  The player may decline maintenance by scrapping (so payment is deferred to when
+ *  they finish — see payShipMaintenance). */
+function setupShipMaintenance(s: GameState): void {
+  const owed: Record<PlayerId, number> = {};
+  for (const id of s.seating) owed[id] = shipCount(s, id);
+  s.shipMaintOwed = owed;
+}
+
+/** §22.3: pay one token per owed ship (treasury, else a levy from a ship's area);
+ *  scrap any ship the player can't afford to maintain. Called when the player
+ *  finishes Ship Construction. */
+function payShipMaintenance(s: GameState, id: PlayerId): void {
+  const p = player(s, id);
+  let owed = Math.min(s.shipMaintOwed?.[id] ?? 0, shipCount(s, id));
+  while (owed > 0) {
+    if (p.treasury > 0) { p.treasury -= 1; p.stock += 1; owed -= 1; continue; }
+    // Levy a token from an area that holds a ship; if none, scrap an unmaintained ship.
+    const levyArea = Object.entries(s.areas).find(([, a]) => (a.ships?.[id] ?? 0) > 0 && (a.tokens[id] ?? 0) > 0);
+    if (levyArea) { const [aid, a] = levyArea; setTokens(s, aid, id, (a.tokens[id] ?? 0) - 1); p.stock += 1; owed -= 1; continue; }
+    const shipArea = Object.entries(s.areas).find(([, a]) => (a.ships?.[id] ?? 0) > 0);
+    if (!shipArea) break;
+    const [aid, a] = shipArea;
+    a.ships![id] = (a.ships![id] ?? 0) - 1; if (a.ships![id]! <= 0) delete a.ships![id];
+    p.shipsAvailable += 1; owed -= 1;
+    s.log.push(`${id} could not maintain a ship in ${areaName(aid)}; it is scrapped (§22.3).`);
   }
+  if (s.shipMaintOwed) s.shipMaintOwed[id] = 0;
 }
 
 function shipCount(s: GameState, id: PlayerId): number {
@@ -1576,7 +1594,23 @@ function finalizePick(s: GameState, calamityId: string, victim: PlayerId, before
 
 /** Apply a validated city pick and chain/finalize the calamity. */
 function applyPick(s: GameState, pk: PendingPick, areas: string[]): void {
-  const { victim, trader, before, overviewBefore } = pk;
+  const { victim, trader } = pk;
+  if (pk.stage === 'taxRevolt') {
+    // §19.32: the beneficiary (pk.chooser) seizes the chosen revolting cities; the
+    // rest of `victim`'s revolt (if the taker ran short) flows to the next taker.
+    for (const aid of areas) {
+      if (s.areas[aid]?.city !== victim) continue;
+      delete s.areas[aid]!.city; player(s, victim).citiesAvailable += 1;
+      s.areas[aid]!.city = pk.chooser; player(s, pk.chooser).citiesAvailable -= 1; markCityAcquired(s, pk.chooser, aid);
+      s.log.push(`The revolting city in ${areaName(aid)} is taken over by ${pk.chooser} (§19.32).`);
+    }
+    if (s.pendingRevolts) s.pendingRevolts[victim] = Math.max(0, (s.pendingRevolts[victim] ?? 0) - areas.length);
+    s.pendingPick = undefined;
+    if (resolvePendingRevolts(s)) return; // another revolt choice pending
+    setupPopulationExpansion(s); // §19.31 done — now apply population growth
+    return;
+  }
+  const before = pk.before!, overviewBefore = pk.overviewBefore!; // calamity picks always carry these
   if (pk.stage === 'treachery') {
     const aid = areas[0]!; const a = s.areas[aid]!;
     delete a.city; player(s, victim).citiesAvailable += 1;
@@ -1924,14 +1958,13 @@ function enterPhase(s: GameState, phase: Phase): void {
     if (phase === 'trade') {
       s.negotiation = { turnPointer: 0, passStreak: 0, actions: 0, nextOfferId: 0, done: [], offers: [], completed: [] };
     }
-    if (phase === 'shipConstruction') runShipMaintenance(s); // §22.3, before building
+    if (phase === 'shipConstruction') setupShipMaintenance(s); // §22.3: snapshot owed maintenance (paid when each player finishes)
     if (phase === 'taxation') setupTaxation(s); // §19: auto-tax non-Coinage; Coinage holders pick
-    if (phase === 'populationExpansion') resolvePendingRevolts(s); // §19.31: revolts settle after all paid
     if (phase === 'calamity') { runCalamity(s); if (!s.calamityActive) setupCalamityConversion(s); } // §29: resolve (may pause for allocation), then Monotheism converts
     if (phase === 'acquireAdvances') checkCitySupport(s); // §29.8: support rechecked after any conversion
-    // §13: apply growth now (auto when stock allows); constrained players are
-    // left to place their limited tokens interactively.
-    if (phase === 'populationExpansion') setupPopulationExpansion(s);
+    // §19.31 revolts settle after all paid; the beneficiary may need to choose which
+    // cities to take (pause). Population growth (§20) applies once revolts are done.
+    if (phase === 'populationExpansion') { if (resolvePendingRevolts(s)) return; setupPopulationExpansion(s); }
   }
 }
 
@@ -2263,6 +2296,8 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         } else if (!s.actedThisPhase.includes(actor)) {
           // Passing taxation = accept the default rate 2 (still collect the tax).
           if (s.phase === 'taxation') collectTax(s, actor, 2);
+          // §22.3: finishing Ship Construction pays maintenance on the ships kept.
+          if (s.phase === 'shipConstruction') payShipMaintenance(s, actor);
           s.actedThisPhase.push(actor);
         }
         break;
@@ -2315,6 +2350,17 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         if (s.phase !== 'shipConstruction') throw new Error('buildShips only in shipConstruction phase');
         applyBuildShips(s, actor, action.builds);
         break; // stays acting; may build more or pass
+      case 'scrapShip': {
+        if (s.phase !== 'shipConstruction') throw new Error('scrapShip only in shipConstruction phase');
+        const a = s.areas[action.area];
+        if (!a || (a.ships?.[actor] ?? 0) <= 0) throw new Error('no ship of yours to scrap there');
+        a.ships![actor] = (a.ships![actor] ?? 0) - 1; if (a.ships![actor]! <= 0) delete a.ships![actor];
+        player(s, actor).shipsAvailable += 1;
+        // §22.3: a scrapped ship owes no maintenance.
+        if (s.shipMaintOwed) s.shipMaintOwed[actor] = Math.min(s.shipMaintOwed[actor] ?? 0, shipCount(s, actor));
+        s.log.push(`${actor} scraps a ship in ${areaName(action.area)} (§22.3).`);
+        break; // stays acting; may build/scrap more or pass
+      }
       case 'buildCity':
         if (s.phase !== 'cityConstruction') throw new Error('buildCity only in cityConstruction phase');
         applyBuildCity(s, actor, action.area, action.useTreasury);
@@ -2493,6 +2539,11 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
     if (state.pendingSupport && state.pendingSupport.holder === actor) {
       return [{ type: 'chooseCities', areas: [suggestSupportReduce(state, state.pendingSupport)] }];
     }
+    // §30.221/.514/.91/§19.32: a named chooser selecting cities — can arise outside
+    // the calamity phase (the tax-revolt beneficiary acts during populationExpansion).
+    if (state.pendingPick && state.pendingPick.chooser === actor) {
+      return [{ type: 'pickAreas', areas: suggestPick(state, state.pendingPick) }];
+    }
     const out: Action[] = [{ type: 'pass' }];
     switch (state.phase) {
       case 'taxation': {
@@ -2520,6 +2571,8 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
             }
           }
         }
+        // §22.3: a player may scrap any of their ships instead of maintaining it.
+        for (const [aid, a] of Object.entries(state.areas)) if ((a.ships?.[actor] ?? 0) > 0) out.push({ type: 'scrapShip', area: aid });
         break;
       }
       case 'movement': {
@@ -2559,9 +2612,11 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         break;
       }
       case 'acquireAdvances': {
-        // Only commodity cards are spendable currency (not calamity cards).
+        // Only commodity cards are spendable currency (not calamity cards). §30.312:
+        // Grain locked against Famine this turn isn't spendable either.
         const commHand: Record<string, number> = {};
         for (const [c, n] of Object.entries(p.hand)) if (!isCalamityCard(c) && n > 0) commHand[c] = n;
+        if (commHand['grain']) { commHand['grain'] -= (p.grainLockedThisTurn ?? 0); if (commHand['grain'] <= 0) delete commHand['grain']; }
         const creditEligible = p.advances.filter((a) => !(p.advancesThisTurn ?? []).includes(a)); // §31.53
         for (const adv of advanceById.values()) {
           if (has(p, adv.id)) continue;
@@ -2599,10 +2654,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
           const sel = suggestCivilWarSelect(state);
           return [{ type: 'civilWarSelect', tokens: sel.tokens, cities: sel.cities }];
         }
-        // §30.221/.514/.91: a named chooser selects cities — offer the default pick.
-        if (state.pendingPick && state.pendingPick.chooser === actor) {
-          return [{ type: 'pickAreas', areas: suggestPick(state, state.pendingPick) }];
-        }
+        // (pendingPick city selections handled phase-agnostically above.)
         // §29/§32.941: a Monotheism holder may convert one adjacent enemy area.
         if (has(p, 'monotheism') && !p.convertedThisTurn) {
           for (const area of monotheismTargets(state, actor)) out.push({ type: 'convertArea', area });

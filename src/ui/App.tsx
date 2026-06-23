@@ -4,7 +4,7 @@ import { adapter, createGame } from '../engine/index.js';
 import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent } from '../engine/index.js';
 import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
-import { handValue, creditTowards, commoditySetValue } from '../engine/helpers.js';
+import { handValue, creditTowards, commoditySetValue, advancesFaceValue } from '../engine/helpers.js';
 import { submitStandaloneReport, fetchMyReports, resolutionNote, type MyReport } from '../client/api.js';
 import { anchors, MAIN_VIEWBOX } from './anchors.js';
 
@@ -530,9 +530,14 @@ function ToolsView({ state, focus }: { state: GameState; focus: PlayerId }) {
   const groupNames = Object.keys(GROUP_COLOR);
   const ownedByGroup = (g: string) => ALL_ADVANCES.filter((a) => owned.has(a.id) && (a.groups as string[]).includes(g)).length;
   const represented = groupNames.filter((g) => ownedByGroup(g) > 0).length;
+  const totalValue = advancesFaceValue(state.players[focus]!.advances); // §33.25: compared to Late Iron Age space values
   return (
     <div style={{ padding: 16, color: '#eee' }}>
       <h2 style={{ marginTop: 0 }}>Civilization Advances — {civById.get(focus)?.name}</h2>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: 8 }}>
+        <span style={{ fontSize: 22, fontWeight: 800, color: '#ffd98a' }}>{totalValue}</span>
+        <span className="civ-lbl" style={{ color: '#cdc4ad' }}>total advance value — must reach the point value of each Late Iron Age space to enter it (§33.25)</span>
+      </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
         {groupNames.map((g) => (
           <span key={g} style={{ fontSize: 12, padding: '2px 8px', borderRadius: 10, border: `1px solid ${GROUP_COLOR[g]}`, background: ownedByGroup(g) > 0 ? GROUP_COLOR[g] : 'transparent', color: ownedByGroup(g) > 0 ? '#1a1a1a' : '#cdc4ad', fontWeight: 700 }}>

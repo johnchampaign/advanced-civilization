@@ -1,42 +1,35 @@
 // Per-area anchor points for placing token/city markers, plus the layout that
-// stitches the three map panels (West Extension · Main · East Extension) into one
-// scrollable canvas. Each board uses its own VASSAL coordinate space starting near
-// 0, so we translate the western and eastern panels to sit beside the main map.
+// stitches the three VASSAL map panels (West Extension · Main · East Extension)
+// side by side into one scrollable canvas. Each board's zone polygons live in its
+// own image coordinate space (origin 0,0; all three are 1587.4 tall), so we just
+// offset the western/eastern panels to the right of one another.
 import { poleOfInaccessibilityWithClearance, toPolygon } from 'digital-boardgame-framework';
 import { areas } from '../data/index.js';
 
 export interface Anchor { x: number; y: number; r: number; }
 
-/** The main map's SVG/image dimensions (its coordinate origin is 0,0). */
+// Native dimensions of each map artwork (from the VASSAL module SVG viewBoxes).
 export const MAIN_VIEWBOX = { w: 2323.12, h: 1587.4 };
+const WEST = { w: 782.177, h: 1587.4 };
+const EAST = { w: 1189.066, h: 1587.4 };
+const GAP = 0; // the panels are drawn to abut at the same latitude
 
-const GAP = 140; // gutter between map panels
-
-/** Bounding box of a board's area polygons. */
-function extent(board: string): { minx: number; miny: number; w: number; h: number } {
-  let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
-  for (const a of areas) if (a.board === board) for (const [x, y] of a.path) { minx = Math.min(minx, x); maxx = Math.max(maxx, x); miny = Math.min(miny, y); maxy = Math.max(maxy, y); }
-  if (!Number.isFinite(minx)) return { minx: 0, miny: 0, w: 0, h: 0 };
-  return { minx, miny, w: maxx - minx, h: maxy - miny };
-}
-
-const W = extent('western');
-const E = extent('eastern');
-
-// Translate added to each board's raw coordinates. Western is normalized to start
-// at 0; the main map's image is placed after it (its own origin is already 0);
-// eastern follows the main map.
-const mainStart = W.w + GAP;
-const eastStart = mainStart + MAIN_VIEWBOX.w + GAP;
+// X offset added to each board's native coordinates to place it in the canvas.
+const mainX = WEST.w + GAP;
+const eastX = mainX + MAIN_VIEWBOX.w + GAP;
 export const BOARD_OFFSET: Record<string, { x: number; y: number }> = {
-  western: { x: -W.minx, y: -W.miny },
-  main: { x: mainStart, y: 0 },
-  eastern: { x: eastStart - E.minx, y: -E.miny },
+  western: { x: 0, y: 0 },
+  main: { x: mainX, y: 0 },
+  eastern: { x: eastX, y: 0 },
 };
-/** Where the main-map artwork image sits in the combined canvas. */
-export const MAIN_ORIGIN = BOARD_OFFSET.main!;
-/** The combined canvas dimensions (all three panels side by side). */
-export const BOARD_VIEWBOX = { w: eastStart + E.w, h: Math.max(W.h, MAIN_VIEWBOX.h, E.h) };
+export const BOARD_VIEWBOX = { w: eastX + EAST.w, h: MAIN_VIEWBOX.h };
+
+/** The three map artwork images and where each sits in the combined canvas. */
+export const MAP_IMAGES: { href: string; x: number; y: number; w: number; h: number }[] = [
+  { href: '/assets/map-western.svg', x: BOARD_OFFSET.western!.x, y: 0, w: WEST.w, h: WEST.h },
+  { href: '/assets/map-main.svg', x: BOARD_OFFSET.main!.x, y: 0, w: MAIN_VIEWBOX.w, h: MAIN_VIEWBOX.h },
+  { href: '/assets/map-eastern.svg', x: BOARD_OFFSET.eastern!.x, y: 0, w: EAST.w, h: EAST.h },
+];
 
 export const anchors: Record<string, Anchor> = {};
 for (const a of areas) {
@@ -53,15 +46,4 @@ for (const a of areas) {
     r = 12;
   }
   anchors[a.id] = { x: x + off.x, y: y + off.y, r };
-}
-
-/** Extension-map areas drawn as polygons (the main map has its own artwork). Each
- *  is the area's path translated into the combined canvas. */
-export const EXTENSION_SHAPES: { id: string; isWater: boolean; points: string; cx: number; cy: number }[] = [];
-for (const a of areas) {
-  if (a.board === 'main' || a.path.length < 3) continue;
-  const off = BOARD_OFFSET[a.board] ?? { x: 0, y: 0 };
-  const pts = a.path.map(([x, y]) => `${(x + off.x).toFixed(1)},${(y + off.y).toFixed(1)}`).join(' ');
-  const an = anchors[a.id];
-  EXTENSION_SHAPES.push({ id: a.id, isWater: !!a.isWater, points: pts, cx: an?.x ?? 0, cy: an?.y ?? 0 });
 }

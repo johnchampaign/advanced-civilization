@@ -6,7 +6,7 @@ import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, calamityB
 import { HeuristicAI } from '../ai/heuristic.js';
 import { handValue, creditTowards, commoditySetValue, advancesFaceValue } from '../engine/helpers.js';
 import { submitStandaloneReport, fetchMyReports, resolutionNote, type MyReport } from '../client/api.js';
-import { anchors, MAIN_VIEWBOX, BOARD_VIEWBOX, MAIN_ORIGIN, EXTENSION_SHAPES } from './anchors.js';
+import { anchors, BOARD_VIEWBOX, MAP_IMAGES } from './anchors.js';
 
 const DEFAULT_PLAYERS: PlayerId[] = ['egypt', 'babylon', 'crete', 'assyria'];
 const ai = new HeuristicAI();
@@ -270,16 +270,9 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
   return (
     <div style={{ position: 'relative', width: BOARD_VIEWBOX.w, maxWidth: '100%', margin: '0 auto' }}>
       <svg viewBox={`0 0 ${BOARD_VIEWBOX.w} ${BOARD_VIEWBOX.h}`} style={{ width: '100%', display: 'block', background: '#0d3a4a' }}>
-        {/* The West & East extension panels have no artwork — draw their areas as
-            polygons (sea vs land) beside the main map's image. */}
-        {EXTENSION_SHAPES.map((s) => (
-          <polygon key={s.id} points={s.points} fill={s.isWater ? '#14506a' : '#c8a86a'} stroke="#6b4a22" strokeWidth={1.5} opacity={0.92} />
-        ))}
-        {EXTENSION_SHAPES.filter((s) => !s.isWater).map((s) => (
-          <text key={'t' + s.id} x={s.cx} y={s.cy - 16} textAnchor="middle" fontSize={11} fill="#3a2a12" opacity={0.75} pointerEvents="none">{areaById.get(s.id)?.name ?? s.id}</text>
-        ))}
-        {/* Main map artwork, placed in the combined canvas. */}
-        <image href="/assets/map-main.svg" x={MAIN_ORIGIN.x} y={MAIN_ORIGIN.y} width={MAIN_VIEWBOX.w} height={MAIN_VIEWBOX.h} />
+        {/* The three map panels (West Extension · Main · East Extension), each the
+            VASSAL artwork placed in the combined canvas. */}
+        {MAP_IMAGES.map((m) => <image key={m.href} href={m.href} x={m.x} y={m.y} width={m.w} height={m.h} />)}
         {/* Render every anchored area (not just occupied ones) so empty
             destination areas are clickable during movement. */}
         {Object.keys(anchors).map((aid) => {

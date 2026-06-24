@@ -197,7 +197,8 @@ export default function App() {
                 setView('map');
                 setTimeout(() => { const el = boardRef.current; if (el) el.scrollTo({ left: fx * el.scrollWidth - el.clientWidth / 2, top: fy * el.scrollHeight - el.clientHeight / 2, behavior: 'smooth' }); }, 80);
               }}>
-              {ALL_SHAPES.map((s) => <polygon key={s.id} points={s.points} fill={s.isWater ? '#14506a' : '#c8a86a'} stroke="none" />)}
+              <rect x={0} y={0} width={BOARD_VIEWBOX.w} height={BOARD_VIEWBOX.h} fill="#14506a" />
+              {ALL_SHAPES.filter((s) => !s.isWater).map((s) => <polygon key={s.id} points={s.points} fill="#c8a86a" stroke="none" />)}
             </svg>
           </div>
           <HotseatReport state={state} focus={focus} />
@@ -279,13 +280,19 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
     <div style={{ position: 'relative', width: BOARD_VIEWBOX.w, maxWidth: '100%', margin: '0 auto' }}>
       <svg viewBox={`0 0 ${BOARD_VIEWBOX.w} ${BOARD_VIEWBOX.h}`} style={{ width: '100%', display: 'block', background: '#0d3a4a' }}>
         {/* Board art: if the player has loaded their VASSAL module, draw the three
-            map panels (West · Main · East); otherwise draw every area from our own
-            geometry (water/land polygons) so the game is fully playable as shipped. */}
+            map panels (West · Main · East). Otherwise draw from our own geometry:
+            only ~13 sea zones are defined as areas, so painting every water polygon
+            over a dark canvas leaves most of the sea as void. Instead paint the whole
+            canvas sea-colour and draw only the LAND areas on top — unzoned space then
+            correctly reads as sea, and the board looks like land masses in a sea. */}
         {art
           ? MAP_PANELS.map((m) => <image key={m.key} href={art[m.key]} x={m.x} y={m.y} width={m.w} height={m.h} />)
-          : ALL_SHAPES.map((s) => (
-              <polygon key={s.id} points={s.points} fill={s.isWater ? '#14506a' : '#c8a86a'} stroke="#5e7d52" strokeWidth={1} opacity={0.95} />
-            ))}
+          : <>
+              <rect x={0} y={0} width={BOARD_VIEWBOX.w} height={BOARD_VIEWBOX.h} fill="#14506a" />
+              {ALL_SHAPES.filter((s) => !s.isWater).map((s) => (
+                <polygon key={s.id} points={s.points} fill="#c8a86a" stroke="#9c7d3e" strokeWidth={1.2} strokeLinejoin="round" />
+              ))}
+            </>}
         {/* Render every anchored area (not just occupied ones) so empty
             destination areas are clickable during movement. */}
         {Object.keys(anchors).map((aid) => {

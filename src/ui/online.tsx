@@ -6,6 +6,7 @@ import { adapter } from '../engine/index.js';
 import type { Action, GameState, PlayerId } from '../engine/index.js';
 import { civilizations, civById } from '../data/index.js';
 import { createCivClient, createNetworkGame, fetchMyReports, realtimeSubscribe, resolutionNote, tokenFromInvite, type MyReport } from '../client/api.js';
+import { REPORT_CATEGORY } from '../report-meta.js';
 import { ActionList, Board, CalamityModal, CombatModal, InfoView, MovementControls, ReportModal, StatusPanel, legalAreas, nationFocusArea, prettyPhase, scrollBoardTo, useMovementPlanner, type View } from './App.js';
 
 const API = ''; // same-origin; Vite proxies /api -> the GameServer host
@@ -161,7 +162,7 @@ function BugReport({ client, view }: { client: GameClientApi<GameState, Action>;
   const send = async (message: string, severity: string) => {
     // Attach the game's move log; the server stores the full snapshot too.
     const clientLog: LogEntry[] = view.log.map((m, i) => ({ turn: view.turn, kind: 'log', payload: m, ts: i }));
-    const { reportId } = await client.report({ message, severity, category: 'game', clientLog, clientBuild: 'web-ui', userAgent: navigator.userAgent } as never);
+    const { reportId } = await client.report({ message, severity, category: REPORT_CATEGORY, clientLog, clientBuild: 'web-ui', userAgent: navigator.userAgent } as never);
     setTimeout(refreshMine, 500);
     return reportId as string;
   };

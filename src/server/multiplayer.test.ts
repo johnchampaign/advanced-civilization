@@ -8,6 +8,7 @@ import { FsStore } from 'digital-boardgame-framework/server/node';
 import { adapter, codec, createGame } from '../engine/index.js';
 import type { Action, GameState, PlayerId } from '../engine/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
+import { handleApi } from './handlers.js';
 
 function makeServer() {
   const store = new FsStore(mkdtempSync(join(tmpdir(), 'civ-mp-')));
@@ -91,6 +92,19 @@ describe('async multiplayer (GameServer + filesystem store)', () => {
     expect(r.reporterSide).toBe('egypt');
     expect(r.serverSnapshot.length).toBeGreaterThan(0); // full game state captured
     expect(r.clientLog.length).toBe(1);                   // uploaded game log
+  });
+
+  it('GET /api/reports honours the ?category filter (app isolation on the shared queue)', async () => {
+    const { s, gameId, egypt, babylon } = await newGame();
+    await s.report(gameId, egypt, { message: 'ours', severity: 'bug', category: 'advciv', clientBuild: 'web-ui', userAgent: 't' });
+    await s.report(gameId, babylon, { message: 'other game', severity: 'bug', category: 'other-port', clientBuild: 'web-ui', userAgent: 't' });
+    const q = new URLSearchParams({ unresolved: '1', category: 'advciv' });
+    const res = await handleApi(s, 'GET', '/api/reports', q, undefined);
+    expect(res.status).toBe(200);
+    const rows = res.body as Array<{ message: string; category?: string }>;
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.category === 'advciv')).toBe(true); // pollution from other ports filtered out
+    expect(rows.some((r) => r.message === 'ours')).toBe(true);
   });
 
   it('rejects a bug report from a bad token', async () => {

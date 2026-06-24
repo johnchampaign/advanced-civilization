@@ -6,6 +6,7 @@ import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, calamityB
 import { HeuristicAI } from '../ai/heuristic.js';
 import { handValue, creditTowards, commoditySetValue, advancesFaceValue } from '../engine/helpers.js';
 import { submitStandaloneReport, fetchMyReports, resolutionNote, type MyReport } from '../client/api.js';
+import { REPORT_CATEGORY } from '../report-meta.js';
 import { anchors, BOARD_VIEWBOX, MAP_PANELS, ALL_SHAPES } from './anchors.js';
 import { useMapArt, type MapArt } from './mapArt.js';
 
@@ -1622,7 +1623,7 @@ function HotseatReport({ state, focus }: { state: GameState; focus: PlayerId }) 
   };
   const send = async (message: string, severity: string) => {
     const { reportId } = await submitStandaloneReport('', {
-      message, severity, category: 'game',
+      message, severity, category: REPORT_CATEGORY,
       serverSnapshot: JSON.stringify(state), reporterSide: focus, turnNumber: state.turn,
       clientLog: state.log.map((m, i) => ({ turn: state.turn, kind: 'log', payload: m, ts: i })),
       clientBuild: 'web-ui-hotseat', userAgent: navigator.userAgent,

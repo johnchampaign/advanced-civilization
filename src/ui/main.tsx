@@ -4,6 +4,7 @@ import { UpdateBanner } from 'digital-boardgame-framework/client';
 import App from './App.js';
 import { Lobby, OnlineGame } from './online.js';
 import { fetchUnseenResponses, markResponseSeen, resolutionNote, submitStandaloneReport, type MyReport } from '../client/api.js';
+import { REPORT_CATEGORY } from '../report-meta.js';
 
 /** Catches render/runtime crashes so the app shows a recoverable message (with a
  *  one-click report) instead of a blank screen. */
@@ -12,7 +13,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   static getDerivedStateFromError(error: Error) { return { error, sent: false }; }
   componentDidCatch(error: Error) {
     // Auto-file a report with the stack so crashes surface in the queue.
-    submitStandaloneReport('', { message: `App crashed: ${error.message}\n${(error.stack ?? '').slice(0, 1500)}`, severity: 'bug', category: 'crash', clientBuild: 'web-ui', userAgent: navigator.userAgent })
+    submitStandaloneReport('', { message: `App crashed: ${error.message}\n${(error.stack ?? '').slice(0, 1500)}`, severity: 'bug', category: REPORT_CATEGORY, clientBuild: 'web-ui', userAgent: navigator.userAgent })
       .then(() => this.setState({ sent: true })).catch(() => {});
   }
   render() {

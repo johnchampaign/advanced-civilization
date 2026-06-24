@@ -3,8 +3,9 @@
 // Function (functions/api/[[path]].ts, SupabaseStore) build a GameServer and
 // delegate here. Keeping routing in one place is what makes local dev and
 // production true parity — only the store/notifier/broadcaster differ.
-import type { GameServer, ReportSubmission, BugReportRow } from 'digital-boardgame-framework/server';
+import type { GameServer, ReportSubmission, BugReportRow, ReportFilter } from 'digital-boardgame-framework/server';
 import { createGame, type Action, type GameState } from '../engine/index.js';
+import { REPORT_CATEGORY } from '../report-meta.js';
 // NOTE: import createGame from the engine (node-free), NOT newGameState from
 // game-server.ts — that module top-level-imports FsStore (node:fs), which would
 // break the Cloudflare Workers build of this shared router.
@@ -93,7 +94,7 @@ export async function handleApi(
         clientLog: Array.isArray(b.clientLog) ? b.clientLog : [],
         message: b.message,
         severity: b.severity ?? 'bug',
-        category: b.category ?? 'game',
+        category: b.category ?? REPORT_CATEGORY,
         clientBuild: b.clientBuild,
         userAgent: b.userAgent,
         createdAt: new Date().toISOString(),
@@ -143,8 +144,17 @@ export async function handleApi(
     // ---- reports (public triage, PII-free; see CLAUDE.md trust-tier split) ----
     if (segs[1] === 'reports') {
       if (segs.length === 2 && method === 'GET') {
-        const unresolved = query.get('unresolved') === '1';
-        return { status: 200, body: await server.listReports(unresolved ? { unresolved: true } : undefined) };
+        // Forward the supported filters so triage can scope by app (category),
+        // severity, recency, or game. The shared backend holds several ports'
+        // reports; `?category=advciv` is what isolates this game's queue.
+        const filter: ReportFilter = {};
+        if (query.get('unresolved') === '1') filter.unresolved = true;
+        const category = query.get('category'); if (category) filter.category = category;
+        const severity = query.get('severity'); if (severity) filter.severity = severity;
+        const since = query.get('since'); if (since) filter.since = since;
+        const gameId = query.get('gameId'); if (gameId) filter.gameId = gameId;
+        const hasFilter = Object.keys(filter).length > 0;
+        return { status: 200, body: await server.listReports(hasFilter ? filter : undefined) };
       }
       if (segs[3] === 'resolve' && method === 'POST') {
         await server.resolveReport(segs[2]!, (body as { note?: string })?.note ?? '');

@@ -14,3 +14,11 @@ package/
 .data/
 .env
 .dev.vars
+
+# Board artwork is bring-your-own (extracted from the VASSAL module in the
+# browser at runtime) -- never ship or redistribute the map images.
+public/assets/map-main.svg
+public/assets/map-western.svg
+public/assets/map-eastern.svg
+public/assets/images/map-main-labeled.svg
+assets/civ.vmod

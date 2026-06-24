@@ -6,7 +6,8 @@ import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, calamityB
 import { HeuristicAI } from '../ai/heuristic.js';
 import { handValue, creditTowards, commoditySetValue, advancesFaceValue } from '../engine/helpers.js';
 import { submitStandaloneReport, fetchMyReports, resolutionNote, type MyReport } from '../client/api.js';
-import { anchors, BOARD_VIEWBOX, MAP_IMAGES } from './anchors.js';
+import { anchors, BOARD_VIEWBOX, MAP_PANELS, ALL_SHAPES } from './anchors.js';
+import { useMapArt, type MapArt } from './mapArt.js';
 
 const DEFAULT_PLAYERS: PlayerId[] = ['egypt', 'babylon', 'crete', 'assyria'];
 const ai = new HeuristicAI();
@@ -112,6 +113,7 @@ export default function App() {
     return () => clearTimeout(t);
   }, [actor, state.phase, view, inMovement, planner.origin]);
 
+  const mapArt = useMapArt(); // bring-your-own board artwork (none shipped)
   const newGame = () => setStarted(false); // back to the civilization picker
 
   // Gate AFTER all hooks (hooks must run unconditionally on every render).
@@ -136,8 +138,10 @@ export default function App() {
               origin={inMovement ? planner.origin : null}
               moved={inMovement ? planner.moved : undefined}
               zoomTo={inMovement ? planner.origin : null}
+              art={mapArt.art}
             />
           : <InfoView view={view} state={state} focus={focus} />}
+        {view === 'map' && <MapArtBanner mapArt={mapArt} />}
       </div>
 
       <div className="civ-bar" style={{ display: 'flex', gap: 6, padding: 6, minHeight: 170, maxHeight: '42vh' }}>
@@ -186,13 +190,15 @@ export default function App() {
           <div style={{ textAlign: 'center', fontWeight: 800, letterSpacing: 1 }}>{prettyPhase(state.phase).toUpperCase()}</div>
           <div className="civ-lbl">Turn {state.turn}</div>
           <div style={{ flex: 1, border: '2px solid #7a4a18', background: '#0d3a4a', overflow: 'hidden', minHeight: 60 }} title="Click to jump the map here">
-            <img src="/assets/map-main.svg" alt="mini" style={{ width: '100%', display: 'block', opacity: 0.9, cursor: 'pointer' }}
+            <svg viewBox={`0 0 ${BOARD_VIEWBOX.w} ${BOARD_VIEWBOX.h}`} style={{ width: '100%', display: 'block', cursor: 'pointer' }}
               onClick={(e) => {
                 const r = e.currentTarget.getBoundingClientRect();
                 const fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
                 setView('map');
                 setTimeout(() => { const el = boardRef.current; if (el) el.scrollTo({ left: fx * el.scrollWidth - el.clientWidth / 2, top: fy * el.scrollHeight - el.clientHeight / 2, behavior: 'smooth' }); }, 80);
-              }} />
+              }}>
+              {ALL_SHAPES.map((s) => <polygon key={s.id} points={s.points} fill={s.isWater ? '#14506a' : '#c8a86a'} stroke="none" />)}
+            </svg>
           </div>
           <HotseatReport state={state} focus={focus} />
         </div>
@@ -254,7 +260,7 @@ export function legalAreas(legal: Action[], _phase: string): Set<string> {
 
 // ---- Board ---------------------------------------------------------------
 
-export function Board({ state, selected, onSelect, highlight, zoomTo, origin, moved }: {
+export function Board({ state, selected, onSelect, highlight, zoomTo, origin, moved, art }: {
   state: GameState; selected: string | null; onSelect: (a: string | null) => void; highlight: Set<string>;
   /** When set, the board zooms in toward this area's anchor (e.g. a chosen move origin). */
   zoomTo?: string | null;
@@ -262,6 +268,8 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
   origin?: string | null;
   /** Areas that received planned-but-not-official moves (dashed marker). */
   moved?: Set<string>;
+  /** Bring-your-own map artwork (object-URLs per panel), or null to draw from geometry. */
+  art?: MapArt | null;
 }) {
   const [hovered, setHovered] = useState<string | null>(null);
   void zoomTo; // (was a CSS scale-zoom; removed — it created overflow that the
@@ -270,9 +278,14 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
   return (
     <div style={{ position: 'relative', width: BOARD_VIEWBOX.w, maxWidth: '100%', margin: '0 auto' }}>
       <svg viewBox={`0 0 ${BOARD_VIEWBOX.w} ${BOARD_VIEWBOX.h}`} style={{ width: '100%', display: 'block', background: '#0d3a4a' }}>
-        {/* The three map panels (West Extension · Main · East Extension), each the
-            VASSAL artwork placed in the combined canvas. */}
-        {MAP_IMAGES.map((m) => <image key={m.href} href={m.href} x={m.x} y={m.y} width={m.w} height={m.h} />)}
+        {/* Board art: if the player has loaded their VASSAL module, draw the three
+            map panels (West · Main · East); otherwise draw every area from our own
+            geometry (water/land polygons) so the game is fully playable as shipped. */}
+        {art
+          ? MAP_PANELS.map((m) => <image key={m.key} href={art[m.key]} x={m.x} y={m.y} width={m.w} height={m.h} />)
+          : ALL_SHAPES.map((s) => (
+              <polygon key={s.id} points={s.points} fill={s.isWater ? '#14506a' : '#c8a86a'} stroke="#5e7d52" strokeWidth={1} opacity={0.95} />
+            ))}
         {/* Render every anchored area (not just occupied ones) so empty
             destination areas are clickable during movement. */}
         {Object.keys(anchors).map((aid) => {
@@ -323,6 +336,38 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
         })}
       </svg>
       {hovered && anchors[hovered] && <AreaTooltip areaId={hovered} state={state} zoomed={!!zoomTo} />}
+    </div>
+  );
+}
+
+/** First-run prompt to load the original board art from a VASSAL module. The
+ *  game is fully playable without it (geometry board), so this is dismissible. */
+function MapArtBanner({ mapArt }: { mapArt: ReturnType<typeof useMapArt> }) {
+  const [hidden, setHidden] = useState(() => localStorage.getItem('civ-art-banner-hidden') === '1');
+  const dismiss = () => { localStorage.setItem('civ-art-banner-hidden', '1'); setHidden(true); };
+  if (mapArt.status === 'loading' || mapArt.status === 'ready') return null;
+  if (hidden && mapArt.status !== 'importing' && mapArt.status !== 'error') return null;
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) mapArt.importVmod(f); };
+  return (
+    <div style={{
+      position: 'absolute', left: 10, bottom: 10, zIndex: 25, maxWidth: 340,
+      background: 'rgba(26,20,16,0.96)', color: '#fff', border: '2px solid #ffd23f',
+      borderRadius: 8, padding: '10px 12px', fontSize: 13, lineHeight: 1.4, boxShadow: '0 2px 12px rgba(0,0,0,0.6)',
+    }}>
+      <div style={{ fontWeight: 800, marginBottom: 4 }}>Original board art (optional)</div>
+      <div style={{ opacity: 0.9 }}>
+        This version draws the board from its own map data. If you own the Advanced Civilization
+        <b> VASSAL module</b>, load it to use the original maps — extracted in your browser and stored
+        only on this device. Nothing is uploaded.
+      </div>
+      {mapArt.status === 'error' && <div style={{ color: '#ff9', marginTop: 6 }}>Couldn’t read that file: {mapArt.error}</div>}
+      <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
+        <label className="civ-btn" style={{ cursor: 'pointer', background: '#ffd23f', color: '#1a1410', fontWeight: 700, padding: '4px 10px', borderRadius: 5 }}>
+          {mapArt.status === 'importing' ? 'Reading…' : 'Load .vmod…'}
+          <input type="file" accept=".vmod,.zip,application/zip" onChange={onFile} style={{ display: 'none' }} disabled={mapArt.status === 'importing'} />
+        </label>
+        <button onClick={dismiss} style={{ background: 'none', border: 'none', color: '#cfe8ff', cursor: 'pointer', fontSize: 12 }}>Play without art</button>
+      </div>
     </div>
   );
 }

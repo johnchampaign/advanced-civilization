@@ -24,12 +24,30 @@ export const BOARD_OFFSET: Record<string, { x: number; y: number }> = {
 };
 export const BOARD_VIEWBOX = { w: eastX + EAST.w, h: MAIN_VIEWBOX.h };
 
-/** The three map artwork images and where each sits in the combined canvas. */
-export const MAP_IMAGES: { href: string; x: number; y: number; w: number; h: number }[] = [
-  { href: '/assets/map-western.svg', x: BOARD_OFFSET.western!.x, y: 0, w: WEST.w, h: WEST.h },
-  { href: '/assets/map-main.svg', x: BOARD_OFFSET.main!.x, y: 0, w: MAIN_VIEWBOX.w, h: MAIN_VIEWBOX.h },
-  { href: '/assets/map-eastern.svg', x: BOARD_OFFSET.eastern!.x, y: 0, w: EAST.w, h: EAST.h },
+/** Where each map panel sits in the combined canvas. The artwork itself is
+ *  bring-your-own (see mapArt.ts) — `key` selects the loaded image for a panel. */
+export const MAP_PANELS: { key: 'western' | 'main' | 'eastern'; x: number; y: number; w: number; h: number }[] = [
+  { key: 'western', x: BOARD_OFFSET.western!.x, y: 0, w: WEST.w, h: WEST.h },
+  { key: 'main', x: BOARD_OFFSET.main!.x, y: 0, w: MAIN_VIEWBOX.w, h: MAIN_VIEWBOX.h },
+  { key: 'eastern', x: BOARD_OFFSET.eastern!.x, y: 0, w: EAST.w, h: EAST.h },
 ];
+
+/** Every area as a filled polygon in the combined canvas — the board we draw
+ *  from our own geometry when no map artwork has been loaded. */
+export interface Shape { id: string; isWater: boolean; points: string; cx: number; cy: number; }
+export const ALL_SHAPES: Shape[] = [];
+for (const a of areas) {
+  if (a.path.length < 3) continue;
+  const off = BOARD_OFFSET[a.board] ?? { x: 0, y: 0 };
+  const pts = a.path.map(([x, y]) => `${(x + off.x).toFixed(1)},${(y + off.y).toFixed(1)}`).join(' ');
+  const an = anchorsTmp(a);
+  ALL_SHAPES.push({ id: a.id, isWater: a.isWater, points: pts, cx: an.x, cy: an.y });
+}
+function anchorsTmp(a: typeof areas[number]) {
+  const off = BOARD_OFFSET[a.board] ?? { x: 0, y: 0 };
+  const n = a.path.length;
+  return { x: a.path.reduce((s, p) => s + p[0], 0) / n + off.x, y: a.path.reduce((s, p) => s + p[1], 0) / n + off.y };
+}
 
 export const anchors: Record<string, Anchor> = {};
 for (const a of areas) {

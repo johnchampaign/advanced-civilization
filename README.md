@@ -8,8 +8,16 @@ A digital port of Avalon Hill's **Advanced Civilization** (1991), built on
 env vars below set on the Cloudflare Pages project.)
 
 Rules source: the [Advanced Civilization rules & guide (OCR)](https://astro.ucla.edu/~ianc/files/civ/civ_rules_and_guide_ocr.pdf).
-Map / card / advance data extracted from the
+Map / card / advance **data** (area graph, adjacency, advances, calamities, cards)
+was extracted into this repo's own JSON from the
 [VASSAL module](https://obj.vassalengine.org/images/e/ee/AdvancedCivilization_v1.0.vmod).
+
+**Board artwork is not distributed.** The app ships no map images and draws the
+board from its own area geometry, so it is fully playable as-is. A player who owns
+the VASSAL module can optionally load it from the in-game prompt; the three map SVGs
+are then extracted from it entirely in the browser and cached only on that device
+(IndexedDB) — nothing is uploaded, and the deployed app never serves the artwork.
+The module file (`assets/civ.vmod`) and any extracted `map-*.svg` are git-ignored.
 
 ## Status
 

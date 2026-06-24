@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Rng } from 'digital-boardgame-framework';
-import { adapter, createGame } from '../engine/index.js';
+import { adapter, createGame, victoryScore } from '../engine/index.js';
 import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent } from '../engine/index.js';
 import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
@@ -155,8 +155,17 @@ export default function App() {
         <div className="civ-panel" style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 6, overflow: 'auto' }}>
           {result ? (
             <div className="civ-msg" style={{ padding: 10 }}>
-              Game over — winner: <b>{result.winners.map((w) => civById.get(w)?.name).join(', ')}</b><br />
-              <small>{result.reason}</small>
+              <div>Game over — winner: <b>{result.winners.map((w) => civById.get(w)?.name).join(', ')}</b></div>
+              <table style={{ marginTop: 8, fontSize: 13, borderCollapse: 'collapse' }}><tbody>
+                {state.seating.map((id) => ({ id, score: victoryScore(state, id) })).sort((a, b) => b.score - a.score).map((r, i) => (
+                  <tr key={r.id} style={{ fontWeight: result.winners.includes(r.id) ? 800 : 400 }}>
+                    <td style={{ padding: '1px 8px', textAlign: 'right', color: '#9a8d6a' }}>{i + 1}.</td>
+                    <td style={{ padding: '1px 8px', color: civById.get(r.id)?.color }}>{civById.get(r.id)?.name}{result.winners.includes(r.id) ? ' 👑' : ''}</td>
+                    <td style={{ padding: '1px 8px', textAlign: 'right', fontWeight: 700 }}>{r.score}</td>
+                  </tr>
+                ))}
+              </tbody></table>
+              <small style={{ color: '#9a8d6a' }}>Score = advances + commodity sets + treasury + A.S.T. position + cities (§35).</small>
             </div>
           ) : (
             <>
@@ -884,8 +893,15 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
   // Suggest button fills in the sensible play if wanted.
   const [tok, setTok] = useState<Record<string, number>>({});
   const [cities, setCities] = useState<string[]>([]);
+  const [grain, setGrain] = useState(0);
+  // §30.312: a Pottery holder MAY commit Grain to soften Famine (−4 each, locks it).
+  const holderP = state.players[u.holder]!;
+  const grainAvail = (holderP.hand['grain'] ?? 0) - (holderP.grainLockedThisTurn ?? 0);
+  const maxGrain = u.calamityId === 'famine' && holderP.advances.includes('pottery') ? Math.min(grainAvail, Math.ceil(u.points / 4)) : 0;
+  const g = Math.min(grain, maxGrain);
+  const reducedPoints = u.calamityId === 'famine' ? Math.max(0, u.points - 4 * g) : u.points;
   const avail = inv.reduce((t, x) => t + x.removable + (x.city ? u.cityWorth : 0), 0);
-  const target = Math.min(u.points, avail);
+  const target = Math.min(reducedPoints, avail);
   const total = Object.values(tok).reduce((t, n) => t + n, 0) + cities.length * u.cityWorth;
   const remaining = Math.max(0, target - total);
   const ok = total >= target && total - target < u.cityWorth;
@@ -904,6 +920,15 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
         <div style={{ fontSize: 22, fontWeight: 800, color: bannerColor, lineHeight: 1.2 }}>{banner}</div>
         <div style={{ fontSize: 12, color: '#cdc4ad' }}>You must give up <b>{target}</b> unit point{target === 1 ? '' : 's'} (a token = 1, a city = {u.cityWorth}).</div>
       </div>
+      {maxGrain > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', background: 'rgba(80,140,60,0.18)', border: '1px solid #5a8c4a', borderRadius: 6, padding: '5px 9px' }}>
+          <span className="civ-lbl" style={{ color: '#cfe8c0' }}>🌾 Pottery: commit Grain to soften the loss (−4 each; committed Grain is locked from buying advances until next turn, §30.312):</span>
+          <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setGrain((v) => Math.max(0, v - 1))} disabled={g <= 0}>−</button>
+          <b>{g}</b><span className="civ-lbl">/ {maxGrain}</span>
+          <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setGrain((v) => Math.min(maxGrain, v + 1))} disabled={g >= maxGrain}>+</button>
+          <span className="civ-lbl" style={{ color: '#9a8d6a' }}>loss {u.points} → <b>{reducedPoints}</b></span>
+        </div>
+      )}
       {CALAMITY_DESC[u.calamityId] && <span className="civ-lbl" style={{ color: '#cfc7b4' }}>{CALAMITY_DESC[u.calamityId]}</span>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: '30vh', overflowY: 'auto' }}>
         {inv.map((x) => (
@@ -920,8 +945,8 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
         ))}
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
-        {sugg && <button className="civ-btn" style={{ fontSize: 11 }} onClick={() => { setTok({ ...sugg.tokens }); setCities([...(sugg.cities ?? [])]); }}>Suggest</button>}
-        <button className="civ-btn" disabled={!ok} onClick={() => onApply({ type: 'chooseUnits', tokens: tok, cities })}>Lose these</button>
+        {sugg && <button className="civ-btn" style={{ fontSize: 11 }} onClick={() => { setTok({ ...sugg.tokens }); setCities([...(sugg.cities ?? [])]); setGrain(sugg.grainCommit ?? 0); }}>Suggest</button>}
+        <button className="civ-btn" disabled={!ok} onClick={() => onApply({ type: 'chooseUnits', tokens: tok, cities, grainCommit: g })}>Lose these</button>
       </div>
     </div>
   );

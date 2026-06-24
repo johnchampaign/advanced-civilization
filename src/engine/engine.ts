@@ -788,16 +788,12 @@ function startPrimary(s: GameState, calId: string, holder: PlayerId, before: Ret
   const p = player(s, holder);
   // Unit-loss calamities — the victim picks which units (§29.63).
   if (calId === 'famine' || calId === 'epidemic') {
-    let points: number;
-    if (calId === 'famine') {
-      // §30.312: Pottery commits 1 Grain card per 4 points to soften the 10-point
-      // loss; only as many as needed are used, and they lock until next turn.
-      const grainUsed = has(p, 'pottery') ? Math.min(grainCards(p), Math.ceil(10 / 4)) : 0;
-      if (grainUsed > 0) { p.grainLockedThisTurn = (p.grainLockedThisTurn ?? 0) + grainUsed; s.log.push(`${holder} commits ${grainUsed} Grain card${grainUsed === 1 ? '' : 's'} against Famine (locked until next turn, §30.312).`); }
-      points = Math.max(0, 10 - 4 * grainUsed);
-    } else {
-      points = Math.max(0, 16 - (has(p, 'medicine') ? 8 : 0) + (has(p, 'roadbuilding') ? 5 : 0));
-    }
+    // §30.312: the Pottery holder MAY commit Grain to soften Famine — that's the
+    // player's choice (each Grain −4, and it locks), so it's applied when they pick
+    // their units (chooseUnits.grainCommit), not auto-deducted here.
+    const points = calId === 'famine'
+      ? 10
+      : Math.max(0, 16 - (has(p, 'medicine') ? 8 : 0) + (has(p, 'roadbuilding') ? 5 : 0));
     if (points > 0 && boardUnitPoints(s, holder) > 0) {
       s.pendingUnitLoss = { calamityId: calId, holder, points: Math.min(points, boardUnitPoints(s, holder)), cityWorth: calId === 'epidemic' ? 4 : 5, mode: 'remove', before, overviewBefore };
       return true;
@@ -2430,8 +2426,21 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         const u = s.pendingUnitLoss;
         if (!u) throw new Error('no unit loss is pending');
         if (actor !== u.holder) throw new Error('only the affected player chooses which units to give up (§29.63)');
-        validateUnits(s, u, action);
-        applyChosenUnits(s, u, action);
+        // §30.312: the player may commit Grain (Pottery) to soften a Famine loss —
+        // each cuts 4 points and locks until next turn. Their choice, applied here.
+        let eff = u;
+        if (u.calamityId === 'famine' && (action.grainCommit ?? 0) > 0) {
+          const pp = player(s, actor);
+          if (!has(pp, 'pottery')) throw new Error('only a Pottery holder may commit Grain against Famine (§30.312)');
+          const commit = Math.min(action.grainCommit!, Math.max(0, grainCards(pp) - (pp.grainLockedThisTurn ?? 0)), Math.ceil(u.points / 4));
+          if (commit > 0) {
+            pp.grainLockedThisTurn = (pp.grainLockedThisTurn ?? 0) + commit;
+            s.log.push(`${actor} commits ${commit} Grain card${commit === 1 ? '' : 's'} against Famine (−${4 * commit}, locked until next turn §30.312).`);
+            eff = { ...u, points: Math.max(0, u.points - 4 * commit) };
+          }
+        }
+        validateUnits(s, eff, action);
+        applyChosenUnits(s, eff, action);
         const { calamityId, holder, before, overviewBefore, areas } = u;
         s.pendingUnitLoss = undefined;
         // A secondary victim (Famine/Epidemic/Flood §30.311/.611/.512) just chose
@@ -2580,9 +2589,25 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         for (const [aid, a] of Object.entries(state.areas)) {
           const t = a.tokens[actor] ?? 0;
           if (t > 0) {
-            for (const nb of neighbors(aid)) {
+            const adj = neighbors(aid);
+            for (const nb of adj) {
               if (areaById.get(nb)?.isWater) continue;
               out.push({ type: 'move', moves: [{ from: aid, to: nb, count: t }] });
+            }
+            // §23.31/§32.251 Roadbuilding: move through one clear land area into a
+            // second. The pass-through must be land and free of another player's
+            // tokens/city or a Pirate city.
+            if (has(p, 'roadbuilding')) {
+              for (const via of adj) {
+                const vArea = areaById.get(via);
+                if (!vArea || vArea.isWater) continue;
+                const va = state.areas[via];
+                if (va && (Object.entries(va.tokens).some(([o, n]) => o !== actor && (n ?? 0) > 0) || (va.city && va.city !== actor))) continue;
+                for (const to of neighbors(via)) {
+                  if (to === aid || adj.includes(to) || areaById.get(to)?.isWater) continue; // single-step moves already cover adjacent
+                  out.push({ type: 'move', moves: [{ from: aid, to, count: t, via }] });
+                }
+              }
             }
           }
           // Naval moves from areas where this player has a ship and tokens.
@@ -2638,7 +2663,14 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         }
         // §29.63: a pending unit loss/cede is the victim's; offer the cheapest-first default.
         if (state.pendingUnitLoss && state.pendingUnitLoss.holder === actor) {
-          return [{ type: 'chooseUnits', ...suggestUnits(state, state.pendingUnitLoss) }];
+          const pul = state.pendingUnitLoss;
+          // §30.312: default to committing enough Grain to negate Famine (Pottery).
+          if (pul.calamityId === 'famine' && has(p, 'pottery')) {
+            const commit = Math.min(Math.max(0, grainCards(p) - (p.grainLockedThisTurn ?? 0)), Math.ceil(pul.points / 4));
+            const reduced = { ...pul, points: Math.max(0, pul.points - 4 * commit) };
+            return [{ type: 'chooseUnits', ...suggestUnits(state, reduced), grainCommit: commit }];
+          }
+          return [{ type: 'chooseUnits', ...suggestUnits(state, pul) }];
         }
         // §29.64: a pending secondary allocation is the primary victim's to direct.
         // Offer the leader-targeting default; the UI may submit a custom split.

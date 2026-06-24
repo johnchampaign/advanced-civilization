@@ -554,6 +554,9 @@ export interface ChooseUnitsAction {
   type: 'chooseUnits';
   tokens: Record<string, number>;
   cities: string[];
+  /** §30.312: for Famine, how many Grain cards the Pottery holder chooses to commit
+   *  (each cuts the loss by 4 and locks that Grain until next turn). */
+  grainCommit?: number;
 }
 
 /** §31.71: surrender these surplus commodity cards (one entry per card; length

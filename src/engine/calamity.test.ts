@@ -176,17 +176,32 @@ describe('§30.22 Treachery', () => {
 });
 
 describe('§30.312 Pottery grain-card lock & §30.612 Epidemic minimums', () => {
-  it('Pottery locks the Grain cards committed against Famine until next turn (§30.312)', () => {
+  it('Pottery: the player CHOOSES how much Grain to commit, which locks it (§30.312)', () => {
     let s = scenario({
       tokens: { egypt: { [land[0]!.id]: 20 } },
       hands: { egypt: { 'calamity:famine': 1, grain: 4 } },
     });
     s.players['egypt']!.advances = ['pottery'];
     while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
-    // 3 grain (12 pts) fully negate the 10-point Famine → no unit loss; 3 grain locked.
-    expect(s.pendingUnitLoss).toBeUndefined();
+    // Famine now pauses for the victim's choice (grain is NOT auto-committed).
+    expect(s.pendingUnitLoss?.calamityId).toBe('famine');
+    expect(s.pendingUnitLoss?.points).toBe(10);
+    // Commit 3 Grain (12 pts) to fully negate the loss — choose no units.
+    s = adapter.applyAction(s, { type: 'chooseUnits', tokens: {}, cities: [], grainCommit: 3 }, 'egypt');
     expect(s.players['egypt']!.grainLockedThisTurn).toBe(3);
-    expect(populationCount(s, 'egypt')).toBe(20); // no loss
+    expect(populationCount(s, 'egypt')).toBe(20); // negated — no tokens lost
+  });
+
+  it('Pottery: committing no Grain takes the full Famine loss (player declines)', () => {
+    let s = scenario({
+      tokens: { egypt: { [land[0]!.id]: 20 } },
+      hands: { egypt: { 'calamity:famine': 1, grain: 4 } },
+    });
+    s.players['egypt']!.advances = ['pottery'];
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    s = adapter.applyAction(s, { type: 'chooseUnits', tokens: { [land[0]!.id]: 10 }, cities: [], grainCommit: 0 }, 'egypt');
+    expect(s.players['egypt']!.grainLockedThisTurn ?? 0).toBe(0); // no Grain locked
+    expect(populationCount(s, 'egypt')).toBe(10); // took the full 10-point loss
   });
 
   it('Epidemic leaves ≥1 token per area and turns an eliminated city into one token (§30.612)', () => {

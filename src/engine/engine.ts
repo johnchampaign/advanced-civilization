@@ -2632,7 +2632,9 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
           if (!area || area.isWater) continue;
           const required = area.isCitySite ? 6 : 12;
           const onBoard = a.tokens[actor] ?? 0;
-          const arch = has(p, 'architecture');
+          // §32.631: Architecture assists only ONE city per turn — don't offer a
+          // treasury-assisted build the player can't actually make (a dead button).
+          const arch = has(p, 'architecture') && !p.builtWithTreasuryThisTurn;
           const maxTreasury = arch ? Math.min(Math.floor(required / 2), p.treasury) : 0;
           const reachable = onBoard + maxTreasury >= required;
           if (reachable && p.citiesAvailable > 0) {

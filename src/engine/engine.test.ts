@@ -394,6 +394,8 @@ describe('advance refinements (§32.261/.631/.251)', () => {
     expect(s.areas[sites[0]!]!.city).toBe('egypt');
     // Second city the same turn can't draw on treasury → 3 on-board < 6 → illegal.
     expect(() => adapter.applyAction(s, { type: 'buildCity', area: sites[1]!, useTreasury: 3 }, 'egypt')).toThrow();
+    // …and legalActions must NOT offer it (no dead button — report 9f6d97cb).
+    expect(adapter.legalActions(s, 'egypt').some((a) => a.type === 'buildCity' && a.area === sites[1]!)).toBe(false);
   });
 
   it('Roadbuilding cannot pass through an area holding an enemy city (§32.251)', async () => {

@@ -107,6 +107,23 @@ describe('async multiplayer (GameServer + filesystem store)', () => {
     expect(rows.some((r) => r.message === 'ours')).toBe(true);
   });
 
+  it('GET /api/reports honours the ?app_id filter (server-stamped, shared-backend isolation)', async () => {
+    // A server configured with this deployment's appId stamps every report.
+    const store = new FsStore(mkdtempSync(join(tmpdir(), 'civ-app-')));
+    const s = new GameServer<GameState, Action, string>({
+      adapter, codec, store, broadcaster: new NoopBroadcaster(), notifier: new NoopNotifier(),
+      gameUrl: (g, t) => `/play?game=${g}&token=${t}`, appId: 'advanced-civilization',
+    });
+    const { gameId, invites } = await s.createGame({ initialState: createGame({ players: ['egypt', 'babylon'], seed: 5 }), players: ['egypt', 'babylon'] });
+    await s.report(gameId, tokenOf(invites.egypt!), { message: 'ours', severity: 'bug' });
+
+    const ours = await handleApi(s, 'GET', '/api/reports', new URLSearchParams({ unresolved: '1', app_id: 'advanced-civilization' }), undefined);
+    expect((ours.body as Array<{ appId?: string }>).every((r) => r.appId === 'advanced-civilization')).toBe(true);
+    expect((ours.body as unknown[]).length).toBe(1);
+    const other = await handleApi(s, 'GET', '/api/reports', new URLSearchParams({ app_id: 'some-other-game' }), undefined);
+    expect((other.body as unknown[]).length).toBe(0); // another port's filter sees none of ours
+  });
+
   it('rejects a bug report from a bad token', async () => {
     const { s, gameId } = await newGame();
     await expect(s.report(gameId, 'bogus', { message: 'x', severity: 'bug' })).rejects.toThrow();

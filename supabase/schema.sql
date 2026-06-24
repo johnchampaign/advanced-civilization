@@ -46,6 +46,7 @@ create table if not exists dbf_reports (
   message          text not null,
   severity         text not null,
   category         text,                  -- game-defined area tag (e.g. 'multiplayer'); opaque to the framework
+  app_id           text,                  -- deployment-stamped app identifier; isolates this game's reports on a shared backend
   client_build     text,
   user_agent       text,
   created_at       timestamptz not null default now(),
@@ -53,9 +54,12 @@ create table if not exists dbf_reports (
 );
 -- Existing databases created before the `category` column was added:
 --   alter table dbf_reports add column if not exists category text;
+-- Existing databases created before the `app_id` column was added:
+--   alter table dbf_reports add column if not exists app_id text;
 create index if not exists dbf_reports_created on dbf_reports(created_at desc);
 create index if not exists dbf_reports_severity on dbf_reports(severity);
 create index if not exists dbf_reports_category on dbf_reports(category);
+create index if not exists dbf_reports_app on dbf_reports(app_id);
 create index if not exists dbf_reports_unresolved on dbf_reports(report_id) where resolution is null;
 create index if not exists dbf_reports_game on dbf_reports(game_id);
 

@@ -150,6 +150,7 @@ export async function handleApi(
         const filter: ReportFilter = {};
         if (query.get('unresolved') === '1') filter.unresolved = true;
         const category = query.get('category'); if (category) filter.category = category;
+        const appId = query.get('app_id'); if (appId) filter.appId = appId;
         const severity = query.get('severity'); if (severity) filter.severity = severity;
         const since = query.get('since'); if (since) filter.since = since;
         const gameId = query.get('gameId'); if (gameId) filter.gameId = gameId;

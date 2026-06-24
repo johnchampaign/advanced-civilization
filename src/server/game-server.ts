@@ -10,6 +10,7 @@
 import { GameServer, NoopBroadcaster, NoopNotifier, type GameBroadcaster, type Notifier, type SnapshotStore } from 'digital-boardgame-framework/server';
 import { FsStore } from 'digital-boardgame-framework/server/node';
 import { adapter, codec, createGame, type Action, type GameState, type NewGameOptions } from '../engine/index.js';
+import { APP_ID } from '../report-meta.js';
 
 const env = (k: string) => (typeof process !== 'undefined' ? process.env[k] : undefined);
 
@@ -54,9 +55,12 @@ export async function buildGameServer(baseUrl = env('PUBLIC_BASE_URL') ?? 'http:
     broadcaster,
     notifier,
     gameUrl: (gameId, token) => `${baseUrl}/?game=${encodeURIComponent(gameId)}&token=${encodeURIComponent(token)}`,
+    // Stamp every in-game report with this app's id so triage can isolate our
+    // reports on the shared backend.
+    appId: APP_ID,
     // Best-effort games-played counter (mirrors the Pages Function): createGame
     // fires an 'online' beacon to the hub; never affects the request.
-    playBeacon: { appId: 'advanced-civilization' },
+    playBeacon: { appId: APP_ID },
   });
 }
 

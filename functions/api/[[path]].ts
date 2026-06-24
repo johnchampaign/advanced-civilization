@@ -8,6 +8,7 @@ import { GameServer, SupabaseStore, SupabaseBroadcaster, ResendNotifier, NoopNot
 import { createClient } from '@supabase/supabase-js';
 import { adapter, codec, type Action, type GameState } from '../../src/engine/index.js';
 import { handleApi } from '../../src/server/handlers.js';
+import { APP_ID } from '../../src/report-meta.js';
 
 interface Env {
   SUPABASE_URL: string;
@@ -46,9 +47,12 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     broadcaster: new SupabaseBroadcaster({ supabaseUrl: env.SUPABASE_URL, serviceKey: env.SUPABASE_SERVICE_KEY }),
     notifier,
     gameUrl: (gameId, token) => `${site}/?game=${encodeURIComponent(gameId)}&token=${encodeURIComponent(token)}`,
+    // Stamp every in-game report with this app's id so triage can isolate our
+    // reports on the shared backend.
+    appId: APP_ID,
     // Best-effort games-played counter: createGame fires an 'online' beacon to
     // the hub. Never affects the request (failures/timeouts are swallowed).
-    playBeacon: { appId: 'advanced-civilization' },
+    playBeacon: { appId: APP_ID },
   });
 
   let body: unknown = undefined;
@@ -56,7 +60,7 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     try { body = await request.json(); } catch { body = {}; }
   }
 
-  const result = await handleApi(server, request.method, url.pathname, url.searchParams, body, (row) => store.putReport(row));
+  const result = await handleApi(server, request.method, url.pathname, url.searchParams, body, (row) => store.putReport({ ...row, appId: APP_ID }));
   return new Response(JSON.stringify(result.body), {
     status: result.status,
     headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' },

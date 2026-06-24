@@ -4,6 +4,7 @@
 import { createServer } from 'node:http';
 import { buildGameServer, makeStore } from './game-server.js';
 import { handleApi } from './handlers.js';
+import { APP_ID } from '../report-meta.js';
 
 const PORT = Number(process.env.PORT ?? 8787);
 
@@ -27,7 +28,7 @@ const http = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
     const body = req.method === 'POST' ? await readJson(req) : undefined;
     // Same router the Cloudflare Pages Function uses (dev/prod parity).
-    const result = await handleApi(server, req.method ?? 'GET', url.pathname, url.searchParams, body, (row) => store.putReport(row));
+    const result = await handleApi(server, req.method ?? 'GET', url.pathname, url.searchParams, body, (row) => store.putReport({ ...row, appId: APP_ID }));
     return send(res, result.status, result.body);
   } catch (e) {
     send(res, 400, { error: (e as Error).message });

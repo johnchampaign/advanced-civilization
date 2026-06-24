@@ -6,7 +6,7 @@ import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, calamityB
 import { HeuristicAI } from '../ai/heuristic.js';
 import { handValue, creditTowards, commoditySetValue, advancesFaceValue } from '../engine/helpers.js';
 import { submitStandaloneReport, fetchMyReports, resolutionNote, type MyReport } from '../client/api.js';
-import { anchors, MAIN_VIEWBOX } from './anchors.js';
+import { anchors, MAIN_VIEWBOX, BOARD_VIEWBOX, MAIN_ORIGIN, EXTENSION_SHAPES } from './anchors.js';
 
 const DEFAULT_PLAYERS: PlayerId[] = ['egypt', 'babylon', 'crete', 'assyria'];
 const ai = new HeuristicAI();
@@ -235,15 +235,12 @@ export function nationFocusArea(state: GameState, id: PlayerId): string | null {
 export function scrollBoardTo(container: HTMLElement | null, areaId: string | null) {
   if (!container || !areaId) return;
   const an = anchors[areaId];
-  const img = container.querySelector('img[alt="map"]') as HTMLImageElement | null;
-  if (!an || !img) return;
-  const doScroll = () => {
-    if (!img.clientWidth || !img.clientHeight) return;
-    const sx = img.clientWidth / MAIN_VIEWBOX.w, sy = img.clientHeight / MAIN_VIEWBOX.h;
-    container.scrollTo({ left: an.x * sx - container.clientWidth / 2, top: an.y * sy - container.clientHeight / 2, behavior: 'smooth' });
-  };
-  if (img.complete && img.clientHeight) doScroll();
-  else img.addEventListener('load', doScroll, { once: true });
+  const svg = container.querySelector('svg') as SVGSVGElement | null; // the combined board canvas
+  if (!an || !svg) return;
+  const rect = svg.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const sx = rect.width / BOARD_VIEWBOX.w, sy = rect.height / BOARD_VIEWBOX.h;
+  container.scrollTo({ left: an.x * sx - container.clientWidth / 2, top: an.y * sy - container.clientHeight / 2, behavior: 'smooth' });
 }
 
 export function legalAreas(legal: Action[], _phase: string): Set<string> {
@@ -271,9 +268,18 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
   // scroll container couldn't pan, hiding edge territories. We scroll-center on
   // the origin instead, which keeps the whole map reachable.)
   return (
-    <div style={{ position: 'relative', width: MAIN_VIEWBOX.w, maxWidth: '100%', margin: '0 auto' }}>
-      <img src="/assets/map-main.svg" alt="map" style={{ width: '100%', display: 'block' }} />
-      <svg viewBox={`0 0 ${MAIN_VIEWBOX.w} ${MAIN_VIEWBOX.h}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+    <div style={{ position: 'relative', width: BOARD_VIEWBOX.w, maxWidth: '100%', margin: '0 auto' }}>
+      <svg viewBox={`0 0 ${BOARD_VIEWBOX.w} ${BOARD_VIEWBOX.h}`} style={{ width: '100%', display: 'block', background: '#0d3a4a' }}>
+        {/* The West & East extension panels have no artwork — draw their areas as
+            polygons (sea vs land) beside the main map's image. */}
+        {EXTENSION_SHAPES.map((s) => (
+          <polygon key={s.id} points={s.points} fill={s.isWater ? '#14506a' : '#c8a86a'} stroke="#6b4a22" strokeWidth={1.5} opacity={0.92} />
+        ))}
+        {EXTENSION_SHAPES.filter((s) => !s.isWater).map((s) => (
+          <text key={'t' + s.id} x={s.cx} y={s.cy - 16} textAnchor="middle" fontSize={11} fill="#3a2a12" opacity={0.75} pointerEvents="none">{areaById.get(s.id)?.name ?? s.id}</text>
+        ))}
+        {/* Main map artwork, placed in the combined canvas. */}
+        <image href="/assets/map-main.svg" x={MAIN_ORIGIN.x} y={MAIN_ORIGIN.y} width={MAIN_VIEWBOX.w} height={MAIN_VIEWBOX.h} />
         {/* Render every anchored area (not just occupied ones) so empty
             destination areas are clickable during movement. */}
         {Object.keys(anchors).map((aid) => {
@@ -337,12 +343,12 @@ function AreaTooltip({ areaId, state, zoomed }: { areaId: string; state: GameSta
   const owners = Object.entries(a?.tokens ?? {}).filter(([, n]) => n > 0);
   const ships = Object.entries(a?.ships ?? {}).filter(([, n]) => n > 0);
   const cityOwner = a?.city;
-  const right = an.x > MAIN_VIEWBOX.w * 0.7; // flip to the left near the east edge
+  const right = an.x > BOARD_VIEWBOX.w * 0.75; // flip to the left near the east edge
   const flags = [meta?.isCitySite && 'city site', meta?.isFloodplain && 'floodplain', meta?.isVolcanoSite && 'volcano', meta?.isOpenSea && 'open sea'].filter(Boolean).join(' · ');
   const nameOf = (o: string) => (o === BARB ? 'Barbarians' : o === PIRATE ? 'Pirates' : civById.get(o)?.name ?? o);
   return (
     <div style={{
-      position: 'absolute', left: `${(an.x / MAIN_VIEWBOX.w) * 100}%`, top: `${(an.y / MAIN_VIEWBOX.h) * 100}%`,
+      position: 'absolute', left: `${(an.x / BOARD_VIEWBOX.w) * 100}%`, top: `${(an.y / BOARD_VIEWBOX.h) * 100}%`,
       transform: `translate(${right ? 'calc(-100% - 14px)' : '14px'}, -50%) scale(${zoomed ? 0.56 : 1})`,
       transformOrigin: right ? 'right center' : 'left center',
       zIndex: 20, pointerEvents: 'none', background: 'rgba(26,20,16,0.96)', color: '#fff',

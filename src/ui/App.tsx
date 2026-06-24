@@ -661,7 +661,9 @@ export function useMovementPlanner(
 
   const origins = useMemo(() => {
     const set = new Set<string>();
-    for (const from of moveOpts.keys()) if (available(from) > 0) set.add(from);
+    // An area is a move origin if it has tokens to move, OR a ship that can relocate
+    // (even with no tokens to carry) — §23.5.
+    for (const [from, opts] of moveOpts) if (available(from) > 0 || [...opts.values()].some((o) => o.byShip)) set.add(from);
     return set;
   }, [moveOpts, available]);
 
@@ -683,7 +685,8 @@ export function useMovementPlanner(
     const opt = dests?.get(area);
     if (opt) {
       const max = Math.min(available(origin), opt.byShip ? 5 : Infinity);
-      const n = Math.max(1, Math.min(count, max));
+      // A ship may sail with 0 tokens (relocate); a land move always moves ≥1.
+      const n = opt.byShip ? Math.min(count, max) : Math.max(1, Math.min(count, max));
       setQueued((q) => [...q, { from: origin, to: area, count: n, ...(opt.byShip ? { byShip: true } : {}), ...(opt.via ? { via: opt.via } : {}) }]);
       setOrigin(null); setCountRaw(1);
       return;
@@ -812,13 +815,20 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
   }
   if (phase === 'shipConstruction') {
     const builds = legal.filter((a) => a.type === 'buildShips') as Extract<Action, { type: 'buildShips' }>[];
+    const scraps = legal.filter((a) => a.type === 'scrapShip') as Extract<Action, { type: 'scrapShip' }>[];
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {builds.length === 0 && <span className="civ-lbl">No ship can be built (need a coastal area + 2 tokens, max 4 ships).</span>}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {builds.map((b, i) => <button className="civ-btn" key={i} onClick={() => onApply(b)}>⛵ Build ship in {areaById.get(b.builds[0]!.area)?.name} (2)</button>)}
+          {builds.map((b, i) => { const bd = b.builds[0]!; return <button className="civ-btn" key={i} onClick={() => onApply(b)}>⛵ Build in {areaById.get(bd.area)?.name} — pay from {bd.payFrom === 'treasury' ? 'treasury' : 'population'} (2)</button>; })}
         </div>
-        {pass && <button className="civ-btn" onClick={() => onApply(pass)}>Done (pass)</button>}
+        {scraps.length > 0 && <>
+          <span className="civ-lbl" style={{ color: '#cdc4ad' }}>You owe 1 token maintenance per ship you keep (§22.3). Scrap a ship instead to avoid it:</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {scraps.map((sc, i) => <button className="civ-btn" key={i} style={{ fontSize: 11 }} onClick={() => onApply(sc)}>✗ Scrap ship in {areaById.get(sc.area)?.name}</button>)}
+          </div>
+        </>}
+        {pass && <button className="civ-btn" onClick={() => onApply(pass)}>Done — keep & maintain remaining ships (pass)</button>}
       </div>
     );
   }

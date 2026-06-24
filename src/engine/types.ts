@@ -464,7 +464,9 @@ export interface ResolveConflictAction {
 
 export interface BuildShipsAction {
   type: 'buildShips';
-  builds: { area: string; count: number }[];
+  /** §22.1/.2: the 2-token cost is drawn from the area's tokens or treasury (or a
+   *  mix). `payFrom` says which source to draw first ('area' default). */
+  builds: { area: string; count: number; payFrom?: 'area' | 'treasury' }[];
 }
 
 /** §22.3: scrap one of your ships in an area (return it to stock) instead of

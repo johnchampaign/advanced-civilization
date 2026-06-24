@@ -334,7 +334,7 @@ function shipCount(s: GameState, id: PlayerId): number {
   return n;
 }
 
-function applyBuildShips(s: GameState, actor: PlayerId, builds: { area: string; count: number }[]): void {
+function applyBuildShips(s: GameState, actor: PlayerId, builds: { area: string; count: number; payFrom?: 'area' | 'treasury' }[]): void {
   const p = player(s, actor);
   for (const b of builds) {
     const a = s.areas[b.area];
@@ -345,15 +345,17 @@ function applyBuildShips(s: GameState, actor: PlayerId, builds: { area: string; 
     for (let i = 0; i < b.count; i++) {
       if (shipCount(s, actor) >= 4) throw new Error('max 4 ships in play (§22.4)');
       if (p.shipsAvailable <= 0) throw new Error('no ships left in stock');
-      // Cost 2 tokens: from the area first, then treasury (§22.1/22.2). Returned to stock.
+      // §22.1/.2: 2 tokens, from the area and/or treasury (the player's choice of
+      // which to draw first); spent tokens return to stock.
       let cost = 2;
-      const fromArea = Math.min(cost, a.tokens[actor] ?? 0);
-      setTokens(s, b.area, actor, (a.tokens[actor] ?? 0) - fromArea); p.stock += fromArea; cost -= fromArea;
-      if (cost > 0) { if (p.treasury < cost) throw new Error('not enough tokens/treasury to build a ship'); p.treasury -= cost; p.stock += cost; }
+      const takeArea = () => { const n = Math.min(cost, a.tokens[actor] ?? 0); setTokens(s, b.area, actor, (a.tokens[actor] ?? 0) - n); p.stock += n; cost -= n; };
+      const takeTreasury = () => { const n = Math.min(cost, p.treasury); p.treasury -= n; p.stock += n; cost -= n; };
+      if (b.payFrom === 'treasury') { takeTreasury(); takeArea(); } else { takeArea(); takeTreasury(); }
+      if (cost > 0) throw new Error('not enough tokens/treasury to build a ship');
       (a.ships ??= {})[actor] = (a.ships[actor] ?? 0) + 1;
       p.shipsAvailable -= 1;
     }
-    s.log.push(`${actor} built ${b.count} ship(s) in ${areaName(b.area)}.`);
+    s.log.push(`${actor} built ${b.count} ship(s) in ${areaName(b.area)}${b.payFrom === 'treasury' ? ' (paid from treasury)' : ''}.`);
   }
 }
 
@@ -2576,7 +2578,9 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
             if (!isCoastal(aid)) continue;
             const occupies = (a.tokens[actor] ?? 0) > 0 || a.city === actor;
             if (occupies && (a.tokens[actor] ?? 0) + p.treasury >= 2) {
-              out.push({ type: 'buildShips', builds: [{ area: aid, count: 1 }] });
+              // §22.1/.2: offer paying from local population and/or from treasury.
+              if ((a.tokens[actor] ?? 0) > 0) out.push({ type: 'buildShips', builds: [{ area: aid, count: 1, payFrom: 'area' }] });
+              if (p.treasury > 0) out.push({ type: 'buildShips', builds: [{ area: aid, count: 1, payFrom: 'treasury' }] });
             }
           }
         }
@@ -2610,8 +2614,9 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
               }
             }
           }
-          // Naval moves from areas where this player has a ship and tokens.
-          if ((a.ships?.[actor] ?? 0) > 0 && t > 0) {
+          // Naval moves from any area with a ship (§23.5): carries up to 5 tokens,
+          // or 0 to relocate an empty ship.
+          if ((a.ships?.[actor] ?? 0) > 0) {
             const range = 4 + (has(p, 'clothmaking') ? 1 : 0);
             for (const to of navalDestinations(aid, range, has(p, 'astronomy'))) {
               out.push({ type: 'move', moves: [{ from: aid, to, count: Math.min(5, t), byShip: true }] });

@@ -367,24 +367,41 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
   );
 }
 
-/** First-run prompt to load the original board art from a VASSAL module. The
- *  game is fully playable without it (geometry board), so this is dismissible. */
+/** Always-available control to load the original board art from a VASSAL module.
+ *  The shipped board is drawn from our own geometry (a rough schematic); loading
+ *  the module swaps in the real maps locally. Collapses to a corner pill rather
+ *  than vanishing, so the real-art path is reachable at any time. */
 function MapArtBanner({ mapArt }: { mapArt: ReturnType<typeof useMapArt> }) {
-  const [hidden, setHidden] = useState(() => localStorage.getItem('civ-art-banner-hidden') === '1');
-  const dismiss = () => { localStorage.setItem('civ-art-banner-hidden', '1'); setHidden(true); };
-  if (mapArt.status === 'loading' || mapArt.status === 'ready') return null;
-  if (hidden && mapArt.status !== 'importing' && mapArt.status !== 'error') return null;
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('civ-art-banner-hidden') === '1');
+  const collapse = () => { localStorage.setItem('civ-art-banner-hidden', '1'); setCollapsed(true); };
+  const expand = () => { localStorage.removeItem('civ-art-banner-hidden'); setCollapsed(false); };
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) mapArt.importVmod(f); };
+  if (mapArt.status === 'loading') return null;
+
+  const pill = (label: string, onClick: () => void, accent = false) => (
+    <button onClick={onClick} style={{
+      position: 'absolute', left: 10, bottom: 10, zIndex: 25, cursor: 'pointer',
+      background: accent ? '#ffd23f' : 'rgba(26,20,16,0.92)', color: accent ? '#1a1410' : '#ffd23f',
+      border: '1px solid #ffd23f', borderRadius: 6, padding: '5px 11px', fontSize: 12, fontWeight: 700,
+      boxShadow: '0 1px 6px rgba(0,0,0,0.5)',
+    }}>{label}</button>
+  );
+
+  // Real art is loaded: small confirmation pill that can switch back to schematic.
+  if (mapArt.status === 'ready') return pill('Board art: original ✓ · use schematic', mapArt.clearArt);
+  // Collapsed and nothing to act on: a small pill that reopens the loader.
+  if (collapsed && mapArt.status !== 'importing' && mapArt.status !== 'error') return pill('Load original board art…', expand, true);
+
   return (
     <div style={{
-      position: 'absolute', left: 10, bottom: 10, zIndex: 25, maxWidth: 340,
+      position: 'absolute', left: 10, bottom: 10, zIndex: 25, maxWidth: 360,
       background: 'rgba(26,20,16,0.96)', color: '#fff', border: '2px solid #ffd23f',
       borderRadius: 8, padding: '10px 12px', fontSize: 13, lineHeight: 1.4, boxShadow: '0 2px 12px rgba(0,0,0,0.6)',
     }}>
-      <div style={{ fontWeight: 800, marginBottom: 4 }}>Original board art (optional)</div>
+      <div style={{ fontWeight: 800, marginBottom: 4 }}>Use the original board art</div>
       <div style={{ opacity: 0.9 }}>
-        This version draws the board from its own map data. If you own the Advanced Civilization
-        <b> VASSAL module</b>, load it to use the original maps — extracted in your browser and stored
+        This build draws a plain schematic from its own map data. If you own the Advanced Civilization
+        <b> VASSAL module</b>, load it here to play on the real maps — extracted in your browser and stored
         only on this device. Nothing is uploaded.
       </div>
       {mapArt.status === 'error' && <div style={{ color: '#ff9', marginTop: 6 }}>Couldn’t read that file: {mapArt.error}</div>}
@@ -393,7 +410,7 @@ function MapArtBanner({ mapArt }: { mapArt: ReturnType<typeof useMapArt> }) {
           {mapArt.status === 'importing' ? 'Reading…' : 'Load .vmod…'}
           <input type="file" accept=".vmod,.zip,application/zip" onChange={onFile} style={{ display: 'none' }} disabled={mapArt.status === 'importing'} />
         </label>
-        <button onClick={dismiss} style={{ background: 'none', border: 'none', color: '#cfe8ff', cursor: 'pointer', fontSize: 12 }}>Play without art</button>
+        <button onClick={collapse} style={{ background: 'none', border: 'none', color: '#cfe8ff', cursor: 'pointer', fontSize: 12 }}>Use the schematic</button>
       </div>
     </div>
   );

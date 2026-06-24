@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "description": "Digital port of Avalon Hill's Advanced Civilization, built on digital-boardgame-framework.",
+  "license": "MIT",
+  "author": "John Champaign",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",

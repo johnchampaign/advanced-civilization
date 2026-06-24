@@ -227,4 +227,19 @@ The SPA has a landing screen → **Local hotseat + AI** or **Online multiplayer*
 
 - **AI depth** — the heuristic AI is a competent baseline, not a strong opponent.
 - The **West-scenario `africa-western` AST variant** is extracted but unused.
+
+## License
+
+The original source in this repository — the rules engine, server, and UI — is
+released under the [MIT License](LICENSE) © 2026 John Champaign.
+
+The MIT grant covers that original code only. *Advanced Civilization* is a game
+designed and published by others (Avalon Hill; the design continues today as
+Eagle-Gryphon's *Mega Civilization*); all rights in the game itself belong to its
+creators. The extracted game **data** (area graph, advances, calamities, cards) is
+derived from the publicly distributed VASSAL module and is included here for
+interoperability, not relicensed — it remains subject to the rights of the original
+game's owners. No board **artwork** is distributed (see "Board artwork" above). This
+is an unofficial fan project and is not affiliated with or endorsed by the
+publishers.
 ```

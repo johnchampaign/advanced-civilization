@@ -871,14 +871,20 @@ const COMMODITY_ORDER = ['ochre', 'hides', 'iron', 'papyrus', 'salt', 'timber', 
  *  A big running "N more points to choose" banner keeps the target unmistakable. */
 function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: Action[]; onApply: (a: Action) => void }) {
   const u = state.pendingUnitLoss!;
+  // §30.612: Epidemic must leave at least one token in each area, so a single-token
+  // area has nothing removable (and isn't shown as an unusable option).
+  const epidemic = u.calamityId === 'epidemic';
   const scope = u.areas ?? Object.keys(state.areas);
-  const inv = scope.map((aid) => ({ aid, tokens: state.areas[aid]?.tokens[u.holder] ?? 0, city: state.areas[aid]?.city === u.holder }))
-    .filter((x) => x.tokens > 0 || x.city);
+  const inv = scope.map((aid) => {
+    const tokens = state.areas[aid]?.tokens[u.holder] ?? 0;
+    const city = state.areas[aid]?.city === u.holder;
+    return { aid, tokens, city, removable: epidemic ? Math.max(0, tokens - 1) : tokens };
+  }).filter((x) => x.removable > 0 || x.city);
   // Start with NO pre-selection (reporters disliked the auto-picked default); a
   // Suggest button fills in the sensible play if wanted.
   const [tok, setTok] = useState<Record<string, number>>({});
   const [cities, setCities] = useState<string[]>([]);
-  const avail = inv.reduce((t, x) => t + x.tokens + (x.city ? u.cityWorth : 0), 0);
+  const avail = inv.reduce((t, x) => t + x.removable + (x.city ? u.cityWorth : 0), 0);
   const target = Math.min(u.points, avail);
   const total = Object.values(tok).reduce((t, n) => t + n, 0) + cities.length * u.cityWorth;
   const remaining = Math.max(0, target - total);
@@ -903,11 +909,11 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
         {inv.map((x) => (
           <div key={x.aid} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 110, color: nationColor(u.holder) }}>{areaById.get(x.aid)?.name ?? x.aid}</span>
-            {x.tokens > 0 && <>
-              <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setT(x.aid, x.tokens, -1)}>−</button>
-              <b style={{ width: 36, textAlign: 'center' }}>{tok[x.aid] ?? 0}/{x.tokens}</b>
-              <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setT(x.aid, x.tokens, +1)}>+</button>
-              <span className="civ-lbl" style={{ color: '#9a8d6a' }}>tokens</span>
+            {x.removable > 0 && <>
+              <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setT(x.aid, x.removable, -1)}>−</button>
+              <b style={{ width: 36, textAlign: 'center' }}>{tok[x.aid] ?? 0}/{x.removable}</b>
+              <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setT(x.aid, x.removable, +1)}>+</button>
+              <span className="civ-lbl" style={{ color: '#9a8d6a' }}>tokens{epidemic ? ' (1 stays)' : ''}</span>
             </>}
             {x.city && <button className={`civ-btn ${cities.includes(x.aid) ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => setCities((c) => c.includes(x.aid) ? c.filter((y) => y !== x.aid) : [...c, x.aid])}>{cities.includes(x.aid) ? '✗ ' : ''}city ({u.cityWorth})</button>}
           </div>

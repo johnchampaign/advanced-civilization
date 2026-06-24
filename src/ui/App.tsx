@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Rng } from 'digital-boardgame-framework';
+import { Rng, recordPlay } from 'digital-boardgame-framework';
 import { adapter, createGame, victoryScore } from '../engine/index.js';
 import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent } from '../engine/index.js';
 import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
@@ -46,8 +46,25 @@ function CivSetup({ onStart, initial }: { onStart: (human: PlayerId, opponents: 
       </div>
       <button className="civ-btn" disabled={!ok} style={{ fontSize: 16, padding: '10px 22px', fontWeight: 700 }} onClick={() => onStart(human, opps)}>Begin as {civById.get(human)?.name} →</button>
       <p className="civ-lbl" style={{ color: '#aaa', maxWidth: 520, textAlign: 'center' }}>You play {civById.get(human)?.name}; the others are run by the AI. Choose 1–6 opponents.</p>
+      <PlayCount />
     </div>
   );
+}
+
+/** Best-effort "games played" counter from the games hub. Renders nothing until
+ *  (and unless) the count loads — a down/slow counter never affects the screen. */
+function PlayCount() {
+  const [n, setN] = useState<number | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetch('https://games-hub-5vo.pages.dev/stats?game=advanced-civilization')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (live && d && typeof d.count === 'number') setN(d.count); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, []);
+  if (!n) return null; // hide until there's a real (non-zero) count
+  return <p className="civ-lbl" style={{ color: '#888' }}>{n.toLocaleString()} game{n === 1 ? '' : 's'} played</p>;
 }
 
 export default function App() {
@@ -74,6 +91,9 @@ export default function App() {
     setState(createGame({ players, seed, maxTurns: 60 }));
     setView('map');
     setStarted(true);
+    // Best-effort games-played counter (once per local game start). Local games
+    // always include AI opponents, so the mode is 'ai'. Never throws/blocks.
+    void recordPlay('advanced-civilization', 'ai');
   }, []);
 
   const actor = adapter.currentActor(state);

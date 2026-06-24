@@ -46,6 +46,9 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     broadcaster: new SupabaseBroadcaster({ supabaseUrl: env.SUPABASE_URL, serviceKey: env.SUPABASE_SERVICE_KEY }),
     notifier,
     gameUrl: (gameId, token) => `${site}/?game=${encodeURIComponent(gameId)}&token=${encodeURIComponent(token)}`,
+    // Best-effort games-played counter: createGame fires an 'online' beacon to
+    // the hub. Never affects the request (failures/timeouts are swallowed).
+    playBeacon: { appId: 'advanced-civilization' },
   });
 
   let body: unknown = undefined;

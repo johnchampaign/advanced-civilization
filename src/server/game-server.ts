@@ -54,6 +54,9 @@ export async function buildGameServer(baseUrl = env('PUBLIC_BASE_URL') ?? 'http:
     broadcaster,
     notifier,
     gameUrl: (gameId, token) => `${baseUrl}/?game=${encodeURIComponent(gameId)}&token=${encodeURIComponent(token)}`,
+    // Best-effort games-played counter (mirrors the Pages Function): createGame
+    // fires an 'online' beacon to the hub; never affects the request.
+    playBeacon: { appId: 'advanced-civilization' },
   });
 }
 

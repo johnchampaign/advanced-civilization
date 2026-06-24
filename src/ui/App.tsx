@@ -1205,6 +1205,13 @@ function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: Pla
   const available = ALL_ADVANCES.filter((a) => !owned.has(a.id) && (a.prerequisites ?? []).every((pre) => owned.has(pre)));
   const adv = sel ? advanceById.get(sel) : null;
   const commHand = Object.entries(p.hand).filter(([c, n]) => !isCal(c) && n > 0).sort((a, b) => byCardValue(a[0], b[0]));
+  // Most a player could pay from cards: their WHOLE commodity hand (§30.312: Grain
+  // locked against Famine isn't spendable). Used to flag which advances are within
+  // reach with all their goods + whole treasury + credits.
+  const spendableHand: Record<string, number> = Object.fromEntries(commHand);
+  if (spendableHand['grain']) { spendableHand['grain'] -= (p.grainLockedThisTurn ?? 0); if (spendableHand['grain'] <= 0) delete spendableHand['grain']; }
+  const maxCardVal = handValue(spendableHand, { mining });
+  const affordable = (a: { id: string; cost: number }) => maxCardVal + p.treasury + creditTowards(p.advances, a.id) >= a.cost;
   const cardVal = handValue(spend, { mining });
   const credit = adv ? creditTowards(p.advances, adv.id) : 0;
   // You pay only the remaining cost from treasury — never overpay.
@@ -1219,17 +1226,20 @@ function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: Pla
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span className="civ-lbl">Acquire an advance — pick one, then choose how to pay (cards + treasury). Treasury available: {p.treasury}.</span>
+      <span className="civ-lbl">Acquire an advance — pick one, then choose how to pay (cards + treasury). Treasury available: {p.treasury}. <span style={{ color: '#7fd17f', fontWeight: 700 }}>Green-bordered advances are affordable</span> with all your goods + treasury.</span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
         {available.length === 0 && <span className="civ-lbl">No advance available (prerequisites unmet).</span>}
-        {available.map((a) => (
+        {available.map((a) => {
+          const aff = affordable(a);
+          return (
           <span key={a.id} style={{ position: 'relative', display: 'inline-block' }} onMouseEnter={() => setTip(a.id)} onMouseLeave={() => setTip((t) => (t === a.id ? '' : t))}>
-            <button className={`civ-btn ${sel === a.id ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => { setSel(a.id); setSpend({}); setTreasury(0); }}>
-              {a.name} ({a.cost}{creditTowards(p.advances, a.id) ? `, −${creditTowards(p.advances, a.id)} credit` : ''})
+            <button className={`civ-btn ${sel === a.id ? 'on' : ''}`} style={{ fontSize: 11, border: `2px solid ${aff ? '#5fbf6a' : 'transparent'}`, opacity: aff ? 1 : 0.55 }} onClick={() => { setSel(a.id); setSpend({}); setTreasury(0); }}>
+              {aff ? '✓ ' : ''}{a.name} ({a.cost}{creditTowards(p.advances, a.id) ? `, −${creditTowards(p.advances, a.id)} credit` : ''})
             </button>
             {tip === a.id && <AdvanceTip id={a.id} />}
           </span>
-        ))}
+          );
+        })}
       </div>
       {adv && (
         <div style={{ border: '1px solid #7a4a18', borderRadius: 4, padding: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>

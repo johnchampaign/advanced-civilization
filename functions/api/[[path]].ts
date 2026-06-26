@@ -4,7 +4,7 @@
 //
 // Imports the Workers-SAFE server barrel only (no node:fs). FsStore lives at
 // digital-boardgame-framework/server/node and is NEVER imported here.
-import { GameServer, SupabaseStore, SupabaseBroadcaster, ResendNotifier, NoopNotifier } from 'digital-boardgame-framework/server';
+import { GameServer, SupabaseStore, SupabaseBroadcaster, ResendNotifier, NoopNotifier, verifyIdentityToken, type Jwks } from 'digital-boardgame-framework/server';
 import { createClient } from '@supabase/supabase-js';
 import { adapter, codec, type Action, type GameState } from '../../src/engine/index.js';
 import { handleApi } from '../../src/server/handlers.js';
@@ -16,6 +16,21 @@ interface Env {
   RESEND_API_KEY?: string;
   MAIL_FROM?: string;
   PUBLIC_BASE_URL?: string;
+  /** Shared secret matching the hub's RATINGS_INGEST_KEY (enables ranked play). */
+  RATINGS_INGEST_KEY?: string;
+}
+
+// Hub identity verification: fetch + cache the hub's JWKS (1h) so claimSeat can
+// verify the signed identity tokens players present.
+const HUB = 'https://games-hub-5vo.pages.dev';
+let _jwks: Jwks | undefined;
+let _jwksAt = 0;
+async function getJwks(): Promise<Jwks> {
+  if (!_jwks || Date.now() - _jwksAt > 3_600_000) {
+    _jwks = (await (await fetch(`${HUB}/id/jwks`)).json()) as Jwks;
+    _jwksAt = Date.now();
+  }
+  return _jwks;
 }
 
 export const onRequest: PagesFunction<Env> = async (ctx) => {
@@ -53,6 +68,12 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     // Best-effort games-played counter: createGame fires an 'online' beacon to
     // the hub. Never affects the request (failures/timeouts are swallowed).
     playBeacon: { appId: APP_ID },
+    // Ranked play: verify hub identity tokens (claimSeat) + auto-report results
+    // to the leaderboard when the ingest key is configured.
+    verifyIdentity: async (t) => verifyIdentityToken(t, await getJwks()),
+    ...(env.RATINGS_INGEST_KEY
+      ? { ratings: { game: 'advanced-civilization', ingestKey: env.RATINGS_INGEST_KEY } }
+      : {}),
   });
 
   let body: unknown = undefined;

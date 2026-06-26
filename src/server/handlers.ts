@@ -126,9 +126,23 @@ export async function handleApi(
       if (segs.length === 3 && method === 'GET') return { status: 200, body: await server.fetch(gameId, token) };
       // GET /api/games/:id/legal
       if (segs[3] === 'legal' && method === 'GET') return { status: 200, body: await server.legalActions(gameId, token) };
-      // POST /api/games/:id/move  { action }
+      // POST /api/games/:id/claim  { identityToken } — attach a hub identity to
+      // this seat (ranked attribution). Token-gated by the per-seat ?token=.
+      if (segs[3] === 'claim' && method === 'POST') {
+        const idTok = (body as { identityToken?: unknown })?.identityToken;
+        if (typeof idTok !== 'string' || !idTok) return { status: 422, body: { error: 'identityToken required' } };
+        const v = await server.claimSeat(gameId, token, idTok);
+        return { status: 200, body: { ok: true, playerId: v.playerId } };
+      }
+      // POST /api/games/:id/move  { action, identityToken? }
       if (segs[3] === 'move' && method === 'POST') {
-        return { status: 200, body: await server.submit(gameId, token, (body as { action: Action }).action) };
+        const b = (body ?? {}) as { action: Action; identityToken?: unknown };
+        // Ranked: best-effort attribute this seat from the move's identity
+        // (idempotent, race-free — turns are sequential). Never blocks the move.
+        if (typeof b.identityToken === 'string' && b.identityToken) {
+          try { await server.claimSeat(gameId, token, b.identityToken); } catch { /* optional */ }
+        }
+        return { status: 200, body: await server.submit(gameId, token, b.action) };
       }
       // GET/POST /api/games/:id/messages
       if (segs[3] === 'messages') {

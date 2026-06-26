@@ -7,12 +7,26 @@
 //   (absent)                             -> FsStore (.data/games) + Noop
 //   RESEND_API_KEY                       -> ResendNotifier (turn emails)
 //   PUBLIC_BASE_URL                      -> base for shareable per-player URLs
-import { GameServer, NoopBroadcaster, NoopNotifier, type GameBroadcaster, type Notifier, type SnapshotStore } from 'digital-boardgame-framework/server';
+import { GameServer, NoopBroadcaster, NoopNotifier, verifyIdentityToken, type GameBroadcaster, type Jwks, type Notifier, type SnapshotStore } from 'digital-boardgame-framework/server';
 import { FsStore } from 'digital-boardgame-framework/server/node';
 import { adapter, codec, createGame, type Action, type GameState, type NewGameOptions } from '../engine/index.js';
 import { APP_ID } from '../report-meta.js';
 
 const env = (k: string) => (typeof process !== 'undefined' ? process.env[k] : undefined);
+
+// Hub identity verification (dev parity): fetch + cache the hub's JWKS (1h) so
+// claimSeat verifies signed identity tokens locally too. Ratings auto-report is
+// left OFF in dev (no ingest key) so local games don't hit the real leaderboard.
+const HUB = 'https://games-hub-5vo.pages.dev';
+let _jwks: Jwks | undefined;
+let _jwksAt = 0;
+async function getJwks(): Promise<Jwks> {
+  if (!_jwks || Date.now() - _jwksAt > 3_600_000) {
+    _jwks = (await (await fetch(`${HUB}/id/jwks`)).json()) as Jwks;
+    _jwksAt = Date.now();
+  }
+  return _jwks;
+}
 
 export async function makeStore(): Promise<SnapshotStore> {
   const url = env('SUPABASE_URL'), key = env('SUPABASE_SERVICE_KEY');
@@ -61,6 +75,8 @@ export async function buildGameServer(baseUrl = env('PUBLIC_BASE_URL') ?? 'http:
     // Best-effort games-played counter (mirrors the Pages Function): createGame
     // fires an 'online' beacon to the hub; never affects the request.
     playBeacon: { appId: APP_ID },
+    // Dev parity: verify hub identity tokens for claimSeat.
+    verifyIdentity: async (t) => verifyIdentityToken(t, await getJwks()),
   });
 }
 

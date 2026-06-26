@@ -2738,14 +2738,16 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
   result(state: GameState): GameResult<PlayerId> | null {
     const over = state.finished || (state.maxTurns != null && state.turn >= state.maxTurns && state.phase === 'taxation');
     if (!over) return null;
-    let best: PlayerId[] = [];
-    let bestScore = -Infinity;
-    for (const id of state.seating) {
-      const sc = victoryScore(state, id);
-      if (sc > bestScore) { bestScore = sc; best = [id]; }
-      else if (sc === bestScore) best.push(id);
-    }
-    return { winners: best, reason: `final score ${bestScore}` };
+    // Score every seat, then order best-first. Ranked play (Glicko-2) uses this
+    // full finishing ORDER for N-player rating updates — it matters who came 2nd
+    // vs last, not just who won. `winners` is the top score (possibly a tie).
+    const scored = state.seating
+      .map((id) => ({ id, score: victoryScore(state, id) }))
+      .sort((a, b) => b.score - a.score);
+    const ranking: PlayerId[] = scored.map((s) => s.id);
+    const bestScore = scored.length ? scored[0]!.score : -Infinity;
+    const winners = scored.filter((s) => s.score === bestScore).map((s) => s.id);
+    return { winners, ranking, reason: `final score ${bestScore}` };
   }
 }
 

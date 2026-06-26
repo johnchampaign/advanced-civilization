@@ -11,6 +11,9 @@ export interface CivClientOpts {
   baseUrl?: string; // HTTP host, e.g. http://localhost:8787
   gameId: string;
   token: string;
+  /** Returns the player's current hub identity token (for ranked attribution),
+   *  or undefined when not signed in. Read fresh on each submit. */
+  getIdentityToken?: () => string | undefined;
 }
 
 async function json<T>(res: Response): Promise<T> {
@@ -20,16 +23,30 @@ async function json<T>(res: Response): Promise<T> {
 type View = { view: GameState; yourTurn: boolean; turn: number; gameOver: boolean; you?: string };
 
 /** A GameClientApi bound to one game + seat token. Pass to `useGame(client)`. */
-export function createCivClient({ baseUrl = '', gameId, token }: CivClientOpts): GameClientApi<GameState, Action> {
+export function createCivClient({ baseUrl = '', gameId, token, getIdentityToken }: CivClientOpts): GameClientApi<GameState, Action> {
   const base = `${baseUrl}/api/games/${encodeURIComponent(gameId)}`;
   const q = `?token=${encodeURIComponent(token)}`;
   return {
     fetch: () => fetch(`${base}${q}`).then((r) => json<View>(r)),
-    submit: (action) => fetch(`${base}/move${q}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action }) }).then((r) => json<View>(r)),
+    // Ranked: attach the seat's hub identity (if signed in) to each move so the
+    // server attributes this seat (idempotent; race-free as turns are sequential).
+    submit: (action) => fetch(`${base}/move${q}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, identityToken: getIdentityToken?.() }) }).then((r) => json<View>(r)),
     legalActions: () => fetch(`${base}/legal${q}`).then((r) => json<Action[]>(r)),
     // submitReportViaHttp enforces the never-silently-drop report contract.
     report: (submission) => submitReportViaHttp(`${base}/report${q}`, submission),
   };
+}
+
+/** Attach the player's hub identity to their seat (ranked attribution). Best-
+ *  effort: a failure just leaves the seat unattributed (casual play). */
+export async function claimSeat(baseUrl: string, gameId: string, token: string, identityToken: string): Promise<void> {
+  try {
+    await fetch(`${baseUrl}/api/games/${encodeURIComponent(gameId)}/claim?token=${encodeURIComponent(token)}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ identityToken }),
+    });
+  } catch { /* ignore — ranked attribution is optional */ }
 }
 
 /** Create a new networked game. `invites` maps each seat to a shareable URL; the

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useGame } from 'digital-boardgame-framework/client';
+import { useGame, useIdentity, SignInBar } from 'digital-boardgame-framework/client';
 import type { GameClientApi } from 'digital-boardgame-framework/client';
 import type { LogEntry } from 'digital-boardgame-framework';
 import { adapter } from '../engine/index.js';
 import type { Action, GameState, PlayerId } from '../engine/index.js';
 import { civilizations, civById } from '../data/index.js';
-import { createCivClient, createNetworkGame, fetchMyReports, realtimeSubscribe, resolutionNote, tokenFromInvite, type MyReport } from '../client/api.js';
+import { claimSeat, createCivClient, createNetworkGame, fetchMyReports, realtimeSubscribe, resolutionNote, tokenFromInvite, type MyReport } from '../client/api.js';
 import { REPORT_CATEGORY } from '../report-meta.js';
 import { ActionList, Board, CalamityModal, CombatModal, InfoView, MovementControls, ReportModal, StatusPanel, legalAreas, nationFocusArea, prettyPhase, scrollBoardTo, useMovementPlanner, type View } from './App.js';
 
@@ -67,7 +67,19 @@ export function Lobby() {
 // ---- Online game (driven by useGame) --------------------------------------
 
 export function OnlineGame({ gameId, token }: { gameId: string; token: string }) {
-  const client: GameClientApi<GameState, Action> = useMemo(() => createCivClient({ baseUrl: API, gameId, token }), [gameId, token]);
+  // Ranked play: the player's hub identity, read fresh on each move via a ref so
+  // the memoized client never goes stale when they sign in mid-game.
+  const { identity } = useIdentity();
+  const identityTokenRef = useRef<string | undefined>(undefined);
+  identityTokenRef.current = identity?.token;
+  const client: GameClientApi<GameState, Action> = useMemo(
+    () => createCivClient({ baseUrl: API, gameId, token, getIdentityToken: () => identityTokenRef.current }),
+    [gameId, token],
+  );
+  // Attach this seat's identity on join (and whenever the player signs in).
+  useEffect(() => {
+    if (identity?.token) void claimSeat(API, gameId, token, identity.token);
+  }, [identity?.token, gameId, token]);
   const subscribe = useMemo(() => realtimeSubscribe(gameId, import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY), [gameId]);
   const game = useGame<GameState, Action>(client, { pollMs: 2500, ...(subscribe ? { subscribe } : {}) });
   const [selected, setSelected] = useState<string | null>(null);
@@ -126,7 +138,20 @@ export function OnlineGame({ gameId, token }: { gameId: string; token: string })
         <StatusPanel state={s} id={you} />
         <div className="civ-panel" style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 6, overflow: 'auto' }}>
           {game.gameOver ? (
-            <div className="civ-msg" style={{ padding: 10 }}>Game over.</div>
+            <div className="civ-msg" style={{ padding: 10 }}>
+              <div>Game over.</div>
+              {game.ranked && (
+                <p style={{ margin: '8px 0 0', fontSize: 13, color: game.ranked.recorded ? '#6c6' : '#caa' }}>
+                  {game.ranked.recorded
+                    ? '✓ Recorded to the leaderboard.'
+                    : game.ranked.reason === 'one-player'
+                      ? 'Not ranked — both seats were the same player (you need different people/identities).'
+                      : game.ranked.reason === 'no-identities'
+                        ? 'Not ranked — no identities were attached to the seats.'
+                        : "Not ranked — couldn't reach the leaderboard."}
+                </p>
+              )}
+            </div>
           ) : game.yourTurn ? (
             <>
               <div className="civ-msg" style={{ padding: '6px 10px', textAlign: 'center' }}>Your turn — {prettyPhase(s.phase)}</div>
@@ -143,6 +168,7 @@ export function OnlineGame({ gameId, token }: { gameId: string; token: string })
         <div className="civ-panel" style={{ width: 210, padding: 6, display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto', minHeight: 0 }}>
           <div style={{ textAlign: 'center', fontWeight: 800, letterSpacing: 1 }}>{prettyPhase(s.phase).toUpperCase()}</div>
           <div className="civ-lbl">Turn {s.turn} · you are <b style={{ color: civById.get(you)?.color }}>{civById.get(you)?.name}</b></div>
+          <SignInBar leaderboardHref="https://games-hub-5vo.pages.dev/leaderboard?game=advanced-civilization" />
           <button className="civ-btn" onClick={() => downloadLog(s, gameId)}>Download game log</button>
           <BugReport client={client} view={s} />
         </div>

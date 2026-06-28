@@ -12,7 +12,17 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   state = { error: null as Error | null, sent: false };
   static getDerivedStateFromError(error: Error) { return { error, sent: false }; }
   componentDidCatch(error: Error) {
-    // Auto-file a report with the stack so crashes surface in the queue.
+    // Auto-file a report with the stack so crashes surface in the queue — but
+    // dedupe: a single incident (e.g. an auto-translate DOM corruption that
+    // re-crashes on every reload) must not flood the queue with dozens of
+    // identical rows. Skip if the same crash was already filed this session.
+    let alreadySent = false;
+    try {
+      const key = `advciv-crash:${error.message}`;
+      alreadySent = sessionStorage.getItem(key) === '1';
+      sessionStorage.setItem(key, '1');
+    } catch { /* storage unavailable — fall through and file once */ }
+    if (alreadySent) { this.setState({ sent: true }); return; }
     submitStandaloneReport('', { message: `App crashed: ${error.message}\n${(error.stack ?? '').slice(0, 1500)}`, severity: 'bug', category: REPORT_CATEGORY, clientBuild: 'web-ui', userAgent: navigator.userAgent })
       .then(() => this.setState({ sent: true })).catch(() => {});
   }

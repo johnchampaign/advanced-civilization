@@ -56,6 +56,7 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
 
   const store = new SupabaseStore(supabase);
   const server = new GameServer<GameState, Action, string>({
+    snapshotHistory: 20,   // cap per-game snapshot history (framework >=0.32)
     adapter,
     codec,
     store,

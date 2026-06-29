@@ -1,6 +1,6 @@
 import { Component, StrictMode, useEffect, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { UpdateBanner } from 'digital-boardgame-framework/client';
+import { UpdateBanner, SplashScreen } from 'digital-boardgame-framework/client';
 import App from './App.js';
 import { Lobby, OnlineGame } from './online.js';
 import { fetchUnseenResponses, markResponseSeen, resolutionNote, submitStandaloneReport, type MyReport } from '../client/api.js';
@@ -89,6 +89,7 @@ createRoot(document.getElementById('root')!).render(
     {/* Shows a "A new version is available — Reload" banner when a newer build
         is deployed while this tab is open (polls /version.json). */}
     <UpdateBanner currentBuild={__DBF_BUILD_ID__} />
+    <SplashScreen title="Advanced Civilization" appId="advanced-civilization" />
     <ErrorBoundary><Root /></ErrorBoundary>
   </StrictMode>,
 );

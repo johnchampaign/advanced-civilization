@@ -51,7 +51,7 @@ export async function claimSeat(baseUrl: string, gameId: string, token: string, 
 
 /** Create a new networked game. `invites` maps each seat to a shareable URL; the
  *  per-seat secret is its `?token=` query param (use `tokenFromInvite`). */
-export async function createNetworkGame(baseUrl: string, body: { players: string[]; seed?: number; maxTurns?: number; emails?: Record<string, string> }): Promise<{ gameId: string; invites: Record<string, string> }> {
+export async function createNetworkGame(baseUrl: string, body: { players: string[]; seed?: number; maxTurns?: number; emails?: Record<string, string>; ai?: Record<string, string> }): Promise<{ gameId: string; invites: Record<string, string> }> {
   return fetch(`${baseUrl}/api/games`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => json<{ gameId: string; invites: Record<string, string> }>(r));
 }
 

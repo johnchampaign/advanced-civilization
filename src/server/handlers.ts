@@ -111,12 +111,12 @@ export async function handleApi(
     if (segs[1] === 'games') {
       // POST /api/games  { players, seed?, maxTurns?, emails? }
       if (segs.length === 2 && method === 'POST') {
-        const b = (body ?? {}) as { players?: string[]; seed?: number; maxTurns?: number; emails?: Record<string, string> };
+        const b = (body ?? {}) as { players?: string[]; seed?: number; maxTurns?: number; emails?: Record<string, string>; ai?: Record<string, string> };
         if (!Array.isArray(b.players) || b.players.length < 2 || b.players.length > 6) {
           return { status: 422, body: { error: 'players must be an array of 2-6 nation ids' } };
         }
         const initialState = newGameState({ players: b.players, seed: b.seed, maxTurns: b.maxTurns });
-        return { status: 200, body: await server.createGame({ initialState, players: b.players, emails: b.emails }) };
+        return { status: 200, body: await server.createGame({ initialState, players: b.players, emails: b.emails, ...(b.ai ? { ai: b.ai } : {}) }) };
       }
 
       const gameId = segs[2];

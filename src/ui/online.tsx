@@ -29,6 +29,18 @@ export function Lobby() {
     } catch (e) { setError((e as Error).message); }
   }
 
+  // Human = first picked nation; the rest become server-driven, rated AI seats.
+  async function createVsAi() {
+    setError(null);
+    try {
+      const seed = Math.floor(Math.random() * 0xffff);
+      const ai = Object.fromEntries(picked.slice(1).map((n) => [n, 'standard']));
+      const g = await createNetworkGame(API, { players: picked, seed, maxTurns: 60, ai });
+      const myUrl = g.invites[picked[0]!] ?? '';
+      location.search = `?game=${encodeURIComponent(g.gameId)}&token=${encodeURIComponent(tokenFromInvite(myUrl))}`;
+    } catch (e) { setError((e as Error).message); }
+  }
+
   return (
     <div style={{ padding: 24, color: '#eee', maxWidth: 760, margin: '0 auto' }}>
       <h1 style={{ marginTop: 0 }}>Advanced Civilization — Online</h1>
@@ -43,6 +55,8 @@ export function Lobby() {
             ))}
           </div>
           <button className="civ-btn" disabled={picked.length < 2 || picked.length > 6} onClick={create}>Create game ({picked.length} players)</button>
+          <button className="civ-btn" style={{ marginLeft: 8 }} disabled={picked.length < 2 || picked.length > 6} onClick={createVsAi}>vs AI (you = {civById.get(picked[0]!)?.name ?? picked[0]}, rest AI)</button>
+          <p className="civ-lbl" style={{ color: '#999', fontSize: 12 }}>Sign in first so your result vs the AI counts. Fewer AI seats = snappier turns.</p>
           {error && <p style={{ color: '#f88' }}>{error}</p>}
         </>
       ) : (

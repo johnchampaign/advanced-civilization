@@ -7,6 +7,7 @@
 import { GameServer, SupabaseStore, SupabaseBroadcaster, ResendNotifier, NoopNotifier, verifyIdentityToken, type Jwks } from 'digital-boardgame-framework/server';
 import { createClient } from '@supabase/supabase-js';
 import { adapter, codec, type Action, type GameState } from '../../src/engine/index.js';
+import { HeuristicAI } from '../../src/ai/heuristic.js';
 import { handleApi } from '../../src/server/handlers.js';
 import { APP_ID } from '../../src/report-meta.js';
 
@@ -60,6 +61,8 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     adapter,
     codec,
     store,
+    aiControllers: { standard: new HeuristicAI() },   // server-driven, rated AI seats
+
     broadcaster: new SupabaseBroadcaster({ supabaseUrl: env.SUPABASE_URL, serviceKey: env.SUPABASE_SERVICE_KEY }),
     notifier,
     gameUrl: (gameId, token) => `${site}/?game=${encodeURIComponent(gameId)}&token=${encodeURIComponent(token)}`,

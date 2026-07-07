@@ -586,8 +586,7 @@
   "aleppo",
   "cilicia",
   "galatia",
-  "phoenicia",
-  "salamis"
+  "phoenicia"
  ],
  "appolonia": [
   "adriatic-sea",
@@ -601,8 +600,7 @@
  "argos": [
   "athens",
   "corinth",
-  "sparta",
-  "thera"
+  "sparta"
  ],
  "armenia": [
   "cappadocia",
@@ -625,8 +623,7 @@
   "chalkis",
   "corinth",
   "delphi",
-  "eretria",
-  "thera"
+  "eretria"
  ],
  "babylon": [
   "babylonia",
@@ -680,10 +677,8 @@
  ],
  "campania": [
   "central-mediterranean",
-  "milazzo",
   "neapolis",
   "samnium",
-  "syracus",
   "tarentum",
   "western-mediterranean-2"
  ],
@@ -709,7 +704,6 @@
  "carthago": [
   "central-mediterranean",
   "numidia-2",
-  "palermo",
   "thapsus",
   "western-mediterranean-2"
  ],
@@ -778,10 +772,6 @@
   "sparta"
  ],
  "corsica-2": [
-  "etruria-2",
-  "massilia",
-  "roma",
-  "sardinia-2",
   "western-mediterranean-2"
  ],
  "crimea": [
@@ -792,8 +782,6 @@
  ],
  "cyprus": [
   "eastern-mediterranean",
-  "galatia",
-  "lycia",
   "salamis"
  ],
  "cyrenaica": [
@@ -891,12 +879,10 @@
  "eretria": [
   "aegean-sea",
   "athens",
-  "chalkis",
-  "thera"
+  "chalkis"
  ],
  "etruria-2": [
   "cisalpina-2",
-  "corsica-2",
   "gaul",
   "massilia",
   "rhaetia",
@@ -913,12 +899,10 @@
  "galatia": [
   "antiochia",
   "cilicia",
-  "cyprus",
   "gordium",
   "ionia",
   "kanesh",
-  "lycia",
-  "salamis"
+  "lycia"
  ],
  "gaza": [
   "eastern-mediterranean",
@@ -956,7 +940,6 @@
   "aegean-sea",
   "galatia",
   "gordium",
-  "lesbos",
   "lycia",
   "miletus",
   "sardes"
@@ -1017,10 +1000,7 @@
   "troy"
  ],
  "lesbos": [
-  "aegean-sea",
-  "ionia",
-  "sardes",
-  "troy"
+  "aegean-sea"
  ],
  "lesser-armenia": [
   "armenia",
@@ -1037,12 +1017,10 @@
   "tripolitania"
  ],
  "lycia": [
-  "cyprus",
   "eastern-mediterranean",
   "galatia",
   "ionia",
-  "miletus",
-  "rhodes"
+  "miletus"
  ],
  "macedonia": [
   "appolonia",
@@ -1085,7 +1063,6 @@
   "nalchik"
  ],
  "milazzo": [
-  "campania",
   "palermo",
   "syracus",
   "western-mediterranean-2"
@@ -1093,8 +1070,7 @@
  "miletus": [
   "aegean-sea",
   "ionia",
-  "lycia",
-  "rhodes"
+  "lycia"
  ],
  "moesia": [
   "black-sea",
@@ -1148,7 +1124,6 @@
   "thrace"
  ],
  "palermo": [
-  "carthago",
   "central-mediterranean",
   "milazzo",
   "syracus",
@@ -1181,7 +1156,6 @@
   "antiochia",
   "damascus",
   "eastern-mediterranean",
-  "salamis",
   "sidon",
   "syria"
  ],
@@ -1206,12 +1180,9 @@
  ],
  "rhodes": [
   "aegean-sea",
-  "eastern-mediterranean",
-  "lycia",
-  "miletus"
+  "eastern-mediterranean"
  ],
  "roma": [
-  "corsica-2",
   "etruria-2",
   "neapolis",
   "rubicon",
@@ -1239,11 +1210,8 @@
   "tunisia-2"
  ],
  "salamis": [
-  "antiochia",
   "cyprus",
-  "eastern-mediterranean",
-  "galatia",
-  "phoenicia"
+  "eastern-mediterranean"
  ],
  "samnium": [
   "adriatic-sea",
@@ -1257,12 +1225,10 @@
   "bithynia",
   "gordium",
   "ionia",
-  "lesbos",
   "troy"
  ],
  "sardinia-2": [
   "carales-2",
-  "corsica-2",
   "western-mediterranean-2"
  ],
  "scythia": [
@@ -1320,7 +1286,6 @@
   "syria"
  ],
  "syracus": [
-  "campania",
   "central-mediterranean",
   "milazzo",
   "palermo"
@@ -1367,10 +1332,7 @@
   "ptolemais"
  ],
  "thera": [
-  "aegean-sea",
-  "argos",
-  "athens",
-  "eretria"
+  "aegean-sea"
  ],
  "thessalonica": [
   "aegean-sea",
@@ -1420,7 +1382,6 @@
   "black-sea",
   "bycantinum",
   "lemnos",
-  "lesbos",
   "sardes"
  ],
  "tunisia-2": [
@@ -1508,8 +1469,6 @@
  ],
  "baleares": [
   "ebusus",
-  "iberus",
-  "new-carthage",
   "western-mediterranean-2"
  ],
  "bay-of-biscay": [
@@ -1572,7 +1531,6 @@
   "tarraconensis"
  ],
  "iberus": [
-  "baleares",
   "hispania",
   "new-carthage",
   "pyrenees",
@@ -1604,7 +1562,6 @@
   "tarraconensis"
  ],
  "massilia": [
-  "corsica-2",
   "etruria-2",
   "gaul",
   "narbo",
@@ -1623,7 +1580,6 @@
   "western-mediterranean-2"
  ],
  "new-carthage": [
-  "baleares",
   "corduba",
   "hispania",
   "iberus",

@@ -70,6 +70,21 @@ const REMOVE_EDGES = [
   ['phaestos', 'argos'],    // open sea (to mainland Greece)
   ['phaestos', 'sparta'],   // open sea (to mainland Greece)
   ['phaestos', 'thera'],    // open sea (Aegean)
+  // Remaining Mediterranean islands (§23.3; owner-confirmed against the board).
+  // Each keeps its internal land borders; every off-island land edge is all-water
+  // (reach only by ship). Groups: Cyprus{cyprus,salamis}, Corsica{corsica-2},
+  // Sardinia{sardinia-2,carales-2}, Baleares{baleares,ebusus}, Rhodes, Thera,
+  // Lesbos, Sicily{syracus,milazzo,palermo}.
+  ['cyprus', 'galatia'], ['cyprus', 'lycia'],
+  ['salamis', 'antiochia'], ['salamis', 'galatia'], ['salamis', 'phoenicia'],
+  ['corsica-2', 'etruria-2'], ['corsica-2', 'massilia'], ['corsica-2', 'roma'],
+  ['corsica-2', 'sardinia-2'], // Strait of Bonifacio (island↔island)
+  ['baleares', 'iberus'], ['baleares', 'new-carthage'],
+  ['rhodes', 'lycia'], ['rhodes', 'miletus'],
+  ['thera', 'argos'], ['thera', 'athens'], ['thera', 'eretria'],
+  ['lesbos', 'ionia'], ['lesbos', 'sardes'], ['lesbos', 'troy'],
+  ['palermo', 'carthago'],   // Sicilian channel to Africa
+  ['syracus', 'campania'], ['milazzo', 'campania'], // Strait of Messina — ship-only in AC
 ];
 for (const [a, b] of REMOVE_EDGES) {
   if (adjacency[a]) adjacency[a] = adjacency[a].filter((x) => x !== b);

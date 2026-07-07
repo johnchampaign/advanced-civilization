@@ -135,3 +135,34 @@ describe('naval range helper', () => {
     for (const d of r4) expect(r4astro.has(d)).toBe(true);     // Astronomy ⊇ no-Astronomy
   });
 });
+
+describe('§23.3 islands are all-water — population must embark to leave (issue #1)', () => {
+  // Each island group and its members; every off-island land edge must be cut so
+  // tokens can only leave by ship. (Owner-confirmed against the board.)
+  const ISLANDS: Record<string, string[]> = {
+    crete: ['knossos', 'phaestos'], cyprus: ['cyprus', 'salamis'], corsica: ['corsica-2'],
+    sardinia: ['sardinia-2', 'carales-2'], baleares: ['baleares', 'ebusus'],
+    rhodes: ['rhodes'], thera: ['thera'], lesbos: ['lesbos'], sicily: ['syracus', 'milazzo', 'palermo'],
+  };
+  it('no island area has a land neighbour outside its own island', () => {
+    for (const members of Object.values(ISLANDS)) {
+      const set = new Set(members);
+      for (const id of members)
+        for (const n of adjacency[id] ?? [])
+          if (!areaById.get(n)?.isWater && !set.has(n))
+            throw new Error(`${id} still walks to off-island land area ${n}`);
+    }
+  });
+  it('the engine offers no on-foot move off Crete or across the Strait of Messina', () => {
+    let s = base();
+    s.areas['phaestos'] = { tokens: { egypt: 3 } };
+    s.areas['syracus'] = { tokens: { egypt: 3 } };
+    s.phase = 'movement'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    const dests = new Set<string>();
+    for (const a of adapter.legalActions(s, 'egypt'))
+      if (a.type === 'move') for (const m of (a as { moves: { from: string; to: string }[] }).moves) dests.add(`${m.from}->${m.to}`);
+    expect(dests.has('phaestos->argos')).toBe(false);
+    expect(dests.has('phaestos->sparta')).toBe(false);
+    expect(dests.has('syracus->campania')).toBe(false); // Messina is ship-only
+  });
+});

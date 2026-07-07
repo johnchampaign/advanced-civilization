@@ -601,7 +601,6 @@
  "argos": [
   "athens",
   "corinth",
-  "phaestos",
   "sparta",
   "thera"
  ],
@@ -1002,9 +1001,7 @@
  "knossos": [
   "aegean-sea",
   "eastern-mediterranean",
-  "phaestos",
-  "rhodes",
-  "thera"
+  "phaestos"
  ],
  "kuban": [
   "black-sea",
@@ -1175,12 +1172,9 @@
   "syria"
  ],
  "phaestos": [
-  "argos",
   "central-mediterranean",
   "eastern-mediterranean",
-  "knossos",
-  "sparta",
-  "thera"
+  "knossos"
  ],
  "phoenicia": [
   "aleppo",
@@ -1213,7 +1207,6 @@
  "rhodes": [
   "aegean-sea",
   "eastern-mediterranean",
-  "knossos",
   "lycia",
   "miletus"
  ],
@@ -1310,8 +1303,7 @@
  "sparta": [
   "argos",
   "central-mediterranean",
-  "corinth",
-  "phaestos"
+  "corinth"
  ],
  "sudeten": [
   "dacia",
@@ -1378,9 +1370,7 @@
   "aegean-sea",
   "argos",
   "athens",
-  "eretria",
-  "knossos",
-  "phaestos"
+  "eretria"
  ],
  "thessalonica": [
   "aegean-sea",

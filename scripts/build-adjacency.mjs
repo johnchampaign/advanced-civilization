@@ -61,6 +61,15 @@ const REMOVE_EDGES = [
   ['ptolemais', 'sinai'],   // separated by the Red Sea (report 7ff3c698)
   ['ptolemais', 'midian'],  // separated by the Red Sea
   ['midian', 'sinai'],      // separated by the Gulf of Aqaba (report b9914628); still land-linked via Petra
+  // Crete is an island (§23.3; GitHub issue #1, itowlson): population must embark
+  // to leave it. Its land areas (knossos, phaestos) were over-connected across the
+  // Aegean/Mediterranean to the mainland and neighbouring islands. Internal border
+  // knossos↔phaestos is kept; all off-island land edges are cut (reach by ship).
+  ['knossos', 'rhodes'],    // open sea (Karpathian)
+  ['knossos', 'thera'],     // open sea (Aegean)
+  ['phaestos', 'argos'],    // open sea (to mainland Greece)
+  ['phaestos', 'sparta'],   // open sea (to mainland Greece)
+  ['phaestos', 'thera'],    // open sea (Aegean)
 ];
 for (const [a, b] of REMOVE_EDGES) {
   if (adjacency[a]) adjacency[a] = adjacency[a].filter((x) => x !== b);

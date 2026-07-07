@@ -839,9 +839,16 @@ export function MovementControls({ planner }: { planner: MovementPlanner }) {
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
             {planner.destinations.map((d) => (
-              <button className="civ-btn" key={d.to} onClick={() => planner.onBoardClick(d.to)}>{d.byShip ? '⛵ ' : '→ '}{name(d.to)}</button>
+              <button className="civ-btn" key={d.to} onClick={() => planner.onBoardClick(d.to)}
+                style={d.byShip ? { borderColor: '#5cf', color: '#cfe8ff' } : undefined}
+                title={d.byShip ? 'Embark these tokens onto your ship here and sail to this sea zone' : undefined}>
+                {d.byShip ? `⛵ Embark → ${name(d.to)}` : `→ ${name(d.to)}`}
+              </button>
             ))}
           </div>
+          {planner.destinations.some((d) => d.byShip) && (
+            <span className="civ-lbl" style={{ color: '#9cd' }}>⛵ These tokens can <b>embark</b> onto a ship here — click a ⛵ sea zone to load them aboard, then move the ship (and debark on a far coast) on a later click.</span>
+          )}
         </div>
       )}
 
@@ -855,7 +862,7 @@ export function MovementControls({ planner }: { planner: MovementPlanner }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '2px 8px', maxHeight: 96, overflowY: 'auto', paddingRight: 4 }}>
             {queued.map((q, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
-                <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{q.byShip ? '⛵ ' : ''}{name(q.from)} → {name(q.to)} ({q.count})</span>
+                <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{q.byShip ? '⛵ Embark: ' : ''}{name(q.from)} → {name(q.to)} ({q.count})</span>
                 <button className="civ-btn" style={{ padding: '0 6px', lineHeight: '18px' }} onClick={() => removeQueued(i)}>✕</button>
               </div>
             ))}

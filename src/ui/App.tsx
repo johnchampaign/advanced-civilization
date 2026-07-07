@@ -615,7 +615,11 @@ function AdvanceChip({ id, owned }: { id: string; owned: boolean }) {
   const [hover, setHover] = useState(false);
   return (
     <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      style={{ position: 'relative', padding: 6, borderRadius: 4, border: '1px solid #555', borderLeft: `5px solid ${GROUP_COLOR[a.groups[0]!] ?? '#999'}`, background: owned ? '#2e6b3a' : '#222', opacity: owned ? 1 : 0.6, cursor: 'help' }}>
+      // While hovered, lift this cell above its neighbours. Un-bought cells use
+      // opacity < 1, which creates a stacking context that would otherwise trap
+      // the tooltip's z-index inside the cell and let a solid (bought) neighbour
+      // paint over it (report bf94bb5e).
+      style={{ position: 'relative', zIndex: hover ? 10 : undefined, padding: 6, borderRadius: 4, border: '1px solid #555', borderLeft: `5px solid ${GROUP_COLOR[a.groups[0]!] ?? '#999'}`, background: owned ? '#2e6b3a' : '#222', opacity: owned ? 1 : 0.6, cursor: 'help' }}>
       <b>{a.name}</b><br /><small><GroupDots groups={a.groups} />{a.groups.join('/')} · {a.cost}</small>
       {hover && <AdvanceTip id={id} />}
     </div>

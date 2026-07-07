@@ -1079,8 +1079,7 @@
  "midian": [
   "arabia",
   "petra",
-  "red-sea",
-  "sinai"
+  "red-sea"
  ],
  "mikop": [
   "black-sea",
@@ -1290,7 +1289,6 @@
   "eastern-desert",
   "gaza",
   "jerusalem",
-  "midian",
   "petra",
   "tanis"
  ],

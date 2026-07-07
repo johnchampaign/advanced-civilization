@@ -60,6 +60,7 @@ for (const ids of Object.values(byName)) {
 const REMOVE_EDGES = [
   ['ptolemais', 'sinai'],   // separated by the Red Sea (report 7ff3c698)
   ['ptolemais', 'midian'],  // separated by the Red Sea
+  ['midian', 'sinai'],      // separated by the Gulf of Aqaba (report b9914628); still land-linked via Petra
 ];
 for (const [a, b] of REMOVE_EDGES) {
   if (adjacency[a]) adjacency[a] = adjacency[a].filter((x) => x !== b);

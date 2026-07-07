@@ -56,6 +56,14 @@ for z in root.iter():
             props[p.get('name')] = p.get('initialValue')
     sustains = props.get('Sustains')
     sustains = int(sustains) if (sustains is not None and sustains.lstrip('-').isdigit()) else 0
+    # The module's machine-readable Sustains property disagrees with the printed
+    # board art for a few zones (transcription typos in the module itself). The
+    # physical Avalon Hill board is authoritative — correct those here.
+    SUSTAINS_OVERRIDES = {
+        'Western Desert': 2,  # module says 1; board shows 2 (report 7b639500, owner-confirmed)
+    }
+    if name in SUSTAINS_OVERRIDES:
+        sustains = SUSTAINS_OVERRIDES[name]
     is_water = sustains == 0
     path = parse_path(z.get('path'))
     sid = slug(name)

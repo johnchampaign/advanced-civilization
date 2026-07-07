@@ -6308,7 +6308,7 @@
   "id": "western-desert",
   "name": "Western Desert",
   "board": "main",
-  "sustains": 1,
+  "sustains": 2,
   "isWater": false,
   "isCitySite": false,
   "isFloodplain": false,

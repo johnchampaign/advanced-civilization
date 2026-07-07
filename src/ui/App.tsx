@@ -405,6 +405,12 @@ function MapArtBanner({ mapArt }: { mapArt: ReturnType<typeof useMapArt> }) {
         <b> VASSAL module</b>, load it here to play on the real maps — extracted in your browser and stored
         only on this device. Nothing is uploaded.
       </div>
+      <div style={{ marginTop: 6, fontSize: 12 }}>
+        Don’t have it?{' '}
+        <a href="https://obj.vassalengine.org/images/e/ee/AdvancedCivilization_v1.0.vmod" target="_blank" rel="noopener noreferrer" style={{ color: '#ffd23f', fontWeight: 700 }}>
+          Download the VASSAL module (.vmod)
+        </a>{' '}from vassalengine.org, then load it above.
+      </div>
       {mapArt.status === 'error' && <div style={{ color: '#ff9', marginTop: 6 }}>Couldn’t read that file: {mapArt.error}</div>}
       <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
         <label className="civ-btn" style={{ cursor: 'pointer', background: '#ffd23f', color: '#1a1410', fontWeight: 700, padding: '4px 10px', borderRadius: 5 }}>

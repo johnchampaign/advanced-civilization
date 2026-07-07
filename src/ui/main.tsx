@@ -78,7 +78,11 @@ function Root() {
         <button className="civ-btn" style={{ fontSize: 16, padding: '10px 18px' }} onClick={() => setMode('hotseat')}>Local hotseat + AI</button>
         <button className="civ-btn" style={{ fontSize: 16, padding: '10px 18px' }} onClick={() => setMode('online')}>Online multiplayer</button>
       </div>
-      <p className="civ-lbl" style={{ color: '#aaa' }}>Hotseat runs entirely in your browser. Online multiplayer creates a shareable game with a link per seat.</p>
+      <p className="civ-lbl" style={{ color: '#aaa', maxWidth: 560, textAlign: 'center' }}>
+        Hotseat runs entirely in your browser and auto-saves on this device — an interrupted game can be resumed from its setup screen.
+        Online multiplayer creates a shareable game with a link per seat; online games (including vs AI) live on the server, so you can
+        close the tab and pick them up any time, from any device — and signed-in results count on the leaderboard.
+      </p>
     </div>
   );
   return <>{modal}{body}</>;

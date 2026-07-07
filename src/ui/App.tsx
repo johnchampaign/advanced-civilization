@@ -16,6 +16,26 @@ const BARB = '__barbarian__';
 const PIRATE = '__pirate__';
 export type View = 'map' | 'ast' | 'census' | 'tools' | 'goods' | 'log';
 
+// ---- Local autosave (report f60ac6cf) -------------------------------------
+// One slot: the in-progress hotseat/AI game is written after every action and
+// offered for resume on the setup screen. Device-local by design — server-side
+// persistence (and rated play) is what Online → vs AI already provides.
+const AUTOSAVE_KEY = 'advciv-autosave';
+interface SavedGame { savedAt: number; config: { players: PlayerId[]; human: PlayerId }; seats: Record<PlayerId, 'human' | 'ai'>; state: GameState }
+function loadAutosave(): SavedGame | null {
+  try {
+    const raw = localStorage.getItem(AUTOSAVE_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw) as SavedGame;
+    // A save from a different engine schema can't be trusted to resume.
+    if (s?.state?.schemaVersion !== adapter.schemaVersion) return null;
+    if (!Array.isArray(s.config?.players) || !s.config.players.every((p) => !!s.state.players?.[p])) return null;
+    if (!s.seats || s.config.players.some((p) => s.seats[p] !== 'human' && s.seats[p] !== 'ai')) return null;
+    return s;
+  } catch { return null; }
+}
+function clearAutosave() { try { localStorage.removeItem(AUTOSAVE_KEY); } catch { /* ignore */ } }
+
 /** Pre-game screen: the human picks which civilization to play and which AI
  *  opponents to face, instead of always being seated as Egypt. */
 function CivSetup({ onStart, initial }: { onStart: (human: PlayerId, opponents: PlayerId[]) => void; initial: PlayerId }) {
@@ -101,6 +121,26 @@ export default function App() {
   const result = adapter.result(state);
   const legal = useMemo(() => (actor ? adapter.legalActions(state, actor) : []), [state, actor]);
 
+  // Autosave the live game after every change; clear it once the game ends.
+  const [saved, setSaved] = useState<SavedGame | null>(() => loadAutosave());
+  useEffect(() => {
+    if (!started) return;
+    try {
+      if (result) localStorage.removeItem(AUTOSAVE_KEY);
+      else {
+        const snap: SavedGame = { savedAt: Date.now(), config, seats, state };
+        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(snap));
+      }
+    } catch { /* storage full/blocked — playing on without autosave is fine */ }
+  }, [started, state, result, config, seats]);
+
+  const resumeGame = useCallback(() => {
+    const s = loadAutosave();
+    if (!s) { setSaved(null); return; }
+    rng.current = new Rng(Date.now() & 0xffff); // fresh randomness; all game data lives in the saved state
+    setConfig(s.config); setSeats(s.seats); setState(s.state); setView('map'); setStarted(true);
+  }, []);
+
   useEffect(() => {
     if (!actor || result || seats[actor] !== 'ai') return;
     const t = setTimeout(async () => {
@@ -135,13 +175,24 @@ export default function App() {
   }, [actor, state.phase, view, inMovement, planner.origin]);
 
   const mapArt = useMapArt(); // bring-your-own board artwork (none shipped)
-  // Back to the civilization picker. SYSTEM reads like a settings menu, so guard
-  // it — abandoning an in-progress game with no way back is easy to hit by
-  // accident (report f60ac6cf).
-  const newGame = () => { if (confirm('Leave this game and return to the setup screen? Your current game will be lost.')) setStarted(false); };
+  // Back to the civilization picker. SYSTEM reads like a settings menu, so keep
+  // the guard (report f60ac6cf) — but with autosave the game is recoverable, so
+  // say so instead of threatening data loss.
+  const newGame = () => { if (confirm('Return to the setup screen? Your game is auto-saved — you can resume it from there.')) { setSaved(loadAutosave()); setStarted(false); } };
 
   // Gate AFTER all hooks (hooks must run unconditionally on every render).
-  if (!started) return <CivSetup onStart={startGame} initial={config.human} />;
+  if (!started) return (
+    <>
+      {saved && (
+        <div style={{ position: 'fixed', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 200, maxWidth: '94vw', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', background: '#1a2f14', border: '1px solid #7fd17f', borderRadius: 8, padding: '8px 12px', boxShadow: '0 4px 18px #000c', color: '#e8f5e0', fontSize: 13 }}>
+          <span>💾 Saved game — turn {saved.state.turn}, you are <b>{civById.get(saved.config.human)?.name ?? saved.config.human}</b> vs {saved.config.players.filter((p) => p !== saved.config.human).map((p) => civById.get(p)?.name ?? p).join(', ')}. <span style={{ color: '#a8c79a' }}>(Starting a new game replaces this save.)</span></span>
+          <button className="civ-btn" onClick={resumeGame}>Resume</button>
+          <button className="civ-btn" onClick={() => { clearAutosave(); setSaved(null); }}>Discard</button>
+        </div>
+      )}
+      <CivSetup onStart={startGame} initial={config.human} />
+    </>
+  );
 
   // The nation shown in the status/info panels: the current actor, else seat 0.
   const focus = actor ?? state.seating[0]!;

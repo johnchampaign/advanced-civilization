@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties } from 'react';
 import { Rng, recordPlay } from 'digital-boardgame-framework';
 import { adapter, createGame, victoryScore } from '../engine/index.js';
 import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent } from '../engine/index.js';
@@ -285,6 +285,11 @@ export function legalAreas(legal: Action[], _phase: string): Set<string> {
 
 // ---- Board ---------------------------------------------------------------
 
+/** Shared style for the small overlay control buttons on the board (zoom, terrain). */
+const MAP_BTN: CSSProperties = { cursor: 'pointer', fontSize: 12, padding: '4px 9px', borderRadius: 6, border: '1px solid #7a4a18', background: 'rgba(13,58,74,0.88)', color: '#fff' };
+/** Board magnification steps (report de3c488e). 1 = fit the window width. */
+const ZOOM_LEVELS = [1, 1.5, 2, 3];
+
 /** Pointy-top regular hexagon centred at (cx,cy). Population tokens use this so
  *  they read distinctly from the square city markers (report 77d720f5). */
 function hexPoints(cx: number, cy: number, r: number): string {
@@ -312,17 +317,53 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
   // volcano / city-site / flood-plain markers so they can be read at a glance
   // without hovering each area. Off by default to keep the board uncluttered.
   const [showTerrain, setShowTerrain] = useState(false);
+  // Board magnification (report de3c488e). Zooming widens the board's LAYOUT
+  // width rather than applying a CSS transform — a transform doesn't create
+  // scrollable overflow, which is exactly why the old scale-zoom was removed
+  // (it hid edge territories). A wider layout box lets the parent
+  // overflow:auto container pan the whole enlarged map naturally.
+  const [zoom, setZoomRaw] = useState<number>(() => {
+    try { const v = Number(localStorage.getItem('advciv-board-zoom')); return ZOOM_LEVELS.includes(v) ? v : 1; } catch { return 1; }
+  });
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const pendingCenter = useRef<{ fx: number; fy: number } | null>(null);
+  const setZoom = (z: number) => {
+    const el = wrapRef.current?.parentElement; // the overflow:auto board container
+    if (el && el.scrollWidth > 0 && el.scrollHeight > 0) {
+      pendingCenter.current = { fx: (el.scrollLeft + el.clientWidth / 2) / el.scrollWidth, fy: (el.scrollTop + el.clientHeight / 2) / el.scrollHeight };
+    }
+    setZoomRaw(z);
+    try { localStorage.setItem('advciv-board-zoom', String(z)); } catch { /* ignore */ }
+  };
+  // Restore the view centre right after the resized board lays out (and before
+  // paint), so zooming feels anchored instead of snapping to the top-left.
+  useLayoutEffect(() => {
+    const p = pendingCenter.current; pendingCenter.current = null;
+    const el = wrapRef.current?.parentElement;
+    if (p && el) el.scrollTo({ left: p.fx * el.scrollWidth - el.clientWidth / 2, top: p.fy * el.scrollHeight - el.clientHeight / 2 });
+  }, [zoom]);
+  const zi = ZOOM_LEVELS.indexOf(zoom);
   void zoomTo; // (was a CSS scale-zoom; removed — it created overflow that the
   // scroll container couldn't pan, hiding edge territories. We scroll-center on
   // the origin instead, which keeps the whole map reachable.)
   return (
-    <div style={{ position: 'relative', width: BOARD_VIEWBOX.w, maxWidth: '100%', margin: '0 auto' }}>
-      <button
-        onClick={() => setShowTerrain((s) => !s)}
-        title="Show/hide terrain markers: 🌋 volcano · 🏛 city site · 🌊 flood plain"
-        style={{ position: 'absolute', right: 10, top: 10, zIndex: 25, cursor: 'pointer', fontSize: 12, padding: '4px 9px', borderRadius: 6, border: '1px solid #7a4a18', background: showTerrain ? '#3a5a2a' : 'rgba(13,58,74,0.88)', color: '#fff' }}>
-        🌋 Terrain: {showTerrain ? 'on' : 'off'}
-      </button>
+    <div ref={wrapRef} style={{ position: 'relative', width: zoom === 1 ? BOARD_VIEWBOX.w : `${zoom * 100}%`, maxWidth: zoom === 1 ? '100%' : undefined, margin: '0 auto' }}>
+      {/* Map controls — sticky so they stay in view while panning a zoomed board. */}
+      <div style={{ position: 'sticky', top: 10, left: 10, zIndex: 25, height: 0, width: 0, overflow: 'visible' }}>
+        <div style={{ display: 'flex', gap: 5, width: 'max-content' }}>
+          <button onClick={() => setZoom(ZOOM_LEVELS[zi - 1] ?? 1)} disabled={zi <= 0} title="Zoom out"
+            style={{ ...MAP_BTN, minWidth: 28, fontWeight: 700, opacity: zi <= 0 ? 0.5 : 1 }}>−</button>
+          <button onClick={() => setZoom(1)} title="Reset zoom to fit the window" style={MAP_BTN}>🔍 {Math.round(zoom * 100)}%</button>
+          <button onClick={() => setZoom(ZOOM_LEVELS[zi + 1] ?? ZOOM_LEVELS[ZOOM_LEVELS.length - 1]!)} disabled={zi >= ZOOM_LEVELS.length - 1} title="Zoom in"
+            style={{ ...MAP_BTN, minWidth: 28, fontWeight: 700, opacity: zi >= ZOOM_LEVELS.length - 1 ? 0.5 : 1 }}>+</button>
+          <button
+            onClick={() => setShowTerrain((s) => !s)}
+            title="Show/hide terrain markers: 🌋 volcano · 🏛 city site · 🌊 flood plain"
+            style={{ ...MAP_BTN, background: showTerrain ? '#3a5a2a' : MAP_BTN.background }}>
+            🌋 Terrain: {showTerrain ? 'on' : 'off'}
+          </button>
+        </div>
+      </div>
       <svg viewBox={`0 0 ${BOARD_VIEWBOX.w} ${BOARD_VIEWBOX.h}`} style={{ width: '100%', display: 'block', background: '#0d3a4a' }}>
         {/* Board art: if the player has loaded their VASSAL module, draw the three
             map panels (West · Main · East). Otherwise draw from our own geometry:

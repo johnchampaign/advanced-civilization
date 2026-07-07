@@ -135,7 +135,10 @@ export default function App() {
   }, [actor, state.phase, view, inMovement, planner.origin]);
 
   const mapArt = useMapArt(); // bring-your-own board artwork (none shipped)
-  const newGame = () => setStarted(false); // back to the civilization picker
+  // Back to the civilization picker. SYSTEM reads like a settings menu, so guard
+  // it — abandoning an in-progress game with no way back is easy to hit by
+  // accident (report f60ac6cf).
+  const newGame = () => { if (confirm('Leave this game and return to the setup screen? Your current game will be lost.')) setStarted(false); };
 
   // Gate AFTER all hooks (hooks must run unconditionally on every render).
   if (!started) return <CivSetup onStart={startGame} initial={config.human} />;

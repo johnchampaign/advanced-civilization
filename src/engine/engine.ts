@@ -2719,6 +2719,9 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
     if (_viewer == null) return state;
     const v = clone(state);
     for (const [id, p] of Object.entries(v.players)) {
+      // The NUMBER of cards a player holds is public (§27.4); expose it so rivals
+      // can gauge a hand's size, then hide the actual cards for everyone else.
+      p.handCount = Object.values(p.hand).reduce((s, n) => s + n, 0);
       if (id !== _viewer) {
         p.hand = {} as Record<string, number>;
         p.calamities = [];

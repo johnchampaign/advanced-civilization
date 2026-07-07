@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties } from 'react';
 import { Rng, recordPlay } from 'digital-boardgame-framework';
 import { adapter, createGame, victoryScore } from '../engine/index.js';
 import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent } from '../engine/index.js';
@@ -14,7 +14,7 @@ const DEFAULT_PLAYERS: PlayerId[] = ['egypt', 'babylon', 'crete', 'assyria'];
 const ai = new HeuristicAI();
 const BARB = '__barbarian__';
 const PIRATE = '__pirate__';
-export type View = 'map' | 'ast' | 'census' | 'tools' | 'goods';
+export type View = 'map' | 'ast' | 'census' | 'tools' | 'goods' | 'log';
 
 /** Pre-game screen: the human picks which civilization to play and which AI
  *  opponents to face, instead of always being seated as Egypt. */
@@ -171,7 +171,7 @@ export default function App() {
       <div className="civ-bar" style={{ display: 'flex', gap: 6, padding: 6, minHeight: 170, maxHeight: '42vh' }}>
         {/* left nav */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, width: 78 }}>
-          {(['map', 'ast', 'census', 'tools', 'goods'] as View[]).map((v) => (
+          {(['map', 'ast', 'census', 'tools', 'goods', 'log'] as View[]).map((v) => (
             <button key={v} className={`civ-nav ${view === v ? 'on' : ''}`} onClick={() => setView(v)}>{v.toUpperCase()}</button>
           ))}
           <button className="civ-nav" onClick={newGame}>SYSTEM</button>
@@ -285,6 +285,17 @@ export function legalAreas(legal: Action[], _phase: string): Set<string> {
 
 // ---- Board ---------------------------------------------------------------
 
+/** Pointy-top regular hexagon centred at (cx,cy). Population tokens use this so
+ *  they read distinctly from the square city markers (report 77d720f5). */
+function hexPoints(cx: number, cy: number, r: number): string {
+  let pts = '';
+  for (let k = 0; k < 6; k++) {
+    const ang = (Math.PI / 180) * (60 * k - 90);
+    pts += `${(cx + r * Math.cos(ang)).toFixed(1)},${(cy + r * Math.sin(ang)).toFixed(1)} `;
+  }
+  return pts.trim();
+}
+
 export function Board({ state, selected, onSelect, highlight, zoomTo, origin, moved, art }: {
   state: GameState; selected: string | null; onSelect: (a: string | null) => void; highlight: Set<string>;
   /** When set, the board zooms in toward this area's anchor (e.g. a chosen move origin). */
@@ -297,11 +308,21 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
   art?: MapArt | null;
 }) {
   const [hovered, setHovered] = useState<string | null>(null);
+  // Optional terrain HUD (report e6de51c9): overlay glyphs for the printed
+  // volcano / city-site / flood-plain markers so they can be read at a glance
+  // without hovering each area. Off by default to keep the board uncluttered.
+  const [showTerrain, setShowTerrain] = useState(false);
   void zoomTo; // (was a CSS scale-zoom; removed — it created overflow that the
   // scroll container couldn't pan, hiding edge territories. We scroll-center on
   // the origin instead, which keeps the whole map reachable.)
   return (
     <div style={{ position: 'relative', width: BOARD_VIEWBOX.w, maxWidth: '100%', margin: '0 auto' }}>
+      <button
+        onClick={() => setShowTerrain((s) => !s)}
+        title="Show/hide terrain markers: 🌋 volcano · 🏛 city site · 🌊 flood plain"
+        style={{ position: 'absolute', right: 10, top: 10, zIndex: 25, cursor: 'pointer', fontSize: 12, padding: '4px 9px', borderRadius: 6, border: '1px solid #7a4a18', background: showTerrain ? '#3a5a2a' : 'rgba(13,58,74,0.88)', color: '#fff' }}>
+        🌋 Terrain: {showTerrain ? 'on' : 'off'}
+      </button>
       <svg viewBox={`0 0 ${BOARD_VIEWBOX.w} ${BOARD_VIEWBOX.h}`} style={{ width: '100%', display: 'block', background: '#0d3a4a' }}>
         {/* Board art: if the player has loaded their VASSAL module, draw the three
             map panels (West · Main · East). Otherwise draw from our own geometry:
@@ -346,7 +367,7 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
                 const barb = owner === BARB;
                 return (
                   <g key={owner}>
-                    <circle cx={an.x + i * 6} cy={an.y} r={an.r} fill={barb ? '#1a1a1a' : (civById.get(owner)?.color ?? '#888')} stroke={barb ? '#c33' : '#000'} strokeWidth={2} opacity={0.95} />
+                    <polygon points={hexPoints(an.x + i * 6, an.y, an.r * 1.15)} fill={barb ? '#1a1a1a' : (civById.get(owner)?.color ?? '#888')} stroke={barb ? '#c33' : '#000'} strokeWidth={2} strokeLinejoin="round" opacity={0.95} />
                     <text x={an.x + i * 6} y={an.y + an.r * 0.4} textAnchor="middle" fontSize={an.r * 1.1} fontWeight="bold" fill={barb ? '#f55' : '#fff'}>{barb ? '⚔' : n}</text>
                   </g>
                 );
@@ -362,6 +383,11 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
                   <text x={an.x + an.r + 6.5} y={an.y - an.r - 0.5} textAnchor="middle" fontSize={8} fontWeight="bold" fill="#cfe8ff">≤{meta!.sustains}</text>
                 </g>
               )}
+              {showTerrain && meta && (() => {
+                const glyphs = [meta.isVolcanoSite && '🌋', meta.isCitySite && '🏛', meta.isFloodplain && '🌊'].filter(Boolean).join('');
+                if (!glyphs) return null;
+                return <text x={an.x} y={an.y + an.r + 11} textAnchor="middle" fontSize={an.r * 1.15} pointerEvents="none">{glyphs}</text>;
+              })()}
             </g>
           );
         })}
@@ -506,7 +532,35 @@ export function InfoView({ view, state, focus }: { view: View; state: GameState;
   if (view === 'ast') return <AstView state={state} />;
   if (view === 'census') return <CensusView state={state} />;
   if (view === 'tools') return <ToolsView state={state} focus={focus} />;
+  if (view === 'log') return <LogView state={state} />;
   return <GoodsView state={state} focus={focus} />;
+}
+
+/** The running game log (§ every recorded change), most-recent first so the
+ *  latest events are visible without scrolling. `state.log` is the same record
+ *  offered as a downloadable file; this just makes it browsable in-game. */
+function LogView({ state }: { state: GameState }) {
+  const lines = state.log ?? [];
+  return (
+    <div style={{ padding: 16, color: '#eee' }}>
+      <h2 style={{ marginTop: 0 }}>Game Log</h2>
+      <div className="civ-lbl" style={{ color: '#b9ad8e', marginBottom: 8 }}>
+        The full record of this game — most recent first ({lines.length} {lines.length === 1 ? 'entry' : 'entries'}).
+      </div>
+      <div style={{ background: 'rgba(0,0,0,0.22)', borderRadius: 4, padding: 10, fontSize: 12, lineHeight: 1.7, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', maxWidth: 900 }}>
+        {lines.length === 0 && <span className="civ-lbl">(nothing has happened yet)</span>}
+        {lines.map((_, i) => {
+          const idx = lines.length - 1 - i; // newest first, keeping original entry numbers
+          return (
+            <div key={idx} style={{ display: 'flex', gap: 10 }}>
+              <span style={{ color: '#6f6a5a', minWidth: 34, textAlign: 'right', userSelect: 'none' }}>{idx + 1}</span>
+              <span style={{ whiteSpace: 'pre-wrap' }}>{lines[idx]}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 const EPOCH_COLOR: Record<string, string> = {
@@ -579,18 +633,56 @@ function AstView({ state }: { state: GameState }) {
 
 function CensusView({ state }: { state: GameState }) {
   const rows = state.seating.map((id) => {
-    let tokens = 0, cities = 0; for (const a of Object.values(state.areas)) { tokens += a.tokens[id] ?? 0; if (a.city === id) cities++; }
-    return { id, tokens, cities };
+    const p = state.players[id]!;
+    let tokens = 0, cities = 0;
+    for (const a of Object.values(state.areas)) { tokens += a.tokens[id] ?? 0; if (a.city === id) cities++; }
+    // handCount is set by viewFor for redacted (online) views; fall back to the
+    // visible hand (hotseat / one's own seat) where the cards aren't hidden.
+    const cards = p.handCount ?? Object.values(p.hand).reduce((s, n) => s + n, 0);
+    return { id, tokens, cities, cards, advances: p.advances, stock: p.stock, treasury: p.treasury };
   }).sort((a, b) => b.tokens - a.tokens);
+  const cell: CSSProperties = { padding: '3px 12px 3px 0', textAlign: 'right' };
+  const head: CSSProperties = { ...cell, fontWeight: 700, color: '#cdc4ad' };
   return (
     <div style={{ padding: 16, color: '#eee' }}>
-      <h2 style={{ marginTop: 0 }}>Census</h2>
-      <table style={{ fontSize: 14 }}><tbody>
-        <tr style={{ textAlign: 'left' }}><th>Order</th><th>Nation</th><th>Population</th><th>Cities</th></tr>
+      <h2 style={{ marginTop: 0 }}>Census &amp; Standings</h2>
+      <div className="civ-lbl" style={{ color: '#b9ad8e', marginBottom: 10, maxWidth: 640 }}>
+        Public information for every nation. A rival's advances, tokens and treasury are open knowledge — only their trade-card <i>contents</i> stay secret (§27.4), so just the number of cards they hold is shown.
+      </div>
+      <table style={{ fontSize: 14, borderCollapse: 'collapse' }}><tbody>
+        <tr style={{ textAlign: 'right' }}>
+          <th style={{ ...head, textAlign: 'left' }}>#</th>
+          <th style={{ ...head, textAlign: 'left' }}>Nation</th>
+          <th style={head}>Pop</th><th style={head}>Cities</th><th style={head}>Cards</th>
+          <th style={head}>Advances</th><th style={head}>Stock</th><th style={head}>Treasury</th>
+        </tr>
         {rows.map((r, i) => (
-          <tr key={r.id}><td>{i + 1}</td><td style={{ color: civById.get(r.id)?.color, fontWeight: 700, paddingRight: 20 }}>{civById.get(r.id)?.name}</td><td>{r.tokens}</td><td>{r.cities}</td></tr>
+          <tr key={r.id} style={{ borderTop: '1px solid #333' }}>
+            <td style={{ ...cell, textAlign: 'left' }}>{i + 1}</td>
+            <td style={{ ...cell, textAlign: 'left', color: civById.get(r.id)?.color, fontWeight: 700 }}>{civById.get(r.id)?.name}</td>
+            <td style={cell}>{r.tokens}</td>
+            <td style={cell}>{r.cities}</td>
+            <td style={cell}>{r.cards}</td>
+            <td style={cell}>{r.advances.length}</td>
+            <td style={cell}>{r.stock}</td>
+            <td style={cell}>{r.treasury}</td>
+          </tr>
         ))}
       </tbody></table>
+      <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="civ-lbl" style={{ color: '#cdc4ad', fontWeight: 700 }}>Advances owned</div>
+        {rows.map((r) => (
+          <div key={r.id} style={{ lineHeight: 1.9 }}>
+            <span style={{ color: civById.get(r.id)?.color, fontWeight: 700, marginRight: 8 }}>{civById.get(r.id)?.name}</span>
+            {r.advances.length === 0
+              ? <span className="civ-lbl" style={{ color: '#8a8270' }}>none yet</span>
+              : [...r.advances].sort().map((aid) => {
+                  const a = advanceById.get(aid); if (!a) return null;
+                  return <span key={aid} title={a.groups.join(' / ')} style={{ display: 'inline-block', fontSize: 11, padding: '1px 6px', margin: '0 4px 2px 0', borderRadius: 3, border: '1px solid #555', borderLeft: `4px solid ${GROUP_COLOR[a.groups[0]!] ?? '#999'}`, background: '#222' }}>{a.name}</span>;
+                })}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

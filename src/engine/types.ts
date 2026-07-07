@@ -105,6 +105,10 @@ export interface PlayerState {
   /** Deprecated: calamities now live in `hand` as `calamity:<id>`. Kept for
    *  back-compat of older snapshots; always empty in new games. */
   calamities: string[];
+  /** Public card count (§27.4): how many trade cards this player holds. Set by
+   *  `viewFor` so opponents can see the SIZE of a rival's hand without its
+   *  contents. Undefined in the canonical (unredacted) state. */
+  handCount?: number;
   /** AST position (space index; 0 = start). */
   astSpace: number;
   /** Current epoch id. */

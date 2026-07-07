@@ -7,21 +7,6 @@
   },
   "civilizations": [
     {
-      "id": "egypt",
-      "name": "Egypt",
-      "color": "#d4af37",
-      "start": "thebes",
-      "startAreas": [
-        "thebes",
-        "upper-egypt",
-        "nubia",
-        "buhen",
-        "siwa",
-        "jalo"
-      ],
-      "astOrder": 10
-    },
-    {
       "id": "africa",
       "name": "Africa",
       "color": "#8b4513",
@@ -33,72 +18,6 @@
         "sahara"
       ],
       "astOrder": 0
-    },
-    {
-      "id": "crete",
-      "name": "Crete",
-      "color": "#1e90ff",
-      "start": "knossos",
-      "startAreas": [
-        "knossos",
-        "phaestos"
-      ],
-      "astOrder": 4
-    },
-    {
-      "id": "asia",
-      "name": "Asia",
-      "color": "#9acd32",
-      "start": "mikop",
-      "startAreas": [
-        "mikop",
-        "kuban"
-      ],
-      "astOrder": 5
-    },
-    {
-      "id": "assyria",
-      "name": "Assyria",
-      "color": "#b22222",
-      "start": "caucasus",
-      "startAreas": [
-        "caucasus",
-        "nalchik"
-      ],
-      "astOrder": 7
-    },
-    {
-      "id": "babylon",
-      "name": "Babylon",
-      "color": "#4b0082",
-      "start": "susa",
-      "startAreas": [
-        "susa",
-        "media",
-        "parthia"
-      ],
-      "astOrder": 8
-    },
-    {
-      "id": "thrace",
-      "name": "Thrace",
-      "color": "#ff8c00",
-      "start": "scythia",
-      "startAreas": [
-        "scythia"
-      ],
-      "astOrder": 3
-    },
-    {
-      "id": "illyria",
-      "name": "Illyria",
-      "color": "#2f4f4f",
-      "start": "sudeten",
-      "startAreas": [
-        "sudeten",
-        "germania-2"
-      ],
-      "astOrder": 2
     },
     {
       "id": "iberia",
@@ -113,6 +32,61 @@
       "astOrder": 1
     },
     {
+      "id": "italy",
+      "name": "Italy",
+      "color": "#e63946",
+      "start": "etruria-2",
+      "startAreas": [
+        "cisalpina-2",
+        "etruria-2",
+        "pannonia-2"
+      ],
+      "astOrder": 2
+    },
+    {
+      "id": "illyria",
+      "name": "Illyria",
+      "color": "#2f4f4f",
+      "start": "sudeten",
+      "startAreas": [
+        "sudeten",
+        "germania-2"
+      ],
+      "astOrder": 3
+    },
+    {
+      "id": "thrace",
+      "name": "Thrace",
+      "color": "#ff8c00",
+      "start": "scythia",
+      "startAreas": [
+        "scythia"
+      ],
+      "astOrder": 4
+    },
+    {
+      "id": "crete",
+      "name": "Crete",
+      "color": "#1e90ff",
+      "start": "knossos",
+      "startAreas": [
+        "knossos",
+        "phaestos"
+      ],
+      "astOrder": 5
+    },
+    {
+      "id": "asia",
+      "name": "Asia",
+      "color": "#9acd32",
+      "start": "mikop",
+      "startAreas": [
+        "mikop",
+        "kuban"
+      ],
+      "astOrder": 6
+    },
+    {
       "id": "persia",
       "name": "Persia",
       "color": "#c71585",
@@ -122,7 +96,30 @@
         "prophtasia",
         "randamar"
       ],
-      "astOrder": 6
+      "astOrder": 7
+    },
+    {
+      "id": "assyria",
+      "name": "Assyria",
+      "color": "#b22222",
+      "start": "caucasus",
+      "startAreas": [
+        "caucasus",
+        "nalchik"
+      ],
+      "astOrder": 8
+    },
+    {
+      "id": "babylon",
+      "name": "Babylon",
+      "color": "#4b0082",
+      "start": "susa",
+      "startAreas": [
+        "susa",
+        "media",
+        "parthia"
+      ],
+      "astOrder": 9
     },
     {
       "id": "indus",
@@ -134,7 +131,22 @@
         "karachi",
         "pala"
       ],
-      "astOrder": 9
+      "astOrder": 10
+    },
+    {
+      "id": "egypt",
+      "name": "Egypt",
+      "color": "#d4af37",
+      "start": "thebes",
+      "startAreas": [
+        "thebes",
+        "upper-egypt",
+        "nubia",
+        "buhen",
+        "siwa",
+        "jalo"
+      ],
+      "astOrder": 11
     }
   ]
 }

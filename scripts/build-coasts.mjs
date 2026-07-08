@@ -10,13 +10,14 @@ import sharp from 'sharp';
 import fs from 'fs';
 
 const terr = JSON.parse(fs.readFileSync('src/data/territories.json', 'utf8'));
+const areasById = Object.fromEntries(JSON.parse(fs.readFileSync('src/data/areas.json', 'utf8')).map((a) => [a.id, a]));
 const { data, info } = await sharp('public/dev-assets/board.png').raw().toBuffer({ resolveWithObject: true });
 const IW = info.width, IH = info.height, C = info.channels;
 const px = (x, y) => { const i = (y * IW + x) * C; return [data[i], data[i + 1], data[i + 2]]; };
 const isBlue = (r, g, b) => b >= g && b > 110 && b >= r - 10;
 const isBorder = (r, g, b) => (r > 200 && g > 200 && b > 200) || Math.max(r, g, b) < 70; // white territory line OR black coast
 const MIN_SEA = 60;   // coastal waters can be small strips — keep them
-const MIN_LAND = 200; // land slivers below this are anti-alias noise
+const MIN_LAND = 60;  // small islands (e.g. Ebusus ~166px) are signal, not noise
 
 const pip = (x, y, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1]; if (((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)) c = !c; } return c; };
 const inRegion = (x, y, r) => pip(x, y, r.exterior) && !(r.holes || []).some((h) => pip(x, y, h));
@@ -60,6 +61,11 @@ for (const r of terr.regions) {
   else subs = splitRegion(r);
   // fallback: if splitting produced nothing, treat whole region as its category
   if (!subs.length) subs = [{ kind: r.category === 'openSea' ? 'sea' : 'land', exterior: r.exterior }];
+  // The game's areas.json is authoritative on land vs water: a LAND area must
+  // have land (don't let a tiny island render as pure water), and vice-versa.
+  const area = r.name ? areasById[r.name] : undefined;
+  if (area && !area.isWater && !subs.some((s) => s.kind === 'land')) subs = [{ kind: 'land', exterior: r.exterior }];
+  else if (area && area.isWater && !subs.some((s) => s.kind === 'sea')) subs = [{ kind: 'sea', exterior: r.exterior }];
   result.push({ id: r.id, name: r.name, category: r.category,
     sub: subs.map((s, i) => ({ subId: `${r.name || r.id}#${s.kind}${i + 1}`, kind: s.kind, area_px: Math.round(polyArea(s.exterior)), centroid: centroidOf(s.exterior).map((v) => +v.toFixed(1)), exterior: s.exterior })) });
 }

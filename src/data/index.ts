@@ -48,6 +48,12 @@ export interface Area {
   isVolcanoSite: boolean;
   /** If set, a legal opening area for the named nation. */
   startRegion: string | null;
+  /** A coastal territory's own inner water — pure naval-routing plumbing
+   *  (scripts/build-water-areas.mjs). Never a move origin/destination or a
+   *  ship's resting place; the UI does not draw it as a clickable cell. */
+  coastalWater?: boolean;
+  /** For a coastalWater area, the land area it belongs to; out of play with it. */
+  parent?: string;
   path: [number, number][];
   flags: Record<string, string>;
 }

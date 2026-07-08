@@ -110,6 +110,8 @@ export function outOfPlaySet(cfg: BoardConfig): Set<string> {
     if (a.board === 'eastern' && !cfg.east) out.add(a.id);
   }
   for (const crop of cfg.crops) for (const id of playAreas.outOfPlay[crop] ?? []) out.add(id);
+  // A coastal-water area is out whenever its parent land is out.
+  for (const a of areas) { if (a.coastalWater && a.parent && out.has(a.parent)) out.add(a.id); }
   return out;
 }
 

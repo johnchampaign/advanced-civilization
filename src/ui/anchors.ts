@@ -38,6 +38,9 @@ export interface Shape { id: string; isWater: boolean; points: string; cx: numbe
 export const ALL_SHAPES: Shape[] = [];
 for (const a of areas) {
   if (a.path.length < 3) continue;
+  // Coastal waters are naval-routing plumbing, not a drawn/clickable cell — the
+  // parent territory already paints its own coast (COAST_SUBS) over the sea backdrop.
+  if (a.coastalWater) continue;
   const off = BOARD_OFFSET[a.board] ?? { x: 0, y: 0 };
   const pts = a.path.map(([x, y]) => `${(x + off.x).toFixed(1)},${(y + off.y).toFixed(1)}`).join(' ');
   const an = anchorsTmp(a);
@@ -63,6 +66,8 @@ for (const t of (coastlinesJson as unknown as { territories: { name?: string; su
 export const anchors: Record<string, Anchor> = {};
 for (const a of areas) {
   if (a.path.length < 3) continue;
+  if (a.coastalWater) continue; // plumbing only — never anchored/clickable
+
   const off = BOARD_OFFSET[a.board] ?? { x: 0, y: 0 };
   let x: number, y: number, r: number;
   try {

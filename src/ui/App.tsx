@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { Rng, recordPlay } from 'digital-boardgame-framework';
 import { adapter, createGame, victoryScore } from '../engine/index.js';
 import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent } from '../engine/index.js';
-import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, playAreas, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
+import { advanceById, advances as ALL_ADVANCES, adjacency, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, playAreas, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
 import { availableNations, boardPresets, unavailableReason, type BoardPreset } from '../engine/boards.js';
 import { handValue, creditTowards, commoditySetValue, advancesFaceValue, outOfPlay } from '../engine/helpers.js';
@@ -966,6 +966,8 @@ export interface MovementPlanner {
   available: (area: string) => number;
   /** Reachable destinations from the current origin (for off-screen fallback buttons). */
   destinations: { to: string; byShip?: boolean }[];
+  /** When a coastal origin offers no embarkation, a plain-language reason why. */
+  embarkHint: string | null;
   onBoardClick: (area: string | null) => void;
   setCount: (n: number) => void;
   removeQueued: (i: number) => void;
@@ -1079,7 +1081,24 @@ export function useMovementPlanner(
   const moved = useMemo(() => new Set(queued.map((q) => q.to)), [queued]);
 
   const destinations = origin && dests ? [...dests.entries()].map(([to, o]) => ({ to, ...(o.byShip ? { byShip: true as const } : {}) })) : [];
-  return { active, origin, count, queued, highlight, available, destinations, onBoardClick, setCount, removeQueued, undoLast, commit, pass, previewState, moved };
+  // Explain WHY a selected coastal area offers no embarkation — otherwise the
+  // absence of any ⛵ option reads as a bug (GitHub issue #1, itowlson).
+  const embarkHint = (() => {
+    if (!origin || !actor) return null;
+    if (dests && [...dests.values()].some((o) => o.byShip)) return null; // embarking is available — no hint
+    const meta = areaById.get(origin);
+    if (!meta || meta.isWater) return null;
+    const a = state.areas?.[origin];
+    if ((a?.tokens?.[actor] ?? 0) <= 0) return null; // no tokens here to embark
+    const waters = (adjacency[origin] ?? []).filter((n) => areaById.get(n)?.isWater);
+    if (waters.length === 0) return null; // landlocked — embarking isn't expected
+    if ((a?.ships?.[actor] ?? 0) <= 0) return 'To embark, one of your own ships must be in this area — sail or build one here first.';
+    const allOpenSea = waters.every((n) => areaById.get(n)?.isOpenSea);
+    const hasAstronomy = !!state.players[actor]?.advances?.includes('astronomy');
+    if (allOpenSea && !hasAstronomy) return 'This coast faces only open sea, which ships can enter only with the Astronomy advance (§23.52). Move overland to a coast on an enclosed sea, or acquire Astronomy.';
+    return null;
+  })();
+  return { active, origin, count, queued, highlight, available, destinations, embarkHint, onBoardClick, setCount, removeQueued, undoLast, commit, pass, previewState, moved };
 }
 
 export function MovementControls({ planner }: { planner: MovementPlanner }) {
@@ -1112,6 +1131,9 @@ export function MovementControls({ planner }: { planner: MovementPlanner }) {
           </div>
           {planner.destinations.some((d) => d.byShip) && (
             <span className="civ-lbl" style={{ color: '#9cd' }}>⛵ These tokens can <b>embark</b> onto a ship here — click a ⛵ sea zone to load them aboard, then move the ship (and debark on a far coast) on a later click.</span>
+          )}
+          {planner.embarkHint && (
+            <span className="civ-lbl" style={{ color: '#e0b060' }}>⚓ No embarkation from here: {planner.embarkHint}</span>
           )}
         </div>
       )}

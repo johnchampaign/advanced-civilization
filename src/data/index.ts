@@ -9,8 +9,27 @@ import commoditiesRaw from './commodities.json' with { type: 'json' };
 import calamitiesRaw from './calamities.json' with { type: 'json' };
 import civilizationsRaw from './civilizations.json' with { type: 'json' };
 import astRaw from './ast.json' with { type: 'json' };
+import playAreasRaw from './playAreas.json' with { type: 'json' };
 
 export type Board = 'western' | 'main' | 'eastern';
+
+/** A main-board crop region (rules §16): the ids name which part is OUT of play. */
+export type CropKey = 'panel1' | 'panel12' | 'panel4' | 'panel34' | 'eastOfDotted' | 'westOfDotted';
+
+/** Rules-§16 play-area data derived from the VASSAL module's overlays
+ *  (scripts/derive_play_areas.py). `outOfPlay`: main-board area ids removed by
+ *  each crop. `suppressedCitySites` (§16.11): areas left in play whose printed
+ *  city site sits on an out-of-play panel (empty for every crop on this board —
+ *  derived and kept for completeness). `islandCitySites` (§16.8): sites
+ *  disregarded in 2-player games. */
+export interface PlayAreas {
+  outOfPlay: Record<CropKey, string[]>;
+  suppressedCitySites: Record<CropKey, string[]>;
+  islandCitySites: string[];
+  /** Each crop's greyout cover outline (main-board coordinates), for drawing
+   *  the out-of-play veil over the board. */
+  coverPolygons: Record<CropKey, [number, number][]>;
+}
 
 export interface Area {
   id: string;
@@ -111,6 +130,7 @@ export interface AstTrack {
    *  (§33.25); its length = number of LIA spaces. */
   lateIronThresholds?: number[];
 }
+export const playAreas: PlayAreas = playAreasRaw as unknown as PlayAreas;
 export const astTrack: AstTrack = (astRaw as unknown as { track: AstTrack }).track;
 export const astTracksByCiv: Record<string, AstTrack> = (astRaw as unknown as { tracksByCiv: Record<string, AstTrack> }).tracksByCiv ?? {};
 export const victoryScoring = (astRaw as { victoryScoring: { pointsPerAstSpace: number; pointsPerCity: number } }).victoryScoring;
@@ -146,6 +166,16 @@ export function validateData(): string[] {
   for (const a of advances) {
     for (const p of a.prerequisites ?? []) if (!advanceById.has(p)) problems.push(`advance ${a.id} prereq ${p} unknown`);
     for (const card of Object.keys(a.credits.byCard)) if (!advanceById.has(card)) problems.push(`advance ${a.id} credit -> unknown ${card}`);
+  }
+  // §16 play-area data must reference real areas of the right kind.
+  for (const [key, ids] of Object.entries(playAreas.outOfPlay)) {
+    for (const id of ids) if (!areaById.has(id)) problems.push(`playAreas.outOfPlay.${key} references unknown area ${id}`);
+  }
+  for (const [key, ids] of Object.entries(playAreas.suppressedCitySites)) {
+    for (const id of ids) if (!areaById.get(id)?.isCitySite) problems.push(`playAreas.suppressedCitySites.${key}: ${id} is not a city site`);
+  }
+  for (const id of playAreas.islandCitySites) {
+    if (!areaById.get(id)?.isCitySite) problems.push(`playAreas.islandCitySites: ${id} is not a city site`);
   }
   // §17.4: every nation has a unique A.S.T. rank forming a 0..n-1 sequence.
   const ranks = civilizations.map((c) => c.astOrder).sort((x, y) => x - y);

@@ -32,9 +32,11 @@ import {
   cardGroupsHeld,
   censusOrder,
   cityCount,
+  citySiteIn,
   commoditySetValue,
   creditTowards,
   handValue,
+  inPlay,
   landNeighbors,
   navalDestinations,
   neighbors,
@@ -340,7 +342,7 @@ function applyBuildShips(s: GameState, actor: PlayerId, builds: { area: string; 
     const a = s.areas[b.area];
     const area = areaById.get(b.area);
     if (!a || !area) throw new Error('build ships: unknown area');
-    if (!isCoastal(b.area)) throw new Error('ships must be built at a coastal area');
+    if (!isCoastal(s, b.area)) throw new Error('ships must be built at a coastal area');
     if ((a.tokens[actor] ?? 0) <= 0 && a.city !== actor) throw new Error('must occupy the area to build a ship there');
     for (let i = 0; i < b.count; i++) {
       if (shipCount(s, actor) >= 4) throw new Error('max 4 ships in play (§22.4)');
@@ -1188,18 +1190,21 @@ const VOLCANO_GROUPS: readonly (readonly string[])[] = [
 
 /** Contiguous flood-plain regions (§4.42): connected components of floodplain
  *  areas. Computed once — the map is static. */
-let _floodRegions: string[][] | null = null;
-function floodRegions(): string[][] {
-  if (_floodRegions) return _floodRegions;
-  const fp = [...areaById.values()].filter((a) => a.isFloodplain).map((a) => a.id);
+const _floodRegions = new WeakMap<GameState, string[][]>();
+function floodRegions(s: GameState): string[][] {
+  const cached = _floodRegions.get(s);
+  if (cached) return cached;
+  // §16: only in-play flood plains flood, and adjacency is play-area-gated (a
+  // crop can split a plain into separate regions).
+  const fp = [...areaById.values()].filter((a) => a.isFloodplain && inPlay(s, a.id)).map((a) => a.id);
   const set = new Set(fp), seen = new Set<string>(), out: string[][] = [];
   for (const id of fp) {
     if (seen.has(id)) continue;
     const stack = [id], comp: string[] = []; seen.add(id);
-    while (stack.length) { const x = stack.pop()!; comp.push(x); for (const n of neighbors(x)) if (set.has(n) && !seen.has(n)) { seen.add(n); stack.push(n); } }
+    while (stack.length) { const x = stack.pop()!; comp.push(x); for (const n of neighbors(s, x)) if (set.has(n) && !seen.has(n)) { seen.add(n); stack.push(n); } }
     out.push(comp);
   }
-  _floodRegions = out;
+  _floodRegions.set(s, out);
   return out;
 }
 
@@ -1231,7 +1236,7 @@ function removeUnitPointsInAreas(s: GameState, owner: PlayerId, areaIds: readonl
 /** Eliminate one of a player's coastal cities (no token substitution). */
 function eliminateOneCoastalCity(s: GameState, owner: PlayerId): boolean {
   for (const [aid, a] of Object.entries(s.areas)) {
-    if (a.city === owner && isCoastal(aid)) { delete a.city; player(s, owner).citiesAvailable += 1; return true; }
+    if (a.city === owner && isCoastal(s, aid)) { delete a.city; player(s, owner).citiesAvailable += 1; return true; }
   }
   return false;
 }
@@ -1271,7 +1276,7 @@ function volcanoDamage(s: GameState, g: readonly string[]): number {
 /** An adjacent reducible enemy city of `holder`'s city in `aid` (§30.212 — an
  *  Engineering holder can't be the secondary victim, §30.213). */
 function enemyCityNear(s: GameState, holder: PlayerId, aid: string): string | undefined {
-  return neighbors(aid).find((n) => { const c = s.areas[n]?.city; return !!c && c !== holder && isPlayer(s, c) && !has(player(s, c), 'engineering'); });
+  return neighbors(s, aid).find((n) => { const c = s.areas[n]?.city; return !!c && c !== holder && isPlayer(s, c) && !has(player(s, c), 'engineering'); });
 }
 
 function resolveEruption(s: GameState, holder: PlayerId, group: readonly string[]): void {
@@ -1314,7 +1319,7 @@ function startVolcano(s: GameState, holder: PlayerId, before: ReturnType<typeof 
 /** The flood plain (§30.51) where the victim has the most unit points, or null. */
 function bestFloodRegion(s: GameState, holder: PlayerId): string[] | null {
   let best: string[] | null = null, bestPts = 0;
-  for (const region of floodRegions()) { const pts = unitPointsInAreas(s, holder, region); if (pts > bestPts) { bestPts = pts; best = region; } }
+  for (const region of floodRegions(s)) { const pts = unitPointsInAreas(s, holder, region); if (pts > bestPts) { bestPts = pts; best = region; } }
   return best;
 }
 
@@ -1494,7 +1499,7 @@ function validateCivilWarSelect(s: GameState, cw: PendingCivilWar, sel: UnitSet,
 // player (human-prompted, else AI heuristic) rather than auto-picking.
 
 const citiesOf = (s: GameState, owner: PlayerId) => Object.keys(s.areas).filter((a) => s.areas[a]!.city === owner);
-const coastalCitiesOf = (s: GameState, owner: PlayerId) => citiesOf(s, owner).filter((a) => isCoastal2(a));
+const coastalCitiesOf = (s: GameState, owner: PlayerId) => citiesOf(s, owner).filter((a) => isCoastal2(s, a));
 
 /** Turn one specific city into a neutral pirate city (§30.91). */
 function razeCityToPirate(s: GameState, aid: string): void {
@@ -1717,7 +1722,7 @@ function marchBarbarians(s: GameState, primary: PlayerId, start: string, visited
     const limit = areaById.get(here)?.sustains ?? 0;
     const surplus = barbs - limit;
     if (surplus <= 0 || barbs <= 0) break;
-    const dests = neighbors(here).filter((n) => !areaById.get(n)?.isWater && !visited.has(n));
+    const dests = neighbors(s, here).filter((n) => !areaById.get(n)?.isWater && !visited.has(n));
     if (dests.length === 0) break;
     const best = Math.max(...dests.map((d) => damageTo(s, d, primary)));
     if (best === 0) break; // §30.5241: nowhere worth going
@@ -1739,7 +1744,7 @@ function marchBarbarians(s: GameState, primary: PlayerId, start: string, visited
  *  any exact tie. Returns true if it paused. */
 function startBarbarians(s: GameState, primary: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string, rng: Rng): boolean {
   if (primary === 'crete') { s.log.push(`Crete is immune to Barbarian Hordes (§30.527).`); return false; }
-  const startAreas = (civById.get(primary)?.startAreas ?? []).filter((aid) => areaById.has(aid));
+  const startAreas = (civById.get(primary)?.startAreas ?? []).filter((aid) => areaById.has(aid) && inPlay(s, aid));
   if (startAreas.length === 0) { s.log.push(`${primary} has no start area for Barbarians to land.`); return false; }
   const occupied = startAreas.filter((aid) => damageTo(s, aid, primary) > 0);
   const pool = occupied.length ? occupied : startAreas;
@@ -1768,7 +1773,7 @@ function startBarbarians(s: GameState, primary: PlayerId, before: ReturnType<typ
  *  reduced among rivals — not the trader, never a Theology-holder, and at most 1
  *  from a Philosophy-holder (§30.818-819). */
 
-const isCoastal2 = (aid: string) => neighbors(aid).some((n) => areaById.get(n)?.isWater);
+const isCoastal2 = (s: GameState, aid: string) => neighbors(s, aid).some((n) => areaById.get(n)?.isWater);
 
 const PIRATE = '__pirate__';
 
@@ -1814,7 +1819,7 @@ export function monotheismTargets(s: GameState, holder: PlayerId): string[] {
     const victim = soleOccupant(s, aid);
     if (!victim || victim === holder) continue;
     if (conversionImmune(s, victim)) continue; // §32.942
-    if (!landNeighbors(aid).some(ownsTokens)) continue; // adjacent by land to my units
+    if (!landNeighbors(s, aid).some(ownsTokens)) continue; // adjacent by land to my units
     const tokens = a.tokens[victim] ?? 0;
     const needsCity = a.city === victim;
     if (tokens > mine.stock) continue; // §32.942: must be able to replace the tokens
@@ -1874,8 +1879,8 @@ function removeTokensFromBoard(s: GameState, owner: PlayerId, unitPoints: number
   }
 }
 
-function isCoastal(aid: string): boolean {
-  return neighbors(aid).some((n) => areaById.get(n)?.isWater);
+function isCoastal(s: GameState, aid: string): boolean {
+  return neighbors(s, aid).some((n) => areaById.get(n)?.isWater);
 }
 function areaName(aid: string): string {
   return areaById.get(aid)?.name ?? aid;
@@ -2025,7 +2030,7 @@ function applyMovement(s: GameState, actor: PlayerId, moves: { from: string; to:
       if ((from.ships?.[actor] ?? 0) <= 0) throw new Error(`no ship in ${m.from} to embark`);
       if (m.count > 5) throw new Error('a ship carries at most 5 tokens (§23.51)');
       const range = 4 + (has(p, 'clothmaking') ? 1 : 0);
-      if (!navalDestinations(m.from, range, has(p, 'astronomy')).has(m.to)) throw new Error(`illegal sea move ${m.from}->${m.to}: out of range`);
+      if (!navalDestinations(s, m.from, range, has(p, 'astronomy')).has(m.to)) throw new Error(`illegal sea move ${m.from}->${m.to}: out of range`);
       setTokens(s, m.from, actor, (from.tokens[actor] ?? 0) - m.count);
       const dest = (s.areas[m.to] ??= { tokens: {} });
       dest.tokens[actor] = (dest.tokens[actor] ?? 0) + m.count;
@@ -2033,12 +2038,12 @@ function applyMovement(s: GameState, actor: PlayerId, moves: { from: string; to:
       (dest.ships ??= {})[actor] = (dest.ships[actor] ?? 0) + 1;
       continue;
     }
-    const adjacent = neighbors(m.from).includes(m.to);
+    const adjacent = neighbors(s, m.from).includes(m.to);
     const via = m.via;
     const viaArea = via ? s.areas[via] : undefined;
     // §32.251: the pass-through area must be land and may not contain another
     // player's units (tokens OR a city) or a Pirate city.
-    const roadReachable = !!(road && via && neighbors(m.from).includes(via) && neighbors(via).includes(m.to)
+    const roadReachable = !!(road && via && neighbors(s, m.from).includes(via) && neighbors(s, via).includes(m.to)
       && !areaById.get(via)?.isWater
       && (!viaArea || (Object.keys(viaArea.tokens).every((o) => o === actor || (viaArea.tokens[o] ?? 0) === 0)
         && (!viaArea.city || viaArea.city === actor))));
@@ -2058,8 +2063,9 @@ function applyBuildCity(s: GameState, actor: PlayerId, area: string, useTreasury
   if (p.citiesAvailable <= 0) throw new Error('no cities available');
   if (areaById.get(area)?.isWater) throw new Error('cannot build a city at sea');
   const onBoard = a.tokens[actor] ?? 0;
-  // 6 tokens build a city on a printed city site; 12 elsewhere (§25.2).
-  const required = areaById.get(area)?.isCitySite ? 6 : 12;
+  // 6 tokens build a city on a printed city site; 12 elsewhere (§25.2). §16.11/
+  // §16.8: a site voided by the board configuration counts as no site.
+  const required = citySiteIn(s, area) ? 6 : 12;
   // §32.631: Architecture may assist the building of only ONE city per turn, and
   // at least half the tokens must be on-board (so treasury covers at most half).
   const architecture = has(p, 'architecture') && !p.builtWithTreasuryThisTurn;
@@ -2575,7 +2581,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         const inPlay = shipCount(state, actor);
         if (p.shipsAvailable > 0 && inPlay < 4) {
           for (const [aid, a] of Object.entries(state.areas)) {
-            if (!isCoastal(aid)) continue;
+            if (!isCoastal(state, aid)) continue;
             const occupies = (a.tokens[actor] ?? 0) > 0 || a.city === actor;
             if (occupies && (a.tokens[actor] ?? 0) + p.treasury >= 2) {
               // §22.1/.2: offer paying from local population and/or from treasury.
@@ -2593,7 +2599,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         for (const [aid, a] of Object.entries(state.areas)) {
           const t = a.tokens[actor] ?? 0;
           if (t > 0) {
-            const adj = neighbors(aid);
+            const adj = neighbors(state, aid);
             for (const nb of adj) {
               if (areaById.get(nb)?.isWater) continue;
               out.push({ type: 'move', moves: [{ from: aid, to: nb, count: t }] });
@@ -2607,7 +2613,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
                 if (!vArea || vArea.isWater) continue;
                 const va = state.areas[via];
                 if (va && (Object.entries(va.tokens).some(([o, n]) => o !== actor && (n ?? 0) > 0) || (va.city && va.city !== actor))) continue;
-                for (const to of neighbors(via)) {
+                for (const to of neighbors(state, via)) {
                   if (to === aid || adj.includes(to) || areaById.get(to)?.isWater) continue; // single-step moves already cover adjacent
                   out.push({ type: 'move', moves: [{ from: aid, to, count: t, via }] });
                 }
@@ -2618,7 +2624,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
           // or 0 to relocate an empty ship.
           if ((a.ships?.[actor] ?? 0) > 0) {
             const range = 4 + (has(p, 'clothmaking') ? 1 : 0);
-            for (const to of navalDestinations(aid, range, has(p, 'astronomy'))) {
+            for (const to of navalDestinations(state, aid, range, has(p, 'astronomy'))) {
               out.push({ type: 'move', moves: [{ from: aid, to, count: Math.min(5, t), byShip: true }] });
             }
           }
@@ -2630,7 +2636,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
           if (a.city) continue;
           const area = areaById.get(aid);
           if (!area || area.isWater) continue;
-          const required = area.isCitySite ? 6 : 12;
+          const required = citySiteIn(state, aid) ? 6 : 12;
           const onBoard = a.tokens[actor] ?? 0;
           // §32.631: Architecture assists only ONE city per turn — don't offer a
           // treasury-assisted build the player can't actually make (a dead button).

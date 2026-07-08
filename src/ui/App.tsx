@@ -2,15 +2,18 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { Rng, recordPlay } from 'digital-boardgame-framework';
 import { adapter, createGame, victoryScore } from '../engine/index.js';
 import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent } from '../engine/index.js';
-import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
+import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, playAreas, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
-import { handValue, creditTowards, commoditySetValue, advancesFaceValue } from '../engine/helpers.js';
+import { availableNations, boardPresets, type BoardPreset } from '../engine/boards.js';
+import { handValue, creditTowards, commoditySetValue, advancesFaceValue, outOfPlay } from '../engine/helpers.js';
 import { submitStandaloneReport, fetchMyReports, resolutionNote, type MyReport } from '../client/api.js';
 import { REPORT_CATEGORY } from '../report-meta.js';
-import { anchors, BOARD_VIEWBOX, MAP_PANELS, ALL_SHAPES } from './anchors.js';
+import { anchors, BOARD_OFFSET, BOARD_VIEWBOX, MAP_PANELS, ALL_SHAPES } from './anchors.js';
 import { useMapArt, type MapArt } from './mapArt.js';
 
-const DEFAULT_PLAYERS: PlayerId[] = ['egypt', 'babylon', 'crete', 'assyria'];
+// The rules-default four-player game (§16.6, eastern panels): these are exactly
+// the four nations §16.6 makes available, so the default picks are legal.
+const DEFAULT_PLAYERS: PlayerId[] = ['egypt', 'babylon', 'assyria', 'asia'];
 const ai = new HeuristicAI();
 const BARB = '__barbarian__';
 const PIRATE = '__pirate__';
@@ -36,24 +39,67 @@ function loadAutosave(): SavedGame | null {
 }
 function clearAutosave() { try { localStorage.removeItem(AUTOSAVE_KEY); } catch { /* ignore */ } }
 
-/** Pre-game screen: the human picks which civilization to play and which AI
- *  opponents to face, instead of always being seated as Egypt. */
-function CivSetup({ onStart, initial }: { onStart: (human: PlayerId, opponents: PlayerId[]) => void; initial: PlayerId }) {
+/** The board preset in effect for a player count: the chosen one if it exists
+ *  at that count, else the rules default (first preset). */
+export function effectiveBoardPreset(numPlayers: number, presetId: string | null): BoardPreset {
+  const presets = boardPresets(numPlayers);
+  return presets.find((b) => b.id === presetId) ?? presets[0]!;
+}
+
+/** Rules-§16 board picker: the legal board configurations for the player count
+ *  (plus the full-map house variant). Shared by the hotseat setup and the
+ *  online lobby. */
+export function BoardPicker({ numPlayers, presetId, onPick }: { numPlayers: number; presetId: string | null; onPick: (id: string) => void }) {
+  const presets = boardPresets(numPlayers);
+  const sel = effectiveBoardPreset(numPlayers, presetId);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+      <div style={{ fontSize: 13, color: '#ffd23f', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Board — {numPlayers} player{numPlayers === 1 ? '' : 's'}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', maxWidth: 700 }}>
+        {presets.map((b) => (
+          <button key={b.id} className={`civ-btn ${sel.id === b.id ? 'on' : ''}`} onClick={() => onPick(b.id)}
+            title={b.rule === 'house' ? 'Every board and nation (house variant)' : `Rules ${b.rule}: ${b.tokensPerPlayer} tokens per player`}
+            style={{ fontWeight: sel.id === b.id ? 700 : 400, opacity: sel.id === b.id ? 1 : 0.7 }}>
+            {sel.id === b.id ? '● ' : ''}{b.label} <span style={{ color: '#aaa' }}>· {b.tokensPerPlayer} tokens{b.rule !== 'house' ? ` · ${b.rule}` : ''}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Pre-game screen: the human picks the board (rules §16 for the player count),
+ *  which civilization to play and which AI opponents to face. */
+function CivSetup({ onStart, initial }: { onStart: (human: PlayerId, opponents: PlayerId[], boardPreset: string) => void; initial: PlayerId }) {
   const all = useMemo(() => [...civilizations].sort((a, b) => a.astOrder - b.astOrder), []);
   const [human, setHuman] = useState<PlayerId>(initial);
   const [opps, setOpps] = useState<PlayerId[]>(() => DEFAULT_PLAYERS.filter((p) => p !== initial).slice(0, 3));
+  const [presetId, setPresetId] = useState<string | null>(null); // null = rules default for the count
+  const numPlayers = 1 + opps.length;
+  const preset = effectiveBoardPreset(numPlayers, presetId);
+  // §16.6-16.8/§16.12: only these nations may be seated on the chosen board.
+  const avail = useMemo(() => new Set(availableNations(preset.config)), [preset]);
   const pickHuman = (id: PlayerId) => { setHuman(id); setOpps((o) => o.filter((x) => x !== id)); };
   const toggleOpp = (id: PlayerId) => setOpps((o) => (o.includes(id) ? o.filter((x) => x !== id) : o.length < 6 ? [...o, id] : o));
-  const ok = opps.length >= 1 && opps.length <= 6;
-  const swatch = (color: string, on: boolean) => ({ borderLeft: `6px solid ${color}`, opacity: on ? 1 : 0.6, fontWeight: on ? 700 : 400 } as const);
+  const invalid = [human, ...opps].filter((id) => !avail.has(id));
+  const ok = opps.length >= 1 && opps.length <= 6 && invalid.length === 0;
+  const swatch = (color: string, on: boolean, allowed: boolean) => ({
+    borderLeft: `6px solid ${color}`,
+    opacity: allowed ? (on ? 1 : 0.6) : 0.3,
+    fontWeight: on ? 700 : 400,
+    ...(on && !allowed ? { outline: '2px solid #e05555', opacity: 0.9 } : {}),
+  } as const);
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, color: '#eee', padding: 24, overflowY: 'auto' }}>
       <h1 style={{ margin: 0 }}>Advanced Civilization</h1>
+      <BoardPicker numPlayers={numPlayers} presetId={presetId} onPick={setPresetId} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
         <div style={{ fontSize: 13, color: '#ffd23f', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Play as</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', maxWidth: 700 }}>
           {all.map((c) => (
-            <button key={c.id} className={`civ-btn ${human === c.id ? 'on' : ''}`} onClick={() => pickHuman(c.id)} style={swatch(c.color, human === c.id)}>{human === c.id ? '★ ' : ''}{c.name}</button>
+            <button key={c.id} className={`civ-btn ${human === c.id ? 'on' : ''}`} onClick={() => pickHuman(c.id)} disabled={!avail.has(c.id) && human !== c.id}
+              title={avail.has(c.id) ? undefined : 'Not available on this board (§16)'}
+              style={swatch(c.color, human === c.id, avail.has(c.id))}>{human === c.id ? '★ ' : ''}{c.name}</button>
           ))}
         </div>
       </div>
@@ -61,12 +107,16 @@ function CivSetup({ onStart, initial }: { onStart: (human: PlayerId, opponents: 
         <div style={{ fontSize: 13, color: '#ffd23f', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Opponents — AI ({opps.length})</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', maxWidth: 700 }}>
           {all.filter((c) => c.id !== human).map((c) => (
-            <button key={c.id} className={`civ-btn ${opps.includes(c.id) ? 'on' : ''}`} onClick={() => toggleOpp(c.id)} style={swatch(c.color, opps.includes(c.id))}>{opps.includes(c.id) ? '✓ ' : ''}{c.name}</button>
+            <button key={c.id} className={`civ-btn ${opps.includes(c.id) ? 'on' : ''}`} onClick={() => toggleOpp(c.id)} disabled={!avail.has(c.id) && !opps.includes(c.id)}
+              title={avail.has(c.id) ? undefined : 'Not available on this board (§16)'}
+              style={swatch(c.color, opps.includes(c.id), avail.has(c.id))}>{opps.includes(c.id) ? '✓ ' : ''}{c.name}</button>
           ))}
         </div>
       </div>
-      <button className="civ-btn" disabled={!ok} style={{ fontSize: 16, padding: '10px 22px', fontWeight: 700 }} onClick={() => onStart(human, opps)}>Begin as {civById.get(human)?.name} →</button>
-      <p className="civ-lbl" style={{ color: '#aaa', maxWidth: 520, textAlign: 'center' }}>You play {civById.get(human)?.name}; the others are run by the AI. Choose 1–6 opponents.</p>
+      <button className="civ-btn" disabled={!ok} style={{ fontSize: 16, padding: '10px 22px', fontWeight: 700 }} onClick={() => onStart(human, opps, preset.id)}>Begin as {civById.get(human)?.name} →</button>
+      {invalid.length > 0
+        ? <p className="civ-lbl" style={{ color: '#f2a0a0', maxWidth: 560, textAlign: 'center' }}>{invalid.map((id) => civById.get(id)?.name ?? id).join(', ')} {invalid.length === 1 ? 'is' : 'are'} not available on this board (rules {preset.rule}) — unselect {invalid.length === 1 ? 'it' : 'them'}, or pick another board.</p>
+        : <p className="civ-lbl" style={{ color: '#aaa', maxWidth: 560, textAlign: 'center' }}>You play {civById.get(human)?.name}; the others are run by the AI. Choose 1–6 opponents. {preset.rule !== 'house' ? `Rules ${preset.rule}: ${preset.tokensPerPlayer} tokens per player.` : 'Full map: every nation, 55 tokens.'}</p>}
       <PlayCount />
     </div>
   );
@@ -103,13 +153,13 @@ export default function App() {
   const [view, setView] = useState<View>('map');
   const rng = useRef(new Rng(7));
 
-  const startGame = useCallback((human: PlayerId, opponents: PlayerId[]) => {
+  const startGame = useCallback((human: PlayerId, opponents: PlayerId[], boardPreset: string) => {
     const players = [human, ...opponents];
     const seed = Date.now() & 0xffff;
     rng.current = new Rng(seed);
     setConfig({ players, human });
     setSeats(Object.fromEntries(players.map((p) => [p, p === human ? 'human' : 'ai'])) as Record<PlayerId, 'human' | 'ai'>);
-    setState(createGame({ players, seed, maxTurns: 60 }));
+    setState(createGame({ players, seed, maxTurns: 60, boardPreset }));
     setView('map');
     setStarted(true);
     // Best-effort games-played counter (once per local game start). Local games
@@ -397,6 +447,15 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
   void zoomTo; // (was a CSS scale-zoom; removed — it created overflow that the
   // scroll container couldn't pan, hiding edge territories. We scroll-center on
   // the origin instead, which keeps the whole map reachable.)
+  // Rules-§16 play area: out-of-play areas draw greyed and take no interaction.
+  const outSet = outOfPlay(state);
+  const panelOn = (k: 'western' | 'main' | 'eastern') =>
+    !state.board || (k === 'western' ? state.board.west : k === 'eastern' ? state.board.east : true);
+  // The module's own greyout cover outline for each active crop, shifted into
+  // the stitched canvas (cover coordinates are main-board space).
+  const cropCovers = (state.board?.crops ?? [])
+    .map((c) => ({ key: c, pts: (playAreas.coverPolygons?.[c] ?? []).map(([x, y]) => `${(x + BOARD_OFFSET.main!.x).toFixed(1)},${y.toFixed(1)}`).join(' ') }))
+    .filter((c) => c.pts.length > 0);
   return (
     <div ref={wrapRef} style={{ position: 'relative', width: zoom === 1 ? BOARD_VIEWBOX.w : `${zoom * 100}%`, maxWidth: zoom === 1 ? '100%' : undefined, margin: '0 auto' }}>
       {/* Map controls — sticky so they stay in view while panning a zoomed board. */}
@@ -423,16 +482,28 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
             canvas sea-colour and draw only the LAND areas on top — unzoned space then
             correctly reads as sea, and the board looks like land masses in a sea. */}
         {art
-          ? MAP_PANELS.map((m) => <image key={m.key} href={art[m.key]} x={m.x} y={m.y} width={m.w} height={m.h} />)
+          ? MAP_PANELS.filter((m) => panelOn(m.key)).map((m) => <image key={m.key} href={art[m.key]} x={m.x} y={m.y} width={m.w} height={m.h} />)
           : <>
               <rect x={0} y={0} width={BOARD_VIEWBOX.w} height={BOARD_VIEWBOX.h} fill="#14506a" />
               {ALL_SHAPES.filter((s) => !s.isWater).map((s) => (
-                <polygon key={s.id} points={s.points} fill="#c8a86a" stroke="#9c7d3e" strokeWidth={1.2} strokeLinejoin="round" />
+                <polygon key={s.id} points={s.points}
+                  fill={outSet.has(s.id) ? '#59564c' : '#c8a86a'} stroke={outSet.has(s.id) ? '#44423a' : '#9c7d3e'}
+                  strokeWidth={1.2} strokeLinejoin="round" />
               ))}
             </>}
-        {/* Render every anchored area (not just occupied ones) so empty
-            destination areas are clickable during movement. */}
-        {Object.keys(anchors).map((aid) => {
+        {/* §16: extension boards not in this game darken whole; main-board crops
+            draw the module's own greyout cover outline as a veil. */}
+        {MAP_PANELS.filter((m) => !panelOn(m.key)).map((m) => (
+          <rect key={`off-${m.key}`} x={m.x} y={m.y} width={m.w} height={m.h} fill="#10141a" opacity={0.82} pointerEvents="none" />
+        ))}
+        {cropCovers.map((c) => (
+          <polygon key={`crop-${c.key}`} points={c.pts} fill="#10141a" opacity={0.62}
+            stroke="#e6e7e8" strokeWidth={2.5} strokeDasharray="10 6" strokeLinejoin="round" pointerEvents="none" />
+        ))}
+        {/* Render every anchored IN-PLAY area (not just occupied ones) so empty
+            destination areas are clickable during movement; out-of-play areas
+            (§16) take no markers and no clicks. */}
+        {Object.keys(anchors).filter((aid) => !outSet.has(aid)).map((aid) => {
           const an = anchors[aid]!;
           const a = state.areas[aid] ?? { tokens: {} as Record<string, number> };
           const meta = areaById.get(aid);

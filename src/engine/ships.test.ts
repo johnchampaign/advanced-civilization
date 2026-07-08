@@ -97,7 +97,7 @@ describe('§23.5 naval movement', () => {
   it('ferries tokens across water and relocates the ship', () => {
     // Find a coastal area with a reachable coastal destination.
     let x = '', y = '';
-    for (const a of coastal) { const d = navalDestinations(a.id, 4, false); if (d.size) { x = a.id; y = [...d][0]!; break; } }
+    for (const a of coastal) { const d = navalDestinations(null, a.id, 4, false); if (d.size) { x = a.id; y = [...d][0]!; break; } }
     expect(x).not.toBe('');
     const s = base();
     s.areas[x] = { tokens: { egypt: 4 }, ships: { egypt: 1 } };
@@ -113,7 +113,7 @@ describe('§23.5 naval movement', () => {
 
   it('rejects a sea move with no ship, over capacity, or out of range', () => {
     let x = '', y = '';
-    for (const a of coastal) { const d = navalDestinations(a.id, 4, false); if (d.size) { x = a.id; y = [...d][0]!; break; } }
+    for (const a of coastal) { const d = navalDestinations(null, a.id, 4, false); if (d.size) { x = a.id; y = [...d][0]!; break; } }
     const s = base();
     s.areas[x] = { tokens: { egypt: 8 } }; // no ship
     fixSupply(s);
@@ -127,10 +127,10 @@ describe('§23.5 naval movement', () => {
 
 describe('naval range helper', () => {
   it('reaches at least as far with more range, and Astronomy never reduces reach', () => {
-    const a = coastal.find((c) => navalDestinations(c.id, 4, false).size > 0)!.id;
-    const r4 = navalDestinations(a, 4, false);
-    const r5 = navalDestinations(a, 5, false);
-    const r4astro = navalDestinations(a, 4, true);
+    const a = coastal.find((c) => navalDestinations(null, c.id, 4, false).size > 0)!.id;
+    const r4 = navalDestinations(null, a, 4, false);
+    const r5 = navalDestinations(null, a, 5, false);
+    const r4astro = navalDestinations(null, a, 4, true);
     for (const d of r4) expect(r5.has(d)).toBe(true);          // range 5 ⊇ range 4
     for (const d of r4) expect(r4astro.has(d)).toBe(true);     // Astronomy ⊇ no-Astronomy
   });

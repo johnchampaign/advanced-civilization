@@ -15,7 +15,7 @@
 
 import type { PlayerController, ControllerContext } from 'digital-boardgame-framework';
 import { advanceById, areaById, calamityById, commodityById } from '../data/index.js';
-import { cardGroupsHeld, cityCount, commoditySetValue, handValue, navalDestinations, neighbors, netAdvanceCost, populationCount } from '../engine/helpers.js';
+import { cardGroupsHeld, cityCount, citySiteIn, commoditySetValue, handValue, navalDestinations, neighbors, netAdvanceCost, populationCount } from '../engine/helpers.js';
 import type { Action, GameState, PlayerId, TradeBundle } from '../engine/types.js';
 
 export class HeuristicAI implements PlayerController<GameState, Action, PlayerId> {
@@ -133,7 +133,7 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
           const area = areaById.get(dest);
           const empty = !da || Object.values(da.tokens).every((n) => n === 0) ? 1 : 0;
           const sustain = area?.sustains ?? 0;
-          const site = area?.isCitySite ? 2 : 0;
+          const site = citySiteIn(state, dest) ? 2 : 0;
           return { m, score: empty * 3 + sustain + site };
         });
         scored.sort((x, y) => y.score - x.score);
@@ -179,9 +179,9 @@ function planCityConsolidation(state: GameState, actor: PlayerId): Action | null
   const candidates = Object.keys(state.areas).filter((aid) => {
     const area = areaById.get(aid);
     const a = state.areas[aid];
-    if (!area || area.isWater || !area.isCitySite || a?.city) return false;
+    if (!area || area.isWater || !citySiteIn(state, aid) || a?.city) return false;
     const here = a?.tokens[actor] ?? 0;
-    const adj = neighbors(aid).reduce((s, n) => s + (state.areas[n]?.tokens[actor] ?? 0), 0);
+    const adj = neighbors(state, aid).reduce((s, n) => s + (state.areas[n]?.tokens[actor] ?? 0), 0);
     return here + adj >= 6;
   });
   if (candidates.length === 0) return null;
@@ -191,7 +191,7 @@ function planCityConsolidation(state: GameState, actor: PlayerId): Action | null
 
   let onTarget = state.areas[target]!.tokens[actor] ?? 0;
   const moves: { from: string; to: string; count: number }[] = [];
-  for (const n of neighbors(target)) {
+  for (const n of neighbors(state, target)) {
     if (onTarget >= 6) break;
     if (areaById.get(n)?.isWater) continue;
     const have = state.areas[n]?.tokens[actor] ?? 0;
@@ -216,7 +216,7 @@ function planExpansionSpread(state: GameState, actor: PlayerId): Action | null {
     if (!area || area.isWater || a.city || t <= 0) continue;
     let excess = t - area.sustains;
     if (excess <= 0) continue;
-    for (const n of neighbors(aid)) {
+    for (const n of neighbors(state, aid)) {
       if (excess <= 0) break;
       const nb = areaById.get(n);
       if (!nb || nb.isWater) continue;
@@ -360,14 +360,14 @@ function planNaval(state: GameState, actor: PlayerId): Action | null {
     const have = a.tokens[actor] ?? 0;
     if (have < 3) continue; // keep some behind; nothing worth ferrying
     let best: string | null = null, bestScore = 0;
-    for (const to of navalDestinations(aid, range, astro)) {
+    for (const to of navalDestinations(state, aid, range, astro)) {
       const da = state.areas[to];
       const area = areaById.get(to);
       if (!area || area.isWater) continue;
       const empty = !da || Object.values(da.tokens).every((n) => n === 0);
       const enemy = da && Object.entries(da.tokens).some(([o, n]) => o !== actor && n > 0);
       if (!empty || enemy) continue; // colonize unoccupied land
-      const score = (area.sustains ?? 0) + (area.isCitySite ? 3 : 0);
+      const score = (area.sustains ?? 0) + (citySiteIn(state, to) ? 3 : 0);
       if (score > bestScore) { bestScore = score; best = to; }
     }
     if (best) return { type: 'move', moves: [{ from: aid, to: best, count: Math.min(5, have - 2), byShip: true }] };

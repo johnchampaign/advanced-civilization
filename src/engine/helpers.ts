@@ -14,6 +14,7 @@ import {
   type AdvanceGroup,
 } from '../data/index.js';
 import type { GameState, PlayerId, PlayerState } from './types.js';
+import { hasCitySite, outOfPlaySet } from './boards.js';
 
 /** Value of a single commodity set of `n` identical cards (rules §28.51):
  *  n^2 * value, with n capped at the printed maximum (the card count). */
@@ -92,19 +93,52 @@ export function advancesFaceValue(owned: string[]): number {
   return owned.reduce((s, id) => s + (advanceById.get(id)?.cost ?? 0), 0);
 }
 
-export function landNeighbors(areaId: string): string[] {
-  return (adjacency[areaId] ?? []).filter((n) => !areaById.get(n)?.isWater);
+// ---- Play area (§16) ------------------------------------------------------
+// A game may use only part of the map (state.board). Out-of-play areas are
+// treated as nonexistent: every adjacency helper takes the state and filters
+// them, so no movement, naval path, calamity or AI enumeration can reach them.
+
+const EMPTY_SET: ReadonlySet<string> = new Set();
+const outCache = new WeakMap<GameState, ReadonlySet<string>>();
+
+/** The area ids out of play for this game (empty for older saves / full map).
+ *  Cached per state object — states are cloned on every action. */
+export function outOfPlay(s: GameState | null | undefined): ReadonlySet<string> {
+  if (!s?.board) return EMPTY_SET;
+  let v = outCache.get(s);
+  if (!v) { v = outOfPlaySet(s.board); outCache.set(s, v); }
+  return v;
+}
+
+export function inPlay(s: GameState | null | undefined, areaId: string): boolean {
+  return !outOfPlay(s).has(areaId);
+}
+
+/** §16.11/§16.8: does the area count as having a city site in this game? */
+export function citySiteIn(s: GameState | null | undefined, areaId: string): boolean {
+  return hasCitySite(s?.board, areaId);
+}
+
+export function neighbors(s: GameState | null | undefined, areaId: string): string[] {
+  const out = outOfPlay(s);
+  if (out.has(areaId)) return [];
+  return (adjacency[areaId] ?? []).filter((n) => !out.has(n));
+}
+
+export function landNeighbors(s: GameState | null | undefined, areaId: string): string[] {
+  return neighbors(s, areaId).filter((n) => !areaById.get(n)?.isWater);
 }
 
 /** Coastal land areas a ship docked at `start` can reach (§23.5): BFS across up
  *  to `range` water areas (4, or 5 with Cloth Making §23.53); open-sea areas are
  *  only traversable with Astronomy (§23.52/.54). Returns the debark candidates
  *  (land areas adjacent to a reachable water area), excluding `start`. */
-export function navalDestinations(start: string, range: number, astronomy: boolean): Set<string> {
-  const s = areaById.get(start);
+export function navalDestinations(s: GameState | null | undefined, start: string, range: number, astronomy: boolean): Set<string> {
+  const out = outOfPlay(s);
+  const a0 = areaById.get(start);
   const dests = new Set<string>();
-  if (!s || s.isWater) return dests; // ships dock at coastal land areas
-  const passable = (id: string) => { const a = areaById.get(id); return !!a?.isWater && (astronomy || !a.isOpenSea); };
+  if (!a0 || a0.isWater || out.has(start)) return dests; // ships dock at coastal land areas
+  const passable = (id: string) => { const a = areaById.get(id); return !!a?.isWater && !out.has(id) && (astronomy || !a.isOpenSea); };
   const visited = new Set<string>();
   let frontier = (adjacency[start] ?? []).filter(passable);
   for (let depth = 1; depth <= range && frontier.length; depth++) {
@@ -114,7 +148,7 @@ export function navalDestinations(start: string, range: number, astronomy: boole
       visited.add(w);
       for (const nb of adjacency[w] ?? []) {
         const a = areaById.get(nb);
-        if (!a) continue;
+        if (!a || out.has(nb)) continue;
         if (a.isWater) { if (passable(nb) && !visited.has(nb)) next.push(nb); }
         else if (nb !== start) dests.add(nb);
       }
@@ -122,10 +156,6 @@ export function navalDestinations(start: string, range: number, astronomy: boole
     frontier = next;
   }
   return dests;
-}
-
-export function neighbors(areaId: string): string[] {
-  return adjacency[areaId] ?? [];
 }
 
 /** Number of cities a player has on the board. */

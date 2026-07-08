@@ -6,12 +6,43 @@ import {
   pieceCounts,
 } from '../data/index.js';
 import type { GameState, PlayerId, PlayerState, TradeStacks } from './types.js';
+import {
+  availableNations,
+  boardPreset,
+  boardPresets,
+  FULL_BOARD,
+  startAreasFor,
+  type BoardConfig,
+} from './boards.js';
 
 export interface NewGameOptions {
   /** Civilization ids to seat, in seating order (2-14). */
   players: PlayerId[];
+  /** Rules-§16 board preset id for the player count (see boardPresets()), e.g.
+   *  'raw-3p' or 'full-map'. Default: the first (rules-default) preset for the
+   *  count. Ignored if `board` is given. */
+  boardPreset?: string;
+  /** Explicit board configuration (overrides `boardPreset`). Token count then
+   *  comes from `tokensPerPlayer` (default 55). */
+  board?: BoardConfig;
+  tokensPerPlayer?: number;
   seed?: number;
   maxTurns?: number;
+}
+
+/** Resolve the §16 board configuration + per-player token count for a game.
+ *  Default (no preset/board given): the full map — programmatic callers and
+ *  older saves keep the pre-§16 behavior; the setup UI passes the rules
+ *  preset for the player count explicitly. */
+export function resolveBoard(opts: NewGameOptions): { board: BoardConfig; tokensPerPlayer: number } {
+  if (opts.board) return { board: opts.board, tokensPerPlayer: opts.tokensPerPlayer ?? pieceCounts.tokens };
+  if (!opts.boardPreset) return { board: FULL_BOARD, tokensPerPlayer: opts.tokensPerPlayer ?? pieceCounts.tokens };
+  const n = opts.players.length;
+  const preset = boardPreset(n, opts.boardPreset);
+  if (!preset) {
+    throw new Error(`no board preset '${opts.boardPreset}' for ${n} players (§16); options: ${boardPresets(n).map((b) => b.id).join(', ')}`);
+  }
+  return { board: preset.config, tokensPerPlayer: preset.tokensPerPlayer };
 }
 
 /** Build the trade-card stacks (rules §15.2). Arrays are bottom→top: cards are
@@ -46,10 +77,10 @@ export function buildTradeStacks(rng: Rng, numPlayers: number): TradeStacks {
   return { stacks };
 }
 
-function newPlayer(id: PlayerId, startArea: string): PlayerState {
+function newPlayer(id: PlayerId, tokens: number): PlayerState {
   return {
     id,
-    stock: pieceCounts.tokens - 1, // one token placed at start
+    stock: tokens - 1, // one token placed at start
     treasury: 0,
     citiesAvailable: pieceCounts.cities,
     shipsAvailable: pieceCounts.ships,
@@ -66,6 +97,8 @@ export function createInitialState(opts: NewGameOptions): GameState {
   const seed = opts.seed ?? 12345;
   const rng = new Rng(seed);
   if (opts.players.length < 2) throw new Error('need at least 2 players');
+  const { board, tokensPerPlayer } = resolveBoard(opts);
+  const allowed = availableNations(board);
 
   const players: Record<PlayerId, PlayerState> = {};
   const areas: Record<string, ReturnType<typeof emptyArea>> = {};
@@ -74,9 +107,12 @@ export function createInitialState(opts: NewGameOptions): GameState {
   for (const id of seating) {
     const civ = civById.get(id);
     if (!civ) throw new Error(`unknown civilization ${id}`);
-    players[id] = newPlayer(id, civ.start);
-    // Place one starting token in the civ's start area.
-    const a = (areas[civ.start] ??= emptyArea());
+    if (!allowed.includes(id)) throw new Error(`${civ.name} is not available on this board (§16.12); available: ${allowed.join(', ')}`);
+    players[id] = newPlayer(id, tokensPerPlayer);
+    // Place one starting token in the civ's start area (§16.12: the first
+    // in-play one — a cropped board can move a nation onto its alternate).
+    const start = startAreasFor(board, id).includes(civ.start) ? civ.start : startAreasFor(board, id)[0]!;
+    const a = (areas[start] ??= emptyArea());
     a.tokens[id] = (a.tokens[id] ?? 0) + 1;
   }
 
@@ -86,6 +122,8 @@ export function createInitialState(opts: NewGameOptions): GameState {
     schemaVersion: 1,
     turn: 1,
     phase: 'taxation',
+    board,
+    tokensPerPlayer,
     activeOrder: censusSeed(seating),
     censusOrder: censusSeed(seating),
     actedThisPhase: [],

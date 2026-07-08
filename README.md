@@ -127,6 +127,20 @@ npm run build:ui # production UI build
 - **Determinism.** All randomness flows through the framework's seeded `Rng`
   (serialized into `GameState.rngState`), so games are reproducible and the
   framework can round-trip state at turn boundaries.
+- **Play area (rules §16).** `GameState.board` fixes the board configuration for
+  the whole game: extension-board toggles plus main-board crops whose
+  out-of-play area sets are derived from the VASSAL module's own greyout
+  overlays (`scripts/derive_play_areas.py` → `src/data/playAreas.json`).
+  Out-of-play areas are treated as nonexistent — every adjacency helper
+  (`neighbors`, `landNeighbors`, `navalDestinations`) is play-area-gated, so
+  movement, naval paths, flood plains, barbarian landings and the AI can never
+  reach them. Setup presets per player count implement §16.2–16.8 (47/55
+  tokens, nation lists, the two-player island-city-site rule); nation
+  availability additionally requires an in-play start area (§16.12). One open
+  RAW question: §16.12 says Africa's and Italy's start areas "are changed
+  accordingly" when the western-most panel is out — Africa has a
+  Western-Extension start (Cirta) in the module data, but no source names
+  Italy's alternate, so Italy is simply unavailable on boards without panel 1.
 
 ## Verified against the rulebook / components
 

@@ -5,9 +5,10 @@ import type { LogEntry } from 'digital-boardgame-framework';
 import { adapter } from '../engine/index.js';
 import type { Action, GameState, PlayerId } from '../engine/index.js';
 import { civilizations, civById } from '../data/index.js';
+import { availableNations } from '../engine/boards.js';
 import { claimSeat, createCivClient, createNetworkGame, fetchMyReports, realtimeSubscribe, resolutionNote, tokenFromInvite, type MyReport } from '../client/api.js';
 import { REPORT_CATEGORY } from '../report-meta.js';
-import { ActionList, Board, CalamityModal, CombatModal, InfoView, MovementControls, ReportModal, StatusPanel, legalAreas, nationFocusArea, prettyPhase, scrollBoardTo, useMovementPlanner, type View } from './App.js';
+import { ActionList, Board, BoardPicker, CalamityModal, CombatModal, InfoView, MovementControls, ReportModal, StatusPanel, effectiveBoardPreset, legalAreas, nationFocusArea, prettyPhase, scrollBoardTo, useMovementPlanner, type View } from './App.js';
 
 const API = ''; // same-origin; Vite proxies /api -> the GameServer host
 // Placeholder so the movement-planner hook can run before the game view loads.
@@ -16,16 +17,23 @@ const EMPTY_STATE = { areas: {}, players: {}, phase: '', turn: 0 } as unknown as
 // ---- Lobby ----------------------------------------------------------------
 
 export function Lobby() {
-  const [picked, setPicked] = useState<PlayerId[]>(['egypt', 'babylon']);
+  // Default two-player picks are §16.8-legal (the rules-default board for two).
+  const [picked, setPicked] = useState<PlayerId[]>(['italy', 'africa']);
+  const [presetId, setPresetId] = useState<string | null>(null); // null = rules default for the count
   const [created, setCreated] = useState<{ gameId: string; invites: Record<string, string> } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const toggle = (id: PlayerId) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const preset = effectiveBoardPreset(picked.length, presetId);
+  // §16.6-16.8/§16.12: only these nations may be seated on the chosen board.
+  const avail = new Set(availableNations(preset.config));
+  const invalid = picked.filter((id) => !avail.has(id));
+  const ok = picked.length >= 2 && picked.length <= 6 && invalid.length === 0;
 
   async function create() {
     setError(null);
     try {
       const seed = Math.floor(Math.random() * 0xffff);
-      setCreated(await createNetworkGame(API, { players: picked, seed, maxTurns: 60 }));
+      setCreated(await createNetworkGame(API, { players: picked, seed, maxTurns: 60, boardPreset: preset.id }));
     } catch (e) { setError((e as Error).message); }
   }
 
@@ -35,7 +43,7 @@ export function Lobby() {
     try {
       const seed = Math.floor(Math.random() * 0xffff);
       const ai = Object.fromEntries(picked.slice(1).map((n) => [n, 'standard']));
-      const g = await createNetworkGame(API, { players: picked, seed, maxTurns: 60, ai });
+      const g = await createNetworkGame(API, { players: picked, seed, maxTurns: 60, ai, boardPreset: preset.id });
       const myUrl = g.invites[picked[0]!] ?? '';
       location.search = `?game=${encodeURIComponent(g.gameId)}&token=${encodeURIComponent(tokenFromInvite(myUrl))}`;
     } catch (e) { setError((e as Error).message); }
@@ -47,16 +55,23 @@ export function Lobby() {
       {!created ? (
         <>
           <p className="civ-lbl" style={{ color: '#ccc' }}>Pick 2–6 nations, then create a game and share each seat's link.</p>
+          <div style={{ marginBottom: 12 }}>
+            <BoardPicker numPlayers={picked.length} presetId={presetId} onPick={setPresetId} />
+          </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
             {civilizations.map((c) => (
-              <button key={c.id} className={`civ-btn ${picked.includes(c.id) ? 'on' : ''}`} onClick={() => toggle(c.id)}>
+              <button key={c.id} className={`civ-btn ${picked.includes(c.id) ? 'on' : ''}`} onClick={() => toggle(c.id)}
+                disabled={!avail.has(c.id) && !picked.includes(c.id)}
+                title={avail.has(c.id) ? undefined : 'Not available on this board (§16)'}
+                style={{ opacity: avail.has(c.id) ? 1 : 0.35, ...(picked.includes(c.id) && !avail.has(c.id) ? { outline: '2px solid #e05555' } : {}) }}>
                 <span style={{ display: 'inline-block', width: 10, height: 10, background: c.color, marginRight: 5, borderRadius: 2 }} />{c.name}
               </button>
             ))}
           </div>
-          <button className="civ-btn" disabled={picked.length < 2 || picked.length > 6} onClick={create}>Create game ({picked.length} players)</button>
-          <button className="civ-btn" style={{ marginLeft: 8 }} disabled={picked.length < 2 || picked.length > 6} onClick={createVsAi}>vs AI (you = {civById.get(picked[0]!)?.name ?? picked[0]}, rest AI)</button>
+          <button className="civ-btn" disabled={!ok} onClick={create}>Create game ({picked.length} players)</button>
+          <button className="civ-btn" style={{ marginLeft: 8 }} disabled={!ok} onClick={createVsAi}>vs AI (you = {civById.get(picked[0]!)?.name ?? picked[0]}, rest AI)</button>
           <p className="civ-lbl" style={{ color: '#999', fontSize: 12 }}>Sign in first so your result vs the AI counts. Fewer AI seats = snappier turns.</p>
+          {invalid.length > 0 && <p style={{ color: '#f2a0a0' }}>{invalid.map((id) => civById.get(id)?.name ?? id).join(', ')} {invalid.length === 1 ? 'is' : 'are'} not available on this board (rules {preset.rule}) — unselect {invalid.length === 1 ? 'it' : 'them'}, or pick another board.</p>}
           {error && <p style={{ color: '#f88' }}>{error}</p>}
         </>
       ) : (

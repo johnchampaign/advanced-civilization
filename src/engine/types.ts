@@ -343,10 +343,18 @@ export interface CalamityEvent {
   interactive?: boolean;
 }
 
+import type { BoardConfig } from './boards.js';
+
 export interface GameState {
   schemaVersion: number;
   turn: number;
   phase: Phase;
+  /** Rules-§16 board configuration. Absent in older saves = the full stitched
+   *  map (every board, no crops). Fixed for the whole game. */
+  board?: BoardConfig;
+  /** Tokens each player uses this game (§16.2-16.8: 47 or 55). Absent in older
+   *  saves = the full 55-token supply. */
+  tokensPerPlayer?: number;
   /** Player order for the current turn (census order). Acting player = first
    *  in `activeOrder` not yet in `actedThisPhase`. */
   activeOrder: PlayerId[];

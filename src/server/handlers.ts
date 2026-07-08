@@ -109,13 +109,20 @@ export async function handleApi(
   try {
     // ---- games ----
     if (segs[1] === 'games') {
-      // POST /api/games  { players, seed?, maxTurns?, emails? }
+      // POST /api/games  { players, seed?, maxTurns?, emails?, boardPreset? }
       if (segs.length === 2 && method === 'POST') {
-        const b = (body ?? {}) as { players?: string[]; seed?: number; maxTurns?: number; emails?: Record<string, string>; ai?: Record<string, string> };
+        const b = (body ?? {}) as { players?: string[]; seed?: number; maxTurns?: number; emails?: Record<string, string>; ai?: Record<string, string>; boardPreset?: string };
         if (!Array.isArray(b.players) || b.players.length < 2 || b.players.length > 6) {
           return { status: 422, body: { error: 'players must be an array of 2-6 nation ids' } };
         }
-        const initialState = newGameState({ players: b.players, seed: b.seed, maxTurns: b.maxTurns });
+        let initialState: GameState;
+        try {
+          initialState = newGameState({ players: b.players, seed: b.seed, maxTurns: b.maxTurns, boardPreset: b.boardPreset });
+        } catch (e) {
+          // A rules-§16 setup problem (unknown preset / nation not available on
+          // the board) is the caller's error, not a server fault.
+          return { status: 422, body: { error: (e as Error).message } };
+        }
         return { status: 200, body: await server.createGame({ initialState, players: b.players, emails: b.emails, ...(b.ai ? { ai: b.ai } : {}) }) };
       }
 

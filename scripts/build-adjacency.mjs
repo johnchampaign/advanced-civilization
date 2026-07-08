@@ -90,6 +90,16 @@ for (const [a, b] of REMOVE_EDGES) {
   if (adjacency[a]) adjacency[a] = adjacency[a].filter((x) => x !== b);
   if (adjacency[b]) adjacency[b] = adjacency[b].filter((x) => x !== a);
 }
+// Curated additions: coastal↔sea edges the geometric extractor missed because the
+// polygons don't quite touch (gap > tolerance), causing a false embark-lock.
+// Owner-confirmed against the board (GitHub issue #1).
+const ADD_EDGES = [
+  ['phaestos', 'aegean-sea'], // Crete's south coast reaches the navigable Aegean to its N (63px gap missed); embark w/o Astronomy
+];
+for (const [a, b] of ADD_EDGES) {
+  if (adjacency[a] && !adjacency[a].includes(b)) adjacency[a].push(b);
+  if (adjacency[b] && !adjacency[b].includes(a)) adjacency[b].push(a);
+}
 for (const k of Object.keys(adjacency)) adjacency[k] = [...new Set(adjacency[k])].sort();
 
 // Connectivity check: how many connected components, and are all panels joined?

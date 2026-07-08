@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "extract": "node --experimental-strip-types scripts/extract-map.ts",
+    "build:board": "node scripts/build-board.mjs",
     "dev": "vite",
     "build:ui": "vite build",
     "serve": "tsc -p tsconfig.json && node dist/server/http.js"

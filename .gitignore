@@ -22,3 +22,22 @@ public/assets/map-western.svg
 public/assets/map-eastern.svg
 public/assets/images/map-main-labeled.svg
 assets/civ.vmod
+
+# Extracted VASSAL board art (used only for local segmentation) -- never commit
+assets/vmod_extract/*.svg
+assets/vmod_extract/*.png
+# Combined board image for the dev Territories editor (derived VASSAL art)
+public/dev-assets/board.png
+# Scratch verification renders + one-off analysis artifacts
+_numbered.png
+_traced_check.png
+_categorized.png
+_layer_full.png
+_v2_overview.png
+_layer_*.png
+_cyr*
+scripts/crosswalk.json
+# Old (pre-polygon) area geometry, kept locally for revert; git history has it too
+src/data/areas.vassal-backup.json
+# Stray root copy of the territories data (real one is src/data/territories.json)
+/territories.json

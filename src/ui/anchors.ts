@@ -8,28 +8,27 @@ import { areas } from '../data/index.js';
 
 export interface Anchor { x: number; y: number; r: number; }
 
-// Native dimensions of each map artwork (from the VASSAL module SVG viewBoxes).
+// Native VASSAL main-panel size (kept for any legacy consumer).
 export const MAIN_VIEWBOX = { w: 2323.12, h: 1587.4 };
-const WEST = { w: 782.177, h: 1587.4 };
-const EAST = { w: 1189.066, h: 1587.4 };
-const GAP = 0; // the panels are drawn to abut at the same latitude
 
-// X offset added to each board's native coordinates to place it in the canvas.
-const mainX = WEST.w + GAP;
-const eastX = mainX + MAIN_VIEWBOX.w + GAP;
+// Area geometry now lives in ONE combined image space — the owner-authored
+// territory polygons (see scripts/build-board.mjs), 3800×1405 — so each area's
+// `path` is already positioned and needs NO per-board offset.
+export const BOARD_VIEWBOX = { w: 3800, h: 1405 };
 export const BOARD_OFFSET: Record<string, { x: number; y: number }> = {
   western: { x: 0, y: 0 },
-  main: { x: mainX, y: 0 },
-  eastern: { x: eastX, y: 0 },
+  main: { x: 0, y: 0 },
+  eastern: { x: 0, y: 0 },
 };
-export const BOARD_VIEWBOX = { w: eastX + EAST.w, h: MAIN_VIEWBOX.h };
 
-/** Where each map panel sits in the combined canvas. The artwork itself is
- *  bring-your-own (see mapArt.ts) — `key` selects the loaded image for a panel. */
+/** Where each VASSAL art panel sits in the combined canvas (bring-your-own art,
+ *  see mapArt.ts). Scaled from the 4294-wide panel layout into the 3800-wide
+ *  polygon space so a loaded image still roughly registers with the vector board. */
+const _SX = 3800 / (782.177 + 2323.12 + 1189.066), _SY = 1405 / 1587.4;
 export const MAP_PANELS: { key: 'western' | 'main' | 'eastern'; x: number; y: number; w: number; h: number }[] = [
-  { key: 'western', x: BOARD_OFFSET.western!.x, y: 0, w: WEST.w, h: WEST.h },
-  { key: 'main', x: BOARD_OFFSET.main!.x, y: 0, w: MAIN_VIEWBOX.w, h: MAIN_VIEWBOX.h },
-  { key: 'eastern', x: BOARD_OFFSET.eastern!.x, y: 0, w: EAST.w, h: EAST.h },
+  { key: 'western', x: 0, y: 0, w: 782.177 * _SX, h: 1587.4 * _SY },
+  { key: 'main', x: 782.177 * _SX, y: 0, w: 2323.12 * _SX, h: 1587.4 * _SY },
+  { key: 'eastern', x: (782.177 + 2323.12) * _SX, y: 0, w: 1189.066 * _SX, h: 1587.4 * _SY },
 ];
 
 /** Every area as a filled polygon in the combined canvas — the board we draw

@@ -9,6 +9,8 @@ import { handValue, creditTowards, commoditySetValue, advancesFaceValue, outOfPl
 import { submitStandaloneReport, fetchMyReports, resolutionNote, type MyReport } from '../client/api.js';
 import { REPORT_CATEGORY } from '../report-meta.js';
 import { anchors, BOARD_OFFSET, BOARD_VIEWBOX, MAP_PANELS, ALL_SHAPES } from './anchors.js';
+// Territory polygon per area id, for full-polygon selection/highlight on the board.
+const SHAPE_BY_ID = new Map(ALL_SHAPES.map((s) => [s.id, s]));
 import { useMapArt, type MapArt } from './mapArt.js';
 
 // The rules-default four-player game (§16.6, eastern panels): these are exactly
@@ -484,11 +486,14 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
         {art
           ? MAP_PANELS.filter((m) => panelOn(m.key)).map((m) => <image key={m.key} href={art[m.key]} x={m.x} y={m.y} width={m.w} height={m.h} />)
           : <>
+              {/* Own geometry: every area is a full territory polygon. Draw water
+                  first, then land, so island land sits over the sea it's cut into.
+                  Coastal territories include their own coast, so they read as land. */}
               <rect x={0} y={0} width={BOARD_VIEWBOX.w} height={BOARD_VIEWBOX.h} fill="#14506a" />
-              {ALL_SHAPES.filter((s) => !s.isWater).map((s) => (
-                <polygon key={s.id} points={s.points}
-                  fill={outSet.has(s.id) ? '#59564c' : '#c8a86a'} stroke={outSet.has(s.id) ? '#44423a' : '#9c7d3e'}
-                  strokeWidth={1.2} strokeLinejoin="round" />
+              {[...ALL_SHAPES].sort((a, b) => (a.isWater ? 0 : 1) - (b.isWater ? 0 : 1)).map((s) => (
+                <polygon key={s.id} points={s.points} pointerEvents="none" strokeLinejoin="round" strokeWidth={1}
+                  fill={outSet.has(s.id) ? '#59564c' : s.isWater ? '#14506a' : '#c8a86a'}
+                  stroke={outSet.has(s.id) ? '#44423a' : s.isWater ? '#123f52' : '#9c7d3e'} />
               ))}
             </>}
         {/* §16: extension boards not in this game darken whole; main-board crops
@@ -505,6 +510,7 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
             (§16) take no markers and no clicks. */}
         {Object.keys(anchors).filter((aid) => !outSet.has(aid)).map((aid) => {
           const an = anchors[aid]!;
+          const sh = SHAPE_BY_ID.get(aid);
           const a = state.areas[aid] ?? { tokens: {} as Record<string, number> };
           const meta = areaById.get(aid);
           const owners = Object.entries(a.tokens).filter(([, n]) => n > 0);
@@ -520,10 +526,13 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
           const ships = Object.entries(a.ships ?? {}).filter(([, n]) => n > 0);
           return (
             <g key={aid} data-area={aid} onClick={() => onSelect(isSel ? null : aid)} onMouseEnter={() => setHovered(aid)} onMouseLeave={() => setHovered((h) => (h === aid ? null : h))} style={{ cursor: 'pointer' }}>
-              {/* Invisible hit target so areas with no markers still capture clicks. */}
-              <circle cx={an.x} cy={an.y} r={an.r + 6} fill="transparent" />
-              {(isHi || isSel || isOrigin) && <circle cx={an.x} cy={an.y} r={an.r + 10} fill="none" stroke={isOrigin ? '#ffd23f' : isSel ? '#fff' : '#5cf'} strokeWidth={isOrigin ? 5 : 4} pointerEvents="none" />}
-              {isMoved && <circle cx={an.x} cy={an.y} r={an.r + 13} fill="none" stroke="#ffd23f" strokeWidth={3} strokeDasharray="5 4" pointerEvents="none" />}
+              {/* The whole territory polygon is the hit target (falls back to a
+                  small circle only if an area has no polygon). */}
+              {sh
+                ? <polygon points={sh.points} fill={isSel ? '#ffffff22' : isOrigin ? '#ffd23f22' : 'transparent'} pointerEvents="all" />
+                : <circle cx={an.x} cy={an.y} r={an.r + 6} fill="transparent" />}
+              {(isHi || isSel || isOrigin) && sh && <polygon points={sh.points} fill="none" stroke={isOrigin ? '#ffd23f' : isSel ? '#fff' : '#5cf'} strokeWidth={isOrigin ? 4 : 3} strokeLinejoin="round" pointerEvents="none" />}
+              {isMoved && sh && <polygon points={sh.points} fill="none" stroke="#ffd23f" strokeWidth={2.5} strokeDasharray="8 5" strokeLinejoin="round" pointerEvents="none" />}
               {a.city && <rect x={an.x - an.r} y={an.y - an.r} width={an.r * 2} height={an.r * 2} fill={cityColor!} stroke="#000" strokeWidth={2} />}
               {isPirate && <text x={an.x} y={an.y + an.r * 0.45} textAnchor="middle" fontSize={an.r * 1.3} fill="#fff">☠</text>}
               {owners.map(([owner, n], i) => {

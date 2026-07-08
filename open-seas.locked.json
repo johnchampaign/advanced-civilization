@@ -1,0 +1,22 @@
+{
+  "_comment": "OWNER-SPECIFIED GROUND TRUTH. Territory numbers refer to territories.json (from scripts/number-territories.mjs). These are the open seas (navigable only with Astronomy, RAW). No code may reassign these. 'name' is Claude's read of the board label — correct if wrong; the NUMBER is what's authoritative.",
+  "specifiedBy": "owner",
+  "date": "2026-07-08",
+  "openSeas": [
+    { "n": 75,  "name": "Bay of Biscay" },
+    { "n": 181, "name": "Western Mediterranean" },
+    { "n": 252, "name": "Central Mediterranean" },
+    { "n": 242, "name": "Eastern Mediterranean" },
+    { "n": 57,  "name": "Black Sea" },
+    { "n": 14,  "name": "Caspian Sea" },
+    { "n": 192, "name": "Gulf of Persia" },
+    { "n": 131, "name": "Gulf of Oman" },
+    { "n": 273, "name": "Indian Ocean" },
+    { "n": 299, "name": "Arabian Sea" },
+    { "n": 304, "name": "Red Sea" }
+  ],
+  "pending": [
+    { "name": "Adriatic Sea", "note": "fragmented by segmentation; owner to supply the constituent number(s) to merge" },
+    { "name": "Aegean Sea",   "note": "fragmented by segmentation; owner to supply the constituent number(s) to merge" }
+  ]
+}

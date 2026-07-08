@@ -90,6 +90,9 @@ export function boardPresets(numPlayers: number): BoardPreset[] {
       p('raw-8p', 'All panels + Western Extension', '§16.2', 47, { west: true, east: false, crops: [] });
       break;
   }
+  // House options, always offered last: the central board alone (no extensions,
+  // no crops) and the full map.
+  p('main-only', 'Main board only (no extensions)', 'house', 55, { west: false, east: false, crops: [] });
   raw.push({ id: 'full-map', label: 'Full map (all boards)', rule: 'house', tokensPerPlayer: 55, config: FULL_BOARD });
   return raw;
 }

@@ -5,7 +5,7 @@ import type { LogEntry } from 'digital-boardgame-framework';
 import { adapter } from '../engine/index.js';
 import type { Action, GameState, PlayerId } from '../engine/index.js';
 import { civilizations, civById } from '../data/index.js';
-import { availableNations } from '../engine/boards.js';
+import { availableNations, unavailableReason } from '../engine/boards.js';
 import { claimSeat, createCivClient, createNetworkGame, fetchMyReports, realtimeSubscribe, resolutionNote, tokenFromInvite, type MyReport } from '../client/api.js';
 import { REPORT_CATEGORY } from '../report-meta.js';
 import { ActionList, Board, BoardPicker, CalamityModal, CombatModal, InfoView, MovementControls, ReportModal, StatusPanel, effectiveBoardPreset, legalAreas, nationFocusArea, prettyPhase, scrollBoardTo, useMovementPlanner, type View } from './App.js';
@@ -62,7 +62,7 @@ export function Lobby() {
             {civilizations.map((c) => (
               <button key={c.id} className={`civ-btn ${picked.includes(c.id) ? 'on' : ''}`} onClick={() => toggle(c.id)}
                 disabled={!avail.has(c.id) && !picked.includes(c.id)}
-                title={avail.has(c.id) ? undefined : 'Not available on this board (§16)'}
+                title={unavailableReason(preset.config, c.id)}
                 style={{ opacity: avail.has(c.id) ? 1 : 0.35, ...(picked.includes(c.id) && !avail.has(c.id) ? { outline: '2px solid #e05555' } : {}) }}>
                 <span style={{ display: 'inline-block', width: 10, height: 10, background: c.color, marginRight: 5, borderRadius: 2 }} />{c.name}
               </button>

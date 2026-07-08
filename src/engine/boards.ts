@@ -48,6 +48,10 @@ export interface BoardPreset {
 const RAW_2P_NATIONS = ['italy', 'africa', 'illyria', 'thrace'];
 const RAW_3P_NATIONS = ['italy', 'africa', 'illyria', 'thrace', 'crete'];
 const RAW_4P_EAST_NATIONS = ['egypt', 'babylon', 'assyria', 'asia'];
+// §16.6 prints "Italy" for the four-player Western-Extension scenario, but the
+// extension's own rules put the red player-race in Iberia when its map is in
+// play (see the note on availableNations) — so the list fields Iberia.
+const RAW_4P_WEST_NATIONS = ['iberia', 'africa', 'illyria', 'thrace', 'crete'];
 
 /** Every §16-legal board configuration for a player count, first = the
  *  default, plus the full-map house variant (always last). */
@@ -68,7 +72,7 @@ export function boardPresets(numPlayers: number): BoardPreset[] {
       p('raw-4p-east', 'Eastern panels (east of the dotted line)', '§16.6', 55,
         { west: false, east: false, crops: ['westOfDotted'], nations: RAW_4P_EAST_NATIONS });
       p('raw-4p-west', 'Western portion + Western Extension', '§16.6', 55,
-        { west: true, east: false, crops: ['eastOfDotted'], nations: RAW_3P_NATIONS });
+        { west: true, east: false, crops: ['eastOfDotted'], nations: RAW_4P_WEST_NATIONS });
       break;
     case 5:
       p('raw-5p-east', 'Panels 2-4', '§16.5', 47, { west: false, east: false, crops: ['panel1'] });
@@ -128,10 +132,30 @@ export function startAreasFor(cfg: BoardConfig, civId: string): string[] {
 
 /** §16.12 + §16.6-16.8: the nations selectable under a configuration — those
  *  §16 names for the player count (when it names any) that still have an
- *  in-play start area. */
+ *  in-play start area.
+ *
+ *  Italy and Iberia are one player-race, never both in a game: the West
+ *  Extension Map's rules state "Iberia now starts from any of the three areas
+ *  on the western edge of the peninsula (replacing Italy as a player-race)"
+ *  (guide p.2) — they share the physical red pieces and the second A.S.T. row.
+ *  So the extension in play fields Iberia and retires Italy; without it Iberia
+ *  does not exist (its starts are all on the extension board anyway). This is
+ *  also what rules §16.12's "the start areas for Africa and Italy are changed
+ *  accordingly" refers to, together with Africa's added Cirta opening. */
 export function availableNations(cfg: BoardConfig): string[] {
   return civilizations
     .filter((c) => !cfg.nations || cfg.nations.includes(c.id))
     .filter((c) => startAreasFor(cfg, c.id).length > 0)
+    .filter((c) => (cfg.west ? c.id !== 'italy' : c.id !== 'iberia'))
     .map((c) => c.id);
+}
+
+/** Why a nation can't be seated under this configuration (undefined = it can).
+ *  For setup-screen tooltips. */
+export function unavailableReason(cfg: BoardConfig, civId: string): string | undefined {
+  if (availableNations(cfg).includes(civId)) return undefined;
+  if (civId === 'italy' && cfg.west) return 'Iberia replaces Italy as a player-race when the Western Extension Map is in play';
+  if (civId === 'iberia' && !cfg.west) return 'Iberia plays only with the Western Extension Map (it replaces Italy)';
+  if (cfg.nations && !cfg.nations.includes(civId)) return 'Not one of the nations §16 names for this player count';
+  return 'No start area in play on this board (§16.12)';
 }

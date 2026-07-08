@@ -4,7 +4,7 @@ import { adapter, createGame, victoryScore } from '../engine/index.js';
 import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent } from '../engine/index.js';
 import { advanceById, advances as ALL_ADVANCES, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, playAreas, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
-import { availableNations, boardPresets, type BoardPreset } from '../engine/boards.js';
+import { availableNations, boardPresets, unavailableReason, type BoardPreset } from '../engine/boards.js';
 import { handValue, creditTowards, commoditySetValue, advancesFaceValue, outOfPlay } from '../engine/helpers.js';
 import { submitStandaloneReport, fetchMyReports, resolutionNote, type MyReport } from '../client/api.js';
 import { REPORT_CATEGORY } from '../report-meta.js';
@@ -98,7 +98,7 @@ function CivSetup({ onStart, initial }: { onStart: (human: PlayerId, opponents: 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', maxWidth: 700 }}>
           {all.map((c) => (
             <button key={c.id} className={`civ-btn ${human === c.id ? 'on' : ''}`} onClick={() => pickHuman(c.id)} disabled={!avail.has(c.id) && human !== c.id}
-              title={avail.has(c.id) ? undefined : 'Not available on this board (§16)'}
+              title={unavailableReason(preset.config, c.id)}
               style={swatch(c.color, human === c.id, avail.has(c.id))}>{human === c.id ? '★ ' : ''}{c.name}</button>
           ))}
         </div>
@@ -108,7 +108,7 @@ function CivSetup({ onStart, initial }: { onStart: (human: PlayerId, opponents: 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', maxWidth: 700 }}>
           {all.filter((c) => c.id !== human).map((c) => (
             <button key={c.id} className={`civ-btn ${opps.includes(c.id) ? 'on' : ''}`} onClick={() => toggleOpp(c.id)} disabled={!avail.has(c.id) && !opps.includes(c.id)}
-              title={avail.has(c.id) ? undefined : 'Not available on this board (§16)'}
+              title={unavailableReason(preset.config, c.id)}
               style={swatch(c.color, opps.includes(c.id), avail.has(c.id))}>{opps.includes(c.id) ? '✓ ' : ''}{c.name}</button>
           ))}
         </div>

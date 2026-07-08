@@ -32,7 +32,30 @@ describe('§16 board presets', () => {
     expect(sorted(at(2, 'raw-2p'))).toEqual(sorted(['italy', 'africa', 'illyria', 'thrace'])); // §16.8
     expect(sorted(at(3, 'raw-3p'))).toEqual(sorted(['italy', 'africa', 'illyria', 'thrace', 'crete'])); // §16.7
     expect(sorted(at(4, 'raw-4p-east'))).toEqual(sorted(['egypt', 'babylon', 'assyria', 'asia'])); // §16.6
-    expect(sorted(at(4, 'raw-4p-west'))).toEqual(sorted(['italy', 'africa', 'illyria', 'thrace', 'crete'])); // §16.6
+    // §16.6 west scenario: the extension's rules field Iberia as the red
+    // player-race in place of the "Italy" §16.6 prints.
+    expect(sorted(at(4, 'raw-4p-west'))).toEqual(sorted(['iberia', 'africa', 'illyria', 'thrace', 'crete'])); // §16.6
+  });
+
+  it('fields Iberia in place of Italy whenever the Western Extension is in play', () => {
+    // "Iberia now starts from any of the three areas on the western edge of
+    // the peninsula (replacing Italy as a player-race)" — West Extension Map
+    // rules. One red race: never both in a game, under any configuration.
+    for (let n = 2; n <= 8; n++) {
+      for (const preset of boardPresets(n)) {
+        const nations = availableNations(preset.config);
+        expect(nations.includes('italy') && nations.includes('iberia'), `${preset.id} (${n}p) fields both`).toBe(false);
+        if (preset.config.west) expect(nations, `${preset.id} (${n}p)`).not.toContain('italy');
+      }
+    }
+    const withExt = availableNations({ west: true, east: false, crops: [] });
+    const withoutExt = availableNations({ west: false, east: false, crops: [] });
+    expect(withExt).toContain('iberia');
+    expect(withExt).not.toContain('italy');
+    expect(withoutExt).toContain('italy');
+    expect(withoutExt).not.toContain('iberia');
+    // And setup enforces it.
+    expect(() => createGame({ players: ['italy', 'iberia', 'africa'], board: { west: true, east: false, crops: [] }, seed: 1 })).toThrow(/not available/);
   });
 
   it('keeps every preset board one connected component', () => {

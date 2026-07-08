@@ -136,11 +136,19 @@ npm run build:ui # production UI build
   movement, naval paths, flood plains, barbarian landings and the AI can never
   reach them. Setup presets per player count implement §16.2–16.8 (47/55
   tokens, nation lists, the two-player island-city-site rule); nation
-  availability additionally requires an in-play start area (§16.12). One open
-  RAW question: §16.12 says Africa's and Italy's start areas "are changed
-  accordingly" when the western-most panel is out — Africa has a
-  Western-Extension start (Cirta) in the module data, but no source names
-  Italy's alternate, so Italy is simply unavailable on boards without panel 1.
+  availability additionally requires an in-play start area (§16.12).
+- **Italy ↔ Iberia.** One red player-race, never both in a game: the West
+  Extension Map's rules state *"Iberia now starts from any of the three areas
+  on the western edge of the peninsula (replacing Italy as a player-race);
+  African openings are also expanded"* (companion guide p.2 — the module
+  agrees: shared `italia-iberia` colour swatch, one census card
+  "2 - Italy/Iberia"). So any board with the Western Extension fields Iberia
+  and retires Italy; without it Iberia doesn't exist. This — plus Africa's
+  added Cirta opening — is what §16.12's "the start areas for Africa and Italy
+  are changed accordingly" refers to. Per Q&A 33.25 (guide p.22) the ADVANCED
+  CIVILIZATION A.S.T. is *always* used and the revised table printed on the
+  extension map is disregarded, so Iberia advances on Italy's row (1400/1700,
+  matching the 1995 computer edition) and Africa keeps 1300/1600.
 
 ## Verified against the rulebook / components
 
@@ -240,7 +248,11 @@ The SPA has a landing screen → **Local hotseat + AI** or **Online multiplayer*
 ## Not yet built
 
 - **AI depth** — the heuristic AI is a competent baseline, not a strong opponent.
-- The **West-scenario `africa-western` AST variant** is extracted but unused.
+- ~~The **West-scenario `africa-western` AST variant** is extracted but
+  unused.~~ Correctly unused: Q&A 33.25 (guide p.22) says the ADVANCED
+  CIVILIZATION A.S.T. is always used and the revised table printed on the
+  West Extension Map (the `africa-western` / `iberia [1200]` strips) is
+  disregarded.
 
 ## License
 

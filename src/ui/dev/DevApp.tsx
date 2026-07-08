@@ -3,9 +3,11 @@
 // from the traced board. More tabs (category, adjacency) get added here.
 import { useState } from 'react';
 import TerritoriesTab from './TerritoriesTab.js';
+import CoastsTab from './CoastsTab.js';
 
 const TABS = [
   { id: 'territories', label: 'Territories', el: <TerritoriesTab /> },
+  { id: 'coasts', label: 'Coasts', el: <CoastsTab /> },
 ] as const;
 
 export default function DevApp() {

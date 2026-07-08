@@ -5,6 +5,7 @@
 // offset the western/eastern panels to the right of one another.
 import { poleOfInaccessibilityWithClearance, toPolygon } from 'digital-boardgame-framework';
 import { areas } from '../data/index.js';
+import coastlinesJson from '../data/coastlines.json' with { type: 'json' };
 
 export interface Anchor { x: number; y: number; r: number; }
 
@@ -46,6 +47,17 @@ function anchorsTmp(a: typeof areas[number]) {
   const off = BOARD_OFFSET[a.board] ?? { x: 0, y: 0 };
   const n = a.path.length;
   return { x: a.path.reduce((s, p) => s + p[0], 0) / n + off.x, y: a.path.reduce((s, p) => s + p[1], 0) / n + off.y };
+}
+
+/** Coast sub-areas per area id — the land/sea split inside coastal territories
+ *  (scripts/build-coasts.mjs), keyed by the area id (coastlines `name`). Used to
+ *  paint coastal territories with their coast (sea vs land) on the vector board.
+ *  Same combined image space as the polygons, so no offset. */
+export interface CoastSub { kind: 'sea' | 'land'; points: string; }
+export const COAST_SUBS: Record<string, CoastSub[]> = {};
+for (const t of (coastlinesJson as unknown as { territories: { name?: string; sub: { kind: 'sea' | 'land'; exterior: number[][] }[] }[] }).territories) {
+  if (!t.name || t.sub.length < 2) continue; // only where the coast actually splits it
+  COAST_SUBS[t.name] = t.sub.map((s) => ({ kind: s.kind, points: s.exterior.map(([x, y]) => `${x},${y}`).join(' ') }));
 }
 
 export const anchors: Record<string, Anchor> = {};

@@ -8,7 +8,7 @@ import { availableNations, boardPresets, unavailableReason, type BoardPreset } f
 import { handValue, creditTowards, commoditySetValue, advancesFaceValue, outOfPlay } from '../engine/helpers.js';
 import { submitStandaloneReport, fetchMyReports, resolutionNote, type MyReport } from '../client/api.js';
 import { REPORT_CATEGORY } from '../report-meta.js';
-import { anchors, BOARD_OFFSET, BOARD_VIEWBOX, MAP_PANELS, ALL_SHAPES } from './anchors.js';
+import { anchors, BOARD_OFFSET, BOARD_VIEWBOX, MAP_PANELS, ALL_SHAPES, COAST_SUBS } from './anchors.js';
 // Territory polygon per area id, for full-polygon selection/highlight on the board.
 const SHAPE_BY_ID = new Map(ALL_SHAPES.map((s) => [s.id, s]));
 import { useMapArt, type MapArt } from './mapArt.js';
@@ -490,11 +490,24 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
                   first, then land, so island land sits over the sea it's cut into.
                   Coastal territories include their own coast, so they read as land. */}
               <rect x={0} y={0} width={BOARD_VIEWBOX.w} height={BOARD_VIEWBOX.h} fill="#14506a" />
-              {[...ALL_SHAPES].sort((a, b) => (a.isWater ? 0 : 1) - (b.isWater ? 0 : 1)).map((s) => (
-                <polygon key={s.id} points={s.points} pointerEvents="none" strokeLinejoin="round" strokeWidth={1}
-                  fill={outSet.has(s.id) ? '#59564c' : s.isWater ? '#14506a' : '#c8a86a'}
-                  stroke={outSet.has(s.id) ? '#44423a' : s.isWater ? '#123f52' : '#9c7d3e'} />
-              ))}
+              {[...ALL_SHAPES].sort((a, b) => (a.isWater ? 0 : 1) - (b.isWater ? 0 : 1)).map((s) => {
+                // In-play coastal territories paint their coast (sea vs land sub-areas);
+                // everything else is one flat fill by water/land/out.
+                const subs = !outSet.has(s.id) ? COAST_SUBS[s.id] : undefined;
+                if (subs) return (
+                  <g key={s.id} pointerEvents="none">
+                    {subs.map((sub, i) => (
+                      <polygon key={i} points={sub.points} strokeLinejoin="round" strokeWidth={0.8}
+                        fill={sub.kind === 'sea' ? '#14506a' : '#c8a86a'} stroke={sub.kind === 'sea' ? '#123f52' : '#9c7d3e'} />
+                    ))}
+                  </g>
+                );
+                return (
+                  <polygon key={s.id} points={s.points} pointerEvents="none" strokeLinejoin="round" strokeWidth={1}
+                    fill={outSet.has(s.id) ? '#59564c' : s.isWater ? '#14506a' : '#c8a86a'}
+                    stroke={outSet.has(s.id) ? '#44423a' : s.isWater ? '#123f52' : '#9c7d3e'} />
+                );
+              })}
             </>}
         {/* §16: extension boards not in this game darken whole; main-board crops
             draw the module's own greyout cover outline as a veil. */}

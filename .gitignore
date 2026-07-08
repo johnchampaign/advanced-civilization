@@ -41,3 +41,5 @@ scripts/crosswalk.json
 src/data/areas.vassal-backup.json
 # Stray root copy of the territories data (real one is src/data/territories.json)
 /territories.json
+_coasts.png
+_c_*.png

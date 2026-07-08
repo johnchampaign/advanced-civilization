@@ -9,23 +9,26 @@ import path from 'node:path';
 // file the user then has to hand-place. Only active under `vite` (apply:'serve')
 // and only ever writes that one path.
 function devTerritoriesSaver() {
+  const saveRoute = (server: import('vite').ViteDevServer, route: string, file: string, listKey: string) =>
+    server.middlewares.use(route, (req, res, next) => {
+      if (req.method !== 'POST') return next();
+      let body = '';
+      req.on('data', (c) => { body += c; });
+      req.on('end', () => {
+        try {
+          const parsed = JSON.parse(body);
+          if (!parsed || !Array.isArray(parsed[listKey])) throw new Error(`expected {${listKey}:[...]}`);
+          fs.writeFileSync(path.resolve(file), body);
+          res.statusCode = 200; res.end(JSON.stringify({ ok: true, count: parsed[listKey].length }));
+        } catch (e) { res.statusCode = 400; res.end(JSON.stringify({ ok: false, error: String(e) })); }
+      });
+    });
   return {
     name: 'dev-territories-saver',
     apply: 'serve' as const,
     configureServer(server: import('vite').ViteDevServer) {
-      server.middlewares.use('/__save-territories', (req, res, next) => {
-        if (req.method !== 'POST') return next();
-        let body = '';
-        req.on('data', (c) => { body += c; });
-        req.on('end', () => {
-          try {
-            const parsed = JSON.parse(body);
-            if (!parsed || !Array.isArray(parsed.regions)) throw new Error('expected {regions:[...]}');
-            fs.writeFileSync(path.resolve('src/data/territories.json'), body);
-            res.statusCode = 200; res.end(JSON.stringify({ ok: true, count: parsed.regions.length }));
-          } catch (e) { res.statusCode = 400; res.end(JSON.stringify({ ok: false, error: String(e) })); }
-        });
-      });
+      saveRoute(server, '/__save-territories', 'src/data/territories.json', 'regions');
+      saveRoute(server, '/__save-coastlines', 'src/data/coastlines.json', 'territories');
     },
   };
 }

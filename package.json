@@ -15,7 +15,8 @@
     "build:board": "node scripts/build-board.mjs",
     "dev": "vite",
     "build:ui": "vite build",
-    "serve": "tsc -p tsconfig.json && node dist/server/http.js"
+    "serve": "tsc -p tsconfig.json && node dist/server/http.js",
+    "build:coasts": "node scripts/build-coasts.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",

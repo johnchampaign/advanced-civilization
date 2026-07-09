@@ -691,7 +691,8 @@
   "charax#sea1",
   "charax#sea2",
   "gulf-of-persia",
-  "susa#sea2"
+  "susa#sea2",
+  "ur"
  ],
  "chalkis": [
   "aegean-sea",
@@ -727,7 +728,8 @@
  "charax#sea1": [
   "chaldaea#sea1",
   "charax",
-  "charax#sea2"
+  "charax#sea2",
+  "ur"
  ],
  "charax#sea2": [
   "chaldaea#sea1",
@@ -2615,7 +2617,8 @@
   "ahwaz#sea2",
   "chaldaea#sea1",
   "gulf-of-persia",
-  "susa"
+  "susa",
+  "ur"
  ],
  "syracus": [
   "central-mediterranean",
@@ -2919,8 +2922,11 @@
   "babylon",
   "babylonia",
   "chaldaea",
+  "chaldaea#sea1",
   "charax",
-  "susa"
+  "charax#sea1",
+  "susa",
+  "susa#sea2"
  ],
  "van": [
   "armenia",

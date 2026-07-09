@@ -45,6 +45,12 @@ let waterEdges = 0, embarkEdges = 0;
 for (const [a, nbrs] of Object.entries(graph.adjacency)) for (const b of nbrs) { const aa = subToArea.get(a), bb = subToArea.get(b); if (aa && bb) { const before = adj[aa]?.size; add(aa, bb); if (adj[aa] && adj[aa].size !== before) waterEdges++; } }
 for (const [land, subs] of Object.entries(graph.embark)) for (const s of subs) { const w = subToArea.get(s); if (baseById.has(land) && w) { const before = adj[land]?.size; add(land, w); if (adj[land] && adj[land].size !== before) embarkEdges++; } }
 
+// Owner corrections: coastal lands whose shore water was traced into a
+// NEIGHBOUR's polygon, so their own polygon has no sea sub. Wire them into the
+// adjacent (gulf/sea-connected) water they physically touch. See [[ur-thyras-shiraz-coastal-corrections]].
+const MANUAL_EMBARK = { ur: ['charax#sea1', 'susa#sea2', 'chaldaea#sea1'] };
+for (const [land, subs] of Object.entries(MANUAL_EMBARK)) for (const s of subs) { const w = subToArea.get(s); if (baseById.has(land) && w) { const before = adj[land]?.size; add(land, w); if (adj[land] && adj[land].size !== before) embarkEdges++; } }
+
 const adjOut = {};
 for (const k of Object.keys(adj).sort()) adjOut[k] = [...adj[k]].sort();
 

@@ -22,7 +22,7 @@
   "illyricum",
   "illyricum#sea2",
   "pannonia-2",
-  "pannonia-2#sea4",
+  "pannonia-2#sea3",
   "rubicon",
   "rubicon#sea2",
   "samnium",
@@ -884,7 +884,7 @@
   "adriatic-sea",
   "dalmatia",
   "illyricum#sea2",
-  "pannonia-2#sea4"
+  "pannonia-2#sea3"
  ],
  "damascus": [
   "jericho",
@@ -2039,21 +2039,21 @@
   "dalmatia",
   "germania-2",
   "illyricum",
+  "pannonia-2#sea2",
   "pannonia-2#sea3",
-  "pannonia-2#sea4",
   "rhenus",
   "rubicon"
  ],
- "pannonia-2#sea3": [
+ "pannonia-2#sea2": [
   "pannonia-2",
-  "pannonia-2#sea4",
+  "pannonia-2#sea3",
   "rubicon#sea2"
  ],
- "pannonia-2#sea4": [
+ "pannonia-2#sea3": [
   "adriatic-sea",
   "dalmatia#sea2",
   "pannonia-2",
-  "pannonia-2#sea3",
+  "pannonia-2#sea2",
   "rubicon#sea2"
  ],
  "parsian": [
@@ -2325,8 +2325,8 @@
  ],
  "rubicon#sea2": [
   "adriatic-sea",
+  "pannonia-2#sea2",
   "pannonia-2#sea3",
-  "pannonia-2#sea4",
   "rubicon",
   "samnium#sea1"
  ],

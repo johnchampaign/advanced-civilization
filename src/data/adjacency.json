@@ -22,7 +22,7 @@
   "illyricum",
   "illyricum#sea2",
   "pannonia-2",
-  "pannonia-2#sea3",
+  "pannonia-2#sea4",
   "rubicon",
   "rubicon#sea2",
   "samnium",
@@ -36,16 +36,15 @@
   "eretria",
   "eretria#sea1",
   "ionia",
-  "ionia#sea3",
+  "ionia#sea2",
   "knossos",
-  "knossos#sea2",
+  "knossos#sea1",
   "lemnos",
   "lemnos#sea1",
   "lesbos",
   "lesbos#sea1",
-  "lesbos#sea3",
   "miletus",
-  "miletus#sea3",
+  "miletus#sea2",
   "phaestos",
   "rhodes",
   "rhodes#sea1",
@@ -67,7 +66,7 @@
   "ahwaz",
   "gulf-of-persia",
   "portas-persas#sea2",
-  "susa#sea2"
+  "susa#sea3"
  ],
  "al-gharbia": [
   "abu-dhabi",
@@ -152,7 +151,7 @@
  ],
  "apolagos#sea2": [
   "apolagos",
-  "chaldaea#sea1",
+  "chaldaea#sea3",
   "gerrha#sea1",
   "gulf-of-persia"
  ],
@@ -169,7 +168,6 @@
  "appolonia#sea2": [
   "adriatic-sea",
   "appolonia",
-  "epirus#sea2",
   "illyricum#sea2",
   "ithaka#sea1",
   "tarentum#sea1"
@@ -218,8 +216,7 @@
   "saba",
   "saba#sea2",
   "socotra",
-  "socotra#sea1",
-  "socotra#sea2"
+  "socotra#sea1"
  ],
  "aracosta": [
   "basri",
@@ -298,7 +295,6 @@
  "athens#sea1": [
   "argos#sea2",
   "athens",
-  "chalkis#sea1",
   "delphi#sea4",
   "eretria#sea1",
   "thera#sea1"
@@ -352,14 +348,12 @@
   "gulf-of-oman",
   "gulf-of-persia",
   "harmoza#sea2",
-  "harmoza#sea3",
   "parsian#sea2",
   "ummannar#sea1"
  ],
  "barna": [
   "barna#sea2",
-  "barna#sea4",
-  "barna#sea5",
+  "barna#sea3",
   "gedrosla",
   "gulf-of-oman",
   "makkan",
@@ -368,47 +362,31 @@
  ],
  "barna#sea2": [
   "barna",
-  "barna#sea4",
-  "barna#sea5",
+  "barna#sea3",
   "gulf-of-oman",
   "makkan#sea2",
   "megan#sea2"
  ],
- "barna#sea4": [
+ "barna#sea3": [
   "barna",
   "barna#sea2",
-  "barna#sea5",
-  "gulf-of-oman",
-  "megan#sea2"
- ],
- "barna#sea5": [
-  "barna",
-  "barna#sea2",
-  "barna#sea4",
   "gulf-of-oman",
   "megan#sea2"
  ],
  "basri": [
   "aracosta",
-  "basri#sea3",
-  "basri#sea4",
+  "basri#sea2",
   "gedrosla",
   "gulf-of-oman",
   "makkan",
   "onitas"
  ],
- "basri#sea3": [
+ "basri#sea2": [
   "basri",
-  "basri#sea4",
-  "onitas#sea3"
- ],
- "basri#sea4": [
-  "basri",
-  "basri#sea3",
   "gulf-of-oman",
   "makkan#sea2",
   "makkan#sea3",
-  "onitas#sea3"
+  "onitas#sea2"
  ],
  "bat": [
   "abu-dhabi",
@@ -503,7 +481,8 @@
  "britannia#sea2": [
   "bay-of-biscay",
   "britannia",
-  "londinium#sea2"
+  "londinium#sea2",
+  "londinium#sea3"
  ],
  "buhen": [
   "ptolemais",
@@ -513,7 +492,6 @@
  "bycantinum": [
   "black-sea",
   "bycantinum#sea1",
-  "bycantinum#sea3",
   "lemnos",
   "moesia",
   "thrace",
@@ -522,21 +500,15 @@
  "bycantinum#sea1": [
   "black-sea",
   "bycantinum",
-  "bycantinum#sea3",
   "lemnos#sea1",
   "moesia#sea2",
-  "thrace#sea3",
+  "thrace#sea2",
   "troy#sea1",
   "troy#sea3",
   "troy#sea4"
  ],
- "bycantinum#sea3": [
-  "bycantinum",
-  "bycantinum#sea1",
-  "lemnos#sea1",
-  "troy#sea4"
- ],
  "campania": [
+  "campania#sea2",
   "campania#sea3",
   "central-mediterranean",
   "neapolis",
@@ -544,14 +516,18 @@
   "tarentum",
   "western-mediterranean-2"
  ],
+ "campania#sea2": [
+  "campania",
+  "milazzo#sea1",
+  "neapolis#sea3",
+  "western-mediterranean-2"
+ ],
  "campania#sea3": [
   "campania",
   "central-mediterranean",
-  "milazzo#sea1",
-  "neapolis#sea2",
+  "milazzo#sea3",
   "syracus#sea1",
-  "tarentum#sea1",
-  "western-mediterranean-2"
+  "tarentum#sea1"
  ],
  "cappadocia": [
   "armenia",
@@ -583,6 +559,7 @@
  "carales-2#sea3": [
   "carales-2",
   "carales-2#sea1",
+  "sardinia-2#sea1",
   "western-mediterranean-2"
  ],
  "carmania": [
@@ -650,12 +627,12 @@
   "carthago",
   "carthago#sea1",
   "corinth",
-  "corinth#sea3",
+  "corinth#sea4",
   "cyrene",
   "cyrene#sea1",
   "delphi",
-  "delphi#sea5",
-  "delphi#sea7",
+  "delphi#sea3",
+  "delphi#sea6",
   "eastern-mediterranean",
   "ithaka",
   "ithaka#sea1",
@@ -664,7 +641,7 @@
   "palermo",
   "palermo#sea1",
   "phaestos",
-  "phaestos#sea2",
+  "phaestos#sea1",
   "sparta",
   "sparta#sea2",
   "syracus",
@@ -680,6 +657,7 @@
   "apolagos",
   "arabia",
   "chaldaea#sea1",
+  "chaldaea#sea3",
   "charax",
   "gulf-of-persia",
   "sumeria",
@@ -687,15 +665,21 @@
   "ur"
  ],
  "chaldaea#sea1": [
-  "apolagos#sea2",
   "chaldaea",
+  "chaldaea#sea3",
   "charax#sea2",
-  "charax#sea3",
-  "gulf-of-persia",
   "susa#sea2",
+  "susa#sea3",
   "ur",
   "ur#sea2",
   "ur#sea3"
+ ],
+ "chaldaea#sea3": [
+  "apolagos#sea2",
+  "chaldaea",
+  "chaldaea#sea1",
+  "gulf-of-persia",
+  "susa#sea3"
  ],
  "chalkis": [
   "aegean-sea",
@@ -708,9 +692,7 @@
  ],
  "chalkis#sea1": [
   "aegean-sea",
-  "athens#sea1",
   "chalkis",
-  "delphi#sea4",
   "eretria#sea1",
   "thessalonica#sea2",
   "thessaly#sea2"
@@ -724,20 +706,12 @@
   "babylon",
   "chaldaea",
   "charax#sea2",
-  "charax#sea3",
   "sumeria",
   "ur"
  ],
  "charax#sea2": [
   "chaldaea#sea1",
   "charax",
-  "charax#sea3",
-  "ur#sea3"
- ],
- "charax#sea3": [
-  "chaldaea#sea1",
-  "charax",
-  "charax#sea2",
   "ur#sea3"
  ],
  "cilicia": [
@@ -777,6 +751,7 @@
  "corduba": [
   "baetica",
   "corduba#sea2",
+  "corduba#sea3",
   "hispania",
   "new-carthage",
   "west-mauretania",
@@ -784,9 +759,16 @@
  ],
  "corduba#sea2": [
   "corduba",
+  "corduba#sea3",
   "new-carthage#sea2",
   "west-mauretania#sea1",
+  "west-mauretania#sea2",
   "western-mediterranean-2"
+ ],
+ "corduba#sea3": [
+  "corduba",
+  "corduba#sea2",
+  "west-mauretania#sea2"
  ],
  "corinth": [
   "argos",
@@ -794,21 +776,25 @@
   "central-mediterranean",
   "corinth#sea1",
   "corinth#sea3",
+  "corinth#sea4",
   "delphi",
   "sparta"
  ],
  "corinth#sea1": [
   "corinth",
   "corinth#sea3",
-  "delphi#sea5",
-  "delphi#sea6"
+  "delphi#sea5"
  ],
  "corinth#sea3": [
-  "central-mediterranean",
   "corinth",
   "corinth#sea1",
-  "delphi#sea5",
-  "delphi#sea7",
+  "delphi#sea3"
+ ],
+ "corinth#sea4": [
+  "central-mediterranean",
+  "corinth",
+  "delphi#sea3",
+  "delphi#sea6",
   "sparta#sea2"
  ],
  "corsica-2": [
@@ -848,8 +834,7 @@
   "cyprus",
   "eastern-mediterranean",
   "galatia#sea3",
-  "lycia#sea3",
-  "lycia#sea4",
+  "lycia#sea2",
   "salamis#sea1"
  ],
  "cyrenaica": [
@@ -899,7 +884,7 @@
   "adriatic-sea",
   "dalmatia",
   "illyricum#sea2",
-  "pannonia-2#sea3"
+  "pannonia-2#sea4"
  ],
  "damascus": [
   "jericho",
@@ -929,38 +914,36 @@
   "central-mediterranean",
   "chalkis",
   "corinth",
+  "delphi#sea3",
   "delphi#sea4",
   "delphi#sea5",
   "delphi#sea6",
-  "delphi#sea7",
   "epirus",
   "ithaka",
   "thessaly"
  ],
- "delphi#sea4": [
-  "athens#sea1",
-  "chalkis#sea1",
-  "delphi",
-  "thessaly#sea2"
- ],
- "delphi#sea5": [
+ "delphi#sea3": [
   "central-mediterranean",
-  "corinth#sea1",
   "corinth#sea3",
+  "corinth#sea4",
   "delphi",
-  "delphi#sea7",
+  "delphi#sea6",
   "epirus#sea2",
   "ithaka#sea1"
  ],
- "delphi#sea6": [
+ "delphi#sea4": [
+  "athens#sea1",
+  "delphi"
+ ],
+ "delphi#sea5": [
   "corinth#sea1",
   "delphi"
  ],
- "delphi#sea7": [
+ "delphi#sea6": [
   "central-mediterranean",
-  "corinth#sea3",
+  "corinth#sea4",
   "delphi",
-  "delphi#sea5",
+  "delphi#sea3",
   "ithaka#sea1"
  ],
  "east-mauretania": [
@@ -1004,11 +987,11 @@
   "jerusalem",
   "jerusalem#sea2",
   "knossos",
-  "knossos#sea2",
+  "knossos#sea1",
   "lycia",
-  "lycia#sea3",
+  "lycia#sea2",
   "phaestos",
-  "phaestos#sea2",
+  "phaestos#sea1",
   "phoenicia",
   "phoenicia#sea2",
   "rhodes",
@@ -1050,8 +1033,7 @@
   "thessaly"
  ],
  "epirus#sea2": [
-  "appolonia#sea2",
-  "delphi#sea5",
+  "delphi#sea3",
   "epirus",
   "ithaka#sea1"
  ],
@@ -1111,8 +1093,8 @@
   "cilicia#sea2",
   "cyprus#sea1",
   "galatia",
+  "lycia#sea2",
   "lycia#sea3",
-  "lycia#sea4",
   "salamis#sea1"
  ],
  "gaul": [
@@ -1167,7 +1149,7 @@
   "apolagos#sea2",
   "gerrha",
   "gulf-of-persia",
-  "tilmun#sea2"
+  "tilmun#sea1"
  ],
  "gordium": [
   "ankara",
@@ -1191,16 +1173,13 @@
   "banda-abbas#sea2",
   "barna",
   "barna#sea2",
-  "barna#sea4",
-  "barna#sea5",
+  "barna#sea3",
   "basri",
-  "basri#sea4",
+  "basri#sea2",
   "bat",
   "bat#sea1",
   "harmoza",
   "harmoza#sea2",
-  "harmoza#sea3",
-  "harmoza#sea4",
   "indian-ocean",
   "karachi",
   "karachi#sea2",
@@ -1213,15 +1192,14 @@
   "mazun#sea1",
   "megan",
   "megan#sea2",
-  "megan#sea3",
   "oman",
   "oman#sea1",
   "onitas",
-  "onitas#sea3",
+  "onitas#sea2",
   "port-dialx",
   "port-dialx#sea2",
   "shahi-tumo",
-  "shahi-tumo#sea3",
+  "shahi-tumo#sea2",
   "ummannar",
   "ummannar#sea1"
  ],
@@ -1237,7 +1215,7 @@
   "banda-abbas",
   "banda-abbas#sea2",
   "chaldaea",
-  "chaldaea#sea1",
+  "chaldaea#sea3",
   "gerrha",
   "gerrha#sea1",
   "lyan",
@@ -1248,12 +1226,10 @@
   "parsian#sea2",
   "portas-persas",
   "portas-persas#sea2",
-  "portas-persas#sea3",
   "susa",
-  "susa#sea2",
+  "susa#sea3",
   "tilmun",
   "tilmun#sea1",
-  "tilmun#sea2",
   "ummannar",
   "ummannar#sea1"
  ],
@@ -1276,8 +1252,6 @@
   "gulashkird",
   "gulf-of-oman",
   "harmoza#sea2",
-  "harmoza#sea3",
-  "harmoza#sea4",
   "megan",
   "pura",
   "ummannar"
@@ -1286,22 +1260,7 @@
   "banda-abbas#sea2",
   "gulf-of-oman",
   "harmoza",
-  "harmoza#sea3",
-  "harmoza#sea4",
   "megan#sea2",
-  "ummannar#sea1"
- ],
- "harmoza#sea3": [
-  "banda-abbas#sea2",
-  "gulf-of-oman",
-  "harmoza",
-  "harmoza#sea2",
-  "ummannar#sea1"
- ],
- "harmoza#sea4": [
-  "gulf-of-oman",
-  "harmoza",
-  "harmoza#sea2",
   "ummannar#sea1"
  ],
  "herat": [
@@ -1370,17 +1329,18 @@
   "aegean-sea",
   "galatia",
   "gordium",
-  "ionia#sea3",
+  "ionia#sea2",
   "lycia",
   "miletus",
   "sardes"
  ],
- "ionia#sea3": [
+ "ionia#sea2": [
   "aegean-sea",
   "ionia",
   "lesbos#sea1",
-  "miletus#sea3",
-  "sardes#sea3"
+  "lesbos#sea3",
+  "miletus#sea2",
+  "sardes#sea2"
  ],
  "ithaka": [
   "appolonia",
@@ -1393,8 +1353,8 @@
  "ithaka#sea1": [
   "appolonia#sea2",
   "central-mediterranean",
-  "delphi#sea5",
-  "delphi#sea7",
+  "delphi#sea3",
+  "delphi#sea6",
   "epirus#sea2",
   "ithaka",
   "tarentum#sea1"
@@ -1418,7 +1378,6 @@
   "gaza",
   "jericho",
   "jerusalem#sea2",
-  "jerusalem#sea3",
   "petra",
   "sinai",
   "tyros"
@@ -1428,9 +1387,6 @@
   "gaza#sea1",
   "jerusalem",
   "tyros#sea2"
- ],
- "jerusalem#sea3": [
-  "jerusalem"
  ],
  "kanesh": [
   "ankara",
@@ -1461,16 +1417,14 @@
  "knossos": [
   "aegean-sea",
   "eastern-mediterranean",
-  "knossos#sea2",
+  "knossos#sea1",
   "phaestos"
  ],
- "knossos#sea2": [
+ "knossos#sea1": [
   "aegean-sea",
   "eastern-mediterranean",
   "knossos",
-  "phaestos#sea2",
-  "rhodes#sea1",
-  "thera#sea1"
+  "phaestos#sea1"
  ],
  "kuban": [
   "black-sea",
@@ -1506,10 +1460,9 @@
  "lemnos#sea1": [
   "aegean-sea",
   "bycantinum#sea1",
-  "bycantinum#sea3",
   "lemnos",
   "thessalonica#sea2",
-  "thrace#sea3",
+  "thrace#sea2",
   "troy#sea4"
  ],
  "lesbos": [
@@ -1519,18 +1472,16 @@
  ],
  "lesbos#sea1": [
   "aegean-sea",
-  "ionia#sea3",
+  "ionia#sea2",
   "lesbos",
   "lesbos#sea3",
-  "sardes#sea3",
-  "troy#sea4",
-  "troy#sea6"
+  "troy#sea4"
  ],
  "lesbos#sea3": [
-  "aegean-sea",
+  "ionia#sea2",
   "lesbos",
   "lesbos#sea1",
-  "troy#sea4"
+  "sardes#sea2"
  ],
  "lesser-armenia": [
   "armenia",
@@ -1568,6 +1519,7 @@
   "belgica",
   "britannia",
   "londinium#sea2",
+  "londinium#sea3",
   "lugdunensis"
  ],
  "londinium#sea2": [
@@ -1575,7 +1527,13 @@
   "belgica#sea1",
   "britannia#sea2",
   "londinium",
+  "londinium#sea3",
   "lugdunensis#sea1"
+ ],
+ "londinium#sea3": [
+  "britannia#sea2",
+  "londinium",
+  "londinium#sea2"
  ],
  "lower-germany": [
   "belgica",
@@ -1632,31 +1590,29 @@
   "gulf-of-persia",
   "lyan",
   "parsian#sea2",
-  "portas-persas#sea2",
-  "portas-persas#sea3"
+  "portas-persas#sea2"
  ],
  "lycia": [
   "eastern-mediterranean",
   "galatia",
   "ionia",
+  "lycia#sea2",
   "lycia#sea3",
-  "lycia#sea4",
   "miletus"
  ],
- "lycia#sea3": [
+ "lycia#sea2": [
   "cyprus#sea1",
   "eastern-mediterranean",
   "galatia#sea3",
   "lycia",
-  "lycia#sea4",
-  "miletus#sea3",
+  "lycia#sea3",
+  "miletus#sea2",
   "rhodes#sea1"
  ],
- "lycia#sea4": [
-  "cyprus#sea1",
+ "lycia#sea3": [
   "galatia#sea3",
   "lycia",
-  "lycia#sea3"
+  "lycia#sea2"
  ],
  "macedonia": [
   "appolonia",
@@ -1676,17 +1632,16 @@
  ],
  "makkan#sea2": [
   "barna#sea2",
-  "basri#sea4",
+  "basri#sea2",
   "gulf-of-oman",
   "makkan",
   "makkan#sea3"
  ],
  "makkan#sea3": [
-  "basri#sea4",
+  "basri#sea2",
   "gulf-of-oman",
   "makkan",
-  "makkan#sea2",
-  "onitas#sea3"
+  "makkan#sea2"
  ],
  "mana": [
   "al-gharbia",
@@ -1702,13 +1657,11 @@
   "al-gharbia#sea1",
   "gulf-of-persia",
   "mana",
-  "mana#sea3",
-  "tilmun#sea2"
+  "tilmun#sea1"
  ],
  "mana#sea3": [
   "mana",
-  "mana#sea1",
-  "tilmun#sea2"
+  "tilmun#sea1"
  ],
  "mari": [
   "carrhae",
@@ -1783,22 +1736,14 @@
   "gulf-of-oman",
   "harmoza",
   "megan#sea2",
-  "megan#sea3",
   "pura"
  ],
  "megan#sea2": [
   "barna#sea2",
-  "barna#sea4",
-  "barna#sea5",
+  "barna#sea3",
   "gulf-of-oman",
   "harmoza#sea2",
-  "megan",
-  "megan#sea3"
- ],
- "megan#sea3": [
-  "gulf-of-oman",
-  "megan",
-  "megan#sea2"
+  "megan"
  ],
  "memphis": [
   "alexandria",
@@ -1842,27 +1787,34 @@
  ],
  "milazzo": [
   "milazzo#sea1",
+  "milazzo#sea3",
   "palermo",
   "syracus",
   "western-mediterranean-2"
  ],
  "milazzo#sea1": [
+  "campania#sea2",
+  "milazzo",
+  "milazzo#sea3",
+  "palermo#sea1",
+  "western-mediterranean-2"
+ ],
+ "milazzo#sea3": [
   "campania#sea3",
   "milazzo",
-  "palermo#sea1",
-  "syracus#sea1",
-  "western-mediterranean-2"
+  "milazzo#sea1",
+  "syracus#sea1"
  ],
  "miletus": [
   "aegean-sea",
   "ionia",
   "lycia",
-  "miletus#sea3"
+  "miletus#sea2"
  ],
- "miletus#sea3": [
+ "miletus#sea2": [
   "aegean-sea",
-  "ionia#sea3",
-  "lycia#sea3",
+  "ionia#sea2",
+  "lycia#sea2",
   "miletus",
   "rhodes#sea1"
  ],
@@ -1929,14 +1881,21 @@
  "neapolis": [
   "campania",
   "neapolis#sea2",
+  "neapolis#sea3",
   "roma",
   "samnium",
   "western-mediterranean-2"
  ],
  "neapolis#sea2": [
-  "campania#sea3",
   "neapolis",
+  "neapolis#sea3",
   "roma#sea2",
+  "western-mediterranean-2"
+ ],
+ "neapolis#sea3": [
+  "campania#sea2",
+  "neapolis",
+  "neapolis#sea2",
   "western-mediterranean-2"
  ],
  "new-africa": [
@@ -2038,16 +1997,14 @@
   "aracosta",
   "basri",
   "gulf-of-oman",
-  "onitas#sea3",
+  "onitas#sea2",
   "shahi-tumo"
  ],
- "onitas#sea3": [
-  "basri#sea3",
-  "basri#sea4",
+ "onitas#sea2": [
+  "basri#sea2",
   "gulf-of-oman",
-  "makkan#sea3",
   "onitas",
-  "shahi-tumo#sea3"
+  "shahi-tumo#sea2"
  ],
  "paeonia": [
   "appolonia",
@@ -2088,13 +2045,13 @@
   "rubicon"
  ],
  "pannonia-2#sea3": [
-  "adriatic-sea",
-  "dalmatia#sea2",
   "pannonia-2",
   "pannonia-2#sea4",
   "rubicon#sea2"
  ],
  "pannonia-2#sea4": [
+  "adriatic-sea",
+  "dalmatia#sea2",
   "pannonia-2",
   "pannonia-2#sea3",
   "rubicon#sea2"
@@ -2154,14 +2111,13 @@
   "central-mediterranean",
   "eastern-mediterranean",
   "knossos",
-  "phaestos#sea2"
+  "phaestos#sea1"
  ],
- "phaestos#sea2": [
+ "phaestos#sea1": [
   "central-mediterranean",
   "eastern-mediterranean",
-  "knossos#sea2",
-  "phaestos",
-  "thera#sea1"
+  "knossos#sea1",
+  "phaestos"
  ],
  "phoenicia": [
   "aleppo",
@@ -2205,7 +2161,7 @@
   "gulf-of-oman",
   "karachi#sea2",
   "port-dialx",
-  "shahi-tumo#sea3"
+  "shahi-tumo#sea2"
  ],
  "portas-caspianas": [
   "media",
@@ -2219,21 +2175,13 @@
   "kurangan",
   "lyan",
   "persepolis",
-  "portas-persas#sea2",
-  "portas-persas#sea3"
+  "portas-persas#sea2"
  ],
  "portas-persas#sea2": [
   "ahwaz#sea2",
   "gulf-of-persia",
   "lyan#sea2",
-  "portas-persas",
-  "portas-persas#sea3"
- ],
- "portas-persas#sea3": [
-  "gulf-of-persia",
-  "lyan#sea2",
-  "portas-persas",
-  "portas-persas#sea2"
+  "portas-persas"
  ],
  "prophtasia": [
   "aria",
@@ -2330,9 +2278,8 @@
  "rhodes#sea1": [
   "aegean-sea",
   "eastern-mediterranean",
-  "knossos#sea2",
-  "lycia#sea3",
-  "miletus#sea3",
+  "lycia#sea2",
+  "miletus#sea2",
   "rhodes"
  ],
  "riyadh": [
@@ -2444,14 +2391,13 @@
   "bithynia",
   "gordium",
   "ionia",
-  "sardes#sea3",
+  "sardes#sea2",
   "troy"
  ],
- "sardes#sea3": [
-  "ionia#sea3",
-  "lesbos#sea1",
-  "sardes",
-  "troy#sea6"
+ "sardes#sea2": [
+  "ionia#sea2",
+  "lesbos#sea3",
+  "sardes"
  ],
  "sardinia-2": [
   "carales-2",
@@ -2460,6 +2406,7 @@
  ],
  "sardinia-2#sea1": [
   "carales-2#sea1",
+  "carales-2#sea3",
   "corsica-2#sea1",
   "sardinia-2",
   "western-mediterranean-2"
@@ -2477,13 +2424,11 @@
  "scythia#sea2": [
   "crimea#sea1",
   "kuban#sea1",
-  "scythia",
-  "scythia#sea3"
+  "scythia"
  ],
  "scythia#sea3": [
   "crimea#sea1",
-  "scythia",
-  "scythia#sea2"
+  "scythia"
  ],
  "scythia#sea4": [
   "crimea#sea1",
@@ -2511,11 +2456,11 @@
   "mochendo-daro",
   "onitas",
   "port-dialx",
-  "shahi-tumo#sea3"
+  "shahi-tumo#sea2"
  ],
- "shahi-tumo#sea3": [
+ "shahi-tumo#sea2": [
   "gulf-of-oman",
-  "onitas#sea3",
+  "onitas#sea2",
   "port-dialx#sea2",
   "shahi-tumo"
  ],
@@ -2579,19 +2524,12 @@
  "socotra": [
   "arabian-sea",
   "indian-ocean",
-  "socotra#sea1",
-  "socotra#sea2"
+  "socotra#sea1"
  ],
  "socotra#sea1": [
   "arabian-sea",
   "indian-ocean",
-  "socotra",
-  "socotra#sea2"
- ],
- "socotra#sea2": [
-  "arabian-sea",
-  "socotra",
-  "socotra#sea1"
+  "socotra"
  ],
  "sparta": [
   "argos",
@@ -2602,7 +2540,7 @@
  "sparta#sea2": [
   "argos#sea2",
   "central-mediterranean",
-  "corinth#sea3",
+  "corinth#sea4",
   "sparta"
  ],
  "sudeten": [
@@ -2627,14 +2565,23 @@
   "parthia",
   "persepolis",
   "susa#sea2",
+  "susa#sea3",
   "ur"
  ],
  "susa#sea2": [
+  "chaldaea#sea1",
+  "susa",
+  "susa#sea3",
+  "ur",
+  "ur#sea2"
+ ],
+ "susa#sea3": [
   "ahwaz#sea2",
   "chaldaea#sea1",
+  "chaldaea#sea3",
   "gulf-of-persia",
   "susa",
-  "ur",
+  "susa#sea2",
   "ur#sea2"
  ],
  "syracus": [
@@ -2646,7 +2593,7 @@
  "syracus#sea1": [
   "campania#sea3",
   "central-mediterranean",
-  "milazzo#sea1",
+  "milazzo#sea3",
   "palermo#sea1",
   "syracus"
  ],
@@ -2740,8 +2687,6 @@
   "argos#sea2",
   "athens#sea1",
   "eretria#sea1",
-  "knossos#sea2",
-  "phaestos#sea2",
   "thera"
  ],
  "thessalonica": [
@@ -2759,7 +2704,7 @@
   "lemnos#sea1",
   "thessalonica",
   "thessaly#sea2",
-  "thrace#sea3"
+  "thrace#sea2"
  ],
  "thessaly": [
   "chalkis",
@@ -2771,7 +2716,6 @@
  ],
  "thessaly#sea2": [
   "chalkis#sea1",
-  "delphi#sea4",
   "thessalonica#sea2",
   "thessaly"
  ],
@@ -2782,9 +2726,9 @@
   "moesia",
   "paeonia",
   "thessalonica",
-  "thrace#sea3"
+  "thrace#sea2"
  ],
- "thrace#sea3": [
+ "thrace#sea2": [
   "bycantinum#sea1",
   "lemnos#sea1",
   "thessalonica#sea2",
@@ -2806,21 +2750,14 @@
   "gerrha",
   "gulf-of-persia",
   "mana",
-  "tilmun#sea1",
-  "tilmun#sea2"
+  "tilmun#sea1"
  ],
  "tilmun#sea1": [
-  "gulf-of-persia",
-  "tilmun",
-  "tilmun#sea2"
- ],
- "tilmun#sea2": [
   "gerrha#sea1",
   "gulf-of-persia",
   "mana#sea1",
   "mana#sea3",
-  "tilmun",
-  "tilmun#sea1"
+  "tilmun"
  ],
  "tripoli": [
   "central-mediterranean",
@@ -2853,16 +2790,14 @@
   "sardes",
   "troy#sea1",
   "troy#sea3",
-  "troy#sea4",
-  "troy#sea6"
+  "troy#sea4"
  ],
  "troy#sea1": [
   "bithynia#sea1",
   "black-sea",
   "bycantinum#sea1",
   "troy",
-  "troy#sea3",
-  "troy#sea4"
+  "troy#sea3"
  ],
  "troy#sea3": [
   "bycantinum#sea1",
@@ -2872,19 +2807,9 @@
  "troy#sea4": [
   "aegean-sea",
   "bycantinum#sea1",
-  "bycantinum#sea3",
   "lemnos#sea1",
   "lesbos#sea1",
-  "lesbos#sea3",
-  "troy",
-  "troy#sea1",
-  "troy#sea6"
- ],
- "troy#sea6": [
-  "lesbos#sea1",
-  "sardes#sea3",
-  "troy",
-  "troy#sea4"
+  "troy"
  ],
  "tunisia-2": [
   "cirta",
@@ -2924,8 +2849,6 @@
   "gulf-of-oman",
   "gulf-of-persia",
   "harmoza#sea2",
-  "harmoza#sea3",
-  "harmoza#sea4",
   "ummannar"
  ],
  "upper-egypt": [
@@ -2956,15 +2879,13 @@
  "ur#sea2": [
   "chaldaea#sea1",
   "susa#sea2",
-  "ur",
-  "ur#sea3"
+  "susa#sea3",
+  "ur"
  ],
  "ur#sea3": [
   "chaldaea#sea1",
   "charax#sea2",
-  "charax#sea3",
-  "ur",
-  "ur#sea2"
+  "ur"
  ],
  "van": [
   "armenia",
@@ -2995,13 +2916,21 @@
   "corduba",
   "east-mauretania",
   "west-mauretania#sea1",
+  "west-mauretania#sea2",
   "western-mediterranean-2"
  ],
  "west-mauretania#sea1": [
   "corduba#sea2",
   "east-mauretania#sea1",
   "west-mauretania",
+  "west-mauretania#sea2",
   "western-mediterranean-2"
+ ],
+ "west-mauretania#sea2": [
+  "corduba#sea2",
+  "corduba#sea3",
+  "west-mauretania",
+  "west-mauretania#sea1"
  ],
  "western-desert": [
   "alexandria",
@@ -3022,7 +2951,7 @@
   "baleares",
   "baleares#sea1",
   "campania",
-  "campania#sea3",
+  "campania#sea2",
   "carales-2",
   "carales-2#sea1",
   "carales-2#sea3",
@@ -3048,6 +2977,7 @@
   "narbo#sea2",
   "neapolis",
   "neapolis#sea2",
+  "neapolis#sea3",
   "new-africa",
   "new-africa#sea1",
   "new-carthage",

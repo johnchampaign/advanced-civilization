@@ -15,12 +15,16 @@ const { data, info } = await sharp('public/dev-assets/board.png').raw().toBuffer
 const IW = info.width, IH = info.height, C = info.channels;
 const px = (x, y) => { const i = (y * IW + x) * C; return [data[i], data[i + 1], data[i + 2]]; };
 const isBlue = (r, g, b) => b >= g && b > 110 && b >= r - 10;
-// White territory line OR near-black coastline. The black threshold must stay
-// BELOW the dark-teal floodplain/delta land colour (~rgb(14,62,56), max ch 62):
-// at <70 that land was misread as coastline, so delta city-sites (port-dialx,
-// karachi, ...) found no land and rendered as a tan blob / water. The true coast
-// line is near-black (max ch <50).
-const isBorder = (r, g, b) => (r > 200 && g > 200 && b > 200) || Math.max(r, g, b) < 50;
+// White territory line (incl. its pale anti-alias halo) OR near-black coastline.
+//  - White/halo: min channel > 150. The strict all-channels>200 test left the
+//    border's pale-grey fringe (~rgb(180,200,180)) as "land", tracing a thin ring
+//    just inside each territory's outline — a floating tan hexagon on island
+//    territories (knossos/phaestos/thera). Real terrain is saturated (one channel
+//    low), so min>150 catches only the near-white halo, not land/sea.
+//  - Black coast: max channel < 50. Must stay BELOW the dark-teal floodplain land
+//    (~rgb(14,62,56), max ch 62) or that land is misread as coastline (delta
+//    city-sites port-dialx/karachi rendered as a tan blob / water).
+const isBorder = (r, g, b) => Math.min(r, g, b) > 150 || Math.max(r, g, b) < 50;
 const MIN_SEA = 60;   // coastal waters can be small strips — keep them
 const MIN_LAND = 60;  // small islands (e.g. Ebusus ~166px) are signal, not noise
 
@@ -38,15 +42,32 @@ function splitRegion(r) {
   minx = Math.max(0, Math.floor(minx)); miny = Math.max(0, Math.floor(miny)); maxx = Math.min(IW - 1, Math.ceil(maxx)); maxy = Math.min(IH - 1, Math.ceil(maxy));
   const W = maxx - minx + 1, H = maxy - miny + 1;
   const kind = new Int8Array(W * H); // 0 outside/border, 1 sea, 2 land
+  const inside = new Uint8Array(W * H);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const gx = minx + x, gy = miny + y;
-    if (!inRegion(gx + 0.5, gy + 0.5, r)) continue; const c = px(gx, gy); if (isBorder(...c)) continue; kind[y * W + x] = isBlue(...c) ? 1 : 2; }
+    if (!inRegion(gx + 0.5, gy + 0.5, r)) continue; inside[y * W + x] = 1; const c = px(gx, gy); if (isBorder(...c)) continue; kind[y * W + x] = isBlue(...c) ? 1 : 2; }
+  // Peel a 2px margin just inside the territory's OUTER boundary. The white
+  // border's anti-alias halo there classifies as land and otherwise traces a thin
+  // ring around the whole polygon — a floating tan outline on island territories
+  // (knossos/phaestos/thera). Erode only against pixels OUTSIDE the polygon, so
+  // the internal land/sea split (the black coastline) is left untouched.
+  const ER = 2;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { if (!kind[y * W + x]) continue;
+    let edge = false;
+    for (let dy = -ER; dy <= ER && !edge; dy++) for (let dx = -ER; dx <= ER; dx++) { const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= H || !inside[ny * W + nx]) { edge = true; break; } }
+    if (edge) kind[y * W + x] = -1; }
+  for (let i = 0; i < W * H; i++) if (kind[i] === -1) kind[i] = 0;
   const lab = new Int32Array(W * H).fill(-1); const comps = []; const st = [];
-  for (let i = 0; i < W * H; i++) { if (lab[i] !== -1 || kind[i] === 0) continue; const id = comps.length; const k = kind[i]; let sz = 0; st.length = 0; st.push(i); lab[i] = id;
-    while (st.length) { const p = st.pop(); const y = (p / W) | 0, x = p % W; sz++; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue; const ni = ny * W + nx; if (lab[ni] === -1 && kind[ni] === k) { lab[ni] = id; st.push(ni); } } }
-    comps.push({ id, k, sz }); }
+  for (let i = 0; i < W * H; i++) { if (lab[i] !== -1 || kind[i] === 0) continue; const id = comps.length; const k = kind[i]; let sz = 0, bx0 = W, by0 = H, bx1 = 0, by1 = 0; st.length = 0; st.push(i); lab[i] = id;
+    while (st.length) { const p = st.pop(); const y = (p / W) | 0, x = p % W; sz++; if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue; const ni = ny * W + nx; if (lab[ni] === -1 && kind[ni] === k) { lab[ni] = id; st.push(ni); } } }
+    comps.push({ id, k, sz, bw: bx1 - bx0 + 1, bh: by1 - by0 + 1 }); }
   const at = (x, y) => (x < 0 || y < 0 || x >= W || y >= H) ? -1 : lab[y * W + x];
   const out = [];
-  for (const comp of comps) { if (comp.sz < (comp.k === 1 ? MIN_SEA : MIN_LAND)) continue; const edges = [];
+  for (const comp of comps) { if (comp.sz < (comp.k === 1 ? MIN_SEA : MIN_LAND)) continue;
+    // Drop a thin perimeter ring: a LAND component that spans almost the whole
+    // territory bbox yet fills little of it is the white-border halo, not real
+    // land (the real island is a separate, compact component).
+    if (comp.k === 2 && comp.bw > 0.8 * W && comp.bh > 0.8 * H && comp.sz < 0.28 * comp.bw * comp.bh) continue;
+    const edges = [];
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { if (lab[y * W + x] !== comp.id) continue;
       if (at(x, y - 1) !== comp.id) edges.push([x, y, x + 1, y]); if (at(x, y + 1) !== comp.id) edges.push([x, y + 1, x + 1, y + 1]); if (at(x - 1, y) !== comp.id) edges.push([x, y, x, y + 1]); if (at(x + 1, y) !== comp.id) edges.push([x + 1, y, x + 1, y + 1]); }
     const loop = traceLoop(edges); if (!loop) continue; const ext = dp(loop.map(([x, y]) => [+(minx + x).toFixed(1), +(miny + y).toFixed(1)]), 2);

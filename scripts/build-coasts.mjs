@@ -67,6 +67,10 @@ function splitRegion(r) {
     // territory bbox yet fills little of it is the white-border halo, not real
     // land (the real island is a separate, compact component).
     if (comp.k === 2 && comp.bw > 0.8 * W && comp.bh > 0.8 * H && comp.sz < 0.28 * comp.bw * comp.bh) continue;
+    // Drop a small, very thin LAND sliver (fill < 0.15) — halo fringe along the
+    // internal coastline, floating in the coastal water. Real small islands are
+    // blobby (fill ≥ 0.2, e.g. Ebusus 0.29), so this leaves them intact.
+    if (comp.k === 2 && comp.sz < 500 && comp.sz < 0.15 * comp.bw * comp.bh) continue;
     const edges = [];
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { if (lab[y * W + x] !== comp.id) continue;
       if (at(x, y - 1) !== comp.id) edges.push([x, y, x + 1, y]); if (at(x, y + 1) !== comp.id) edges.push([x, y + 1, x + 1, y + 1]); if (at(x - 1, y) !== comp.id) edges.push([x, y, x, y + 1]); if (at(x + 1, y) !== comp.id) edges.push([x + 1, y, x + 1, y + 1]); }

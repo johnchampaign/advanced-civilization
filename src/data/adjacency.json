@@ -143,13 +143,13 @@
   "salamis#sea1"
  ],
  "apolagos": [
-  "apolagos#sea2",
+  "apolagos#sea1",
   "arabia",
   "chaldaea",
   "gerrha",
   "gulf-of-persia"
  ],
- "apolagos#sea2": [
+ "apolagos#sea1": [
   "apolagos",
   "chaldaea#sea3",
   "gerrha#sea1",
@@ -675,7 +675,7 @@
   "ur#sea3"
  ],
  "chaldaea#sea3": [
-  "apolagos#sea2",
+  "apolagos#sea1",
   "chaldaea",
   "chaldaea#sea1",
   "gulf-of-persia",
@@ -1146,7 +1146,7 @@
   "tilmun"
  ],
  "gerrha#sea1": [
-  "apolagos#sea2",
+  "apolagos#sea1",
   "gerrha",
   "gulf-of-persia",
   "tilmun#sea1"
@@ -1211,7 +1211,7 @@
   "al-gharbia",
   "al-gharbia#sea1",
   "apolagos",
-  "apolagos#sea2",
+  "apolagos#sea1",
   "banda-abbas",
   "banda-abbas#sea2",
   "chaldaea",

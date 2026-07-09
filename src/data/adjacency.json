@@ -491,6 +491,7 @@
   "sinope",
   "sinope#sea1",
   "thyras",
+  "thyras#sea1",
   "troy",
   "troy#sea1"
  ],
@@ -688,11 +689,13 @@
  "chaldaea#sea1": [
   "apolagos#sea2",
   "chaldaea",
-  "charax#sea1",
   "charax#sea2",
+  "charax#sea3",
   "gulf-of-persia",
   "susa#sea2",
-  "ur"
+  "ur",
+  "ur#sea2",
+  "ur#sea3"
  ],
  "chalkis": [
   "aegean-sea",
@@ -720,21 +723,22 @@
  "charax": [
   "babylon",
   "chaldaea",
-  "charax#sea1",
   "charax#sea2",
+  "charax#sea3",
   "sumeria",
-  "ur"
- ],
- "charax#sea1": [
-  "chaldaea#sea1",
-  "charax",
-  "charax#sea2",
   "ur"
  ],
  "charax#sea2": [
   "chaldaea#sea1",
   "charax",
-  "charax#sea1"
+  "charax#sea3",
+  "ur#sea3"
+ ],
+ "charax#sea3": [
+  "chaldaea#sea1",
+  "charax",
+  "charax#sea2",
+  "ur#sea3"
  ],
  "cilicia": [
   "aleppo",
@@ -917,7 +921,8 @@
   "black-sea",
   "crimea#sea1",
   "danube",
-  "scythia#sea4"
+  "scythia#sea4",
+  "thyras#sea1"
  ],
  "delphi": [
   "athens",
@@ -1214,6 +1219,7 @@
   "onitas",
   "onitas#sea3",
   "port-dialx",
+  "port-dialx#sea2",
   "shahi-tumo",
   "shahi-tumo#sea3",
   "ummannar",
@@ -1442,7 +1448,8 @@
  ],
  "karachi#sea2": [
   "gulf-of-oman",
-  "karachi"
+  "karachi",
+  "port-dialx#sea2"
  ],
  "kerman": [
   "aria",
@@ -1720,7 +1727,7 @@
   "corsica-2#sea1",
   "etruria-2#sea2",
   "massilia",
-  "narbo#sea3",
+  "narbo#sea2",
   "western-mediterranean-2"
  ],
  "mazirah": [
@@ -1880,7 +1887,8 @@
  "moesia#sea2": [
   "black-sea",
   "bycantinum#sea1",
-  "moesia"
+  "moesia",
+  "thyras#sea1"
  ],
  "moscha": [
   "al-wusta",
@@ -1908,11 +1916,11 @@
   "aquitania",
   "gaul",
   "massilia",
-  "narbo#sea3",
+  "narbo#sea2",
   "pyrenees",
   "western-mediterranean-2"
  ],
- "narbo#sea3": [
+ "narbo#sea2": [
   "massilia#sea2",
   "narbo",
   "pyrenees#sea2",
@@ -2190,7 +2198,14 @@
   "karachi",
   "mochendo-daro",
   "pala",
+  "port-dialx#sea2",
   "shahi-tumo"
+ ],
+ "port-dialx#sea2": [
+  "gulf-of-oman",
+  "karachi#sea2",
+  "port-dialx",
+  "shahi-tumo#sea3"
  ],
  "portas-caspianas": [
   "media",
@@ -2266,7 +2281,7 @@
  ],
  "pyrenees#sea2": [
   "iberus#sea2",
-  "narbo#sea3",
+  "narbo#sea2",
   "pyrenees",
   "western-mediterranean-2"
  ],
@@ -2501,6 +2516,7 @@
  "shahi-tumo#sea3": [
   "gulf-of-oman",
   "onitas#sea3",
+  "port-dialx#sea2",
   "shahi-tumo"
  ],
  "shiraz": [
@@ -2618,7 +2634,8 @@
   "chaldaea#sea1",
   "gulf-of-persia",
   "susa",
-  "ur"
+  "ur",
+  "ur#sea2"
  ],
  "syracus": [
   "central-mediterranean",
@@ -2776,7 +2793,14 @@
  "thyras": [
   "black-sea",
   "danube",
-  "moesia"
+  "moesia",
+  "thyras#sea1"
+ ],
+ "thyras#sea1": [
+  "black-sea",
+  "danube#sea2",
+  "moesia#sea2",
+  "thyras"
  ],
  "tilmun": [
   "gerrha",
@@ -2924,9 +2948,23 @@
   "chaldaea",
   "chaldaea#sea1",
   "charax",
-  "charax#sea1",
   "susa",
-  "susa#sea2"
+  "susa#sea2",
+  "ur#sea2",
+  "ur#sea3"
+ ],
+ "ur#sea2": [
+  "chaldaea#sea1",
+  "susa#sea2",
+  "ur",
+  "ur#sea3"
+ ],
+ "ur#sea3": [
+  "chaldaea#sea1",
+  "charax#sea2",
+  "charax#sea3",
+  "ur",
+  "ur#sea2"
  ],
  "van": [
   "armenia",
@@ -3007,7 +3045,7 @@
   "milazzo",
   "milazzo#sea1",
   "narbo",
-  "narbo#sea3",
+  "narbo#sea2",
   "neapolis",
   "neapolis#sea2",
   "new-africa",

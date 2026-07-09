@@ -15,7 +15,12 @@ const { data, info } = await sharp('public/dev-assets/board.png').raw().toBuffer
 const IW = info.width, IH = info.height, C = info.channels;
 const px = (x, y) => { const i = (y * IW + x) * C; return [data[i], data[i + 1], data[i + 2]]; };
 const isBlue = (r, g, b) => b >= g && b > 110 && b >= r - 10;
-const isBorder = (r, g, b) => (r > 200 && g > 200 && b > 200) || Math.max(r, g, b) < 70; // white territory line OR black coast
+// White territory line OR near-black coastline. The black threshold must stay
+// BELOW the dark-teal floodplain/delta land colour (~rgb(14,62,56), max ch 62):
+// at <70 that land was misread as coastline, so delta city-sites (port-dialx,
+// karachi, ...) found no land and rendered as a tan blob / water. The true coast
+// line is near-black (max ch <50).
+const isBorder = (r, g, b) => (r > 200 && g > 200 && b > 200) || Math.max(r, g, b) < 50;
 const MIN_SEA = 60;   // coastal waters can be small strips — keep them
 const MIN_LAND = 60;  // small islands (e.g. Ebusus ~166px) are signal, not noise
 

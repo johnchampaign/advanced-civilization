@@ -32,8 +32,14 @@ function loadAutosave(): SavedGame | null {
     const raw = localStorage.getItem(AUTOSAVE_KEY);
     if (!raw) return null;
     const s = JSON.parse(raw) as SavedGame;
-    // A save from a different engine schema can't be trusted to resume.
-    if (s?.state?.schemaVersion !== adapter.schemaVersion) return null;
+    // A save from a different engine schema can't be trusted to resume — but a
+    // known older version is upgraded via the adapter's migrate() (v1→v2: prose
+    // log lines become structured entries).
+    if (s?.state?.schemaVersion !== adapter.schemaVersion) {
+      if (typeof s?.state?.schemaVersion === 'number' && s.state.schemaVersion < adapter.schemaVersion && adapter.migrate) {
+        s.state = adapter.migrate(s.state, s.state.schemaVersion);
+      } else return null;
+    }
     if (!Array.isArray(s.config?.players) || !s.config.players.every((p) => !!s.state.players?.[p])) return null;
     if (!s.seats || s.config.players.some((p) => s.seats[p] !== 'human' && s.seats[p] !== 'ai')) return null;
     return s;
@@ -724,6 +730,12 @@ export function InfoView({ view, state, focus }: { view: View; state: GameState;
 /** The running game log (§ every recorded change), most-recent first so the
  *  latest events are visible without scrolling. `state.log` is the same record
  *  offered as a downloadable file; this just makes it browsable in-game. */
+/** Render one log entry's text. Entries are structured (log-format v2, `msg`
+ *  carries the prose) but a not-yet-migrated snapshot may still hold strings. */
+function logMsg(l: GameState['log'][number] | string): string {
+  return typeof l === 'string' ? l : l.msg ?? l.kind;
+}
+
 function LogView({ state }: { state: GameState }) {
   const lines = state.log ?? [];
   return (
@@ -739,7 +751,7 @@ function LogView({ state }: { state: GameState }) {
           return (
             <div key={idx} style={{ display: 'flex', gap: 10 }}>
               <span style={{ color: '#6f6a5a', minWidth: 34, textAlign: 'right', userSelect: 'none' }}>{idx + 1}</span>
-              <span style={{ whiteSpace: 'pre-wrap' }}>{lines[idx]}</span>
+              <span style={{ whiteSpace: 'pre-wrap' }}>{logMsg(lines[idx]!)}</span>
             </div>
           );
         })}
@@ -1935,7 +1947,7 @@ function HotseatReport({ state, focus }: { state: GameState; focus: PlayerId }) 
   useEffect(() => { refreshMine(); }, [refreshMine]);
   const answered = mine.filter((r) => resolutionNote(r.resolution));
   const download = () => {
-    const text = `Advanced Civilization — hotseat, turn ${state.turn}\n\n${state.log.join('\n')}\n\n--- state ---\n${JSON.stringify(state)}`;
+    const text = `Advanced Civilization — hotseat, turn ${state.turn}\n\n${state.log.map(logMsg).join('\n')}\n\n--- state ---\n${JSON.stringify(state)}`;
     const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
     const a = document.createElement('a'); a.href = url; a.download = `civ-hotseat-turn${state.turn}.txt`; a.click();
     URL.revokeObjectURL(url);
@@ -1944,7 +1956,7 @@ function HotseatReport({ state, focus }: { state: GameState; focus: PlayerId }) 
     const { reportId } = await submitStandaloneReport('', {
       message, severity, category: REPORT_CATEGORY,
       serverSnapshot: JSON.stringify(state), reporterSide: focus, turnNumber: state.turn,
-      clientLog: state.log.map((m, i) => ({ turn: state.turn, kind: 'log', payload: m, ts: i })),
+      clientLog: state.log.map((m, i) => ({ turn: state.turn, kind: 'log', payload: logMsg(m), ts: i })),
       clientBuild: 'web-ui-hotseat', userAgent: navigator.userAgent,
     });
     setTimeout(refreshMine, 500);

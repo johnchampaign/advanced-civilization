@@ -8,6 +8,8 @@
 // - The turn runs through an ordered list of phases (rules §18). Most phases are
 //   per-player; `currentActor` is derived from `phase` + `activeOrder` + `actedThisPhase`.
 
+import type { GameLogEntry } from 'digital-boardgame-framework';
+
 export type PlayerId = string; // civilization id
 
 /** Rules §18 sequence of play, modeled as discrete phases. */
@@ -440,8 +442,11 @@ export interface GameState {
    *  giver may not be named a secondary victim (§29.61). */
   calamityTradedFrom: Record<string, PlayerId>;
   rngState: number;
-  /** Append-only human-readable log of notable events. */
-  log: string[];
+  /** Append-only structured game log (framework log-format v2). Full prose
+   *  (incl. rulebook § citations) lives in `msg`; machine-readable data in
+   *  `payload` (with `payload.rule` when a § is cited). Capped at 500 entries.
+   *  Kind registry: docs/log-events.md. */
+  log: GameLogEntry<PlayerId>[];
   /** Set once a finish square is reached; game ends after the turn completes. */
   finished?: boolean;
   /** Optional turn cap (time-limit analogue, §34.1B). */

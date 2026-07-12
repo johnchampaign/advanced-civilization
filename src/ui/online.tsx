@@ -216,7 +216,7 @@ function BugReport({ client, view }: { client: GameClientApi<GameState, Action>;
   const answered = mine.filter((r) => resolutionNote(r.resolution));
   const send = async (message: string, severity: string) => {
     // Attach the game's move log; the server stores the full snapshot too.
-    const clientLog: LogEntry[] = view.log.map((m, i) => ({ turn: view.turn, kind: 'log', payload: m, ts: i }));
+    const clientLog: LogEntry[] = view.log.map((m, i) => ({ turn: view.turn, kind: 'log', payload: typeof m === 'string' ? m : m.msg ?? m.kind, ts: i }));
     const { reportId } = await client.report({ message, severity, category: REPORT_CATEGORY, clientLog, clientBuild: 'web-ui', userAgent: navigator.userAgent } as never);
     setTimeout(refreshMine, 500);
     return reportId as string;
@@ -230,7 +230,7 @@ function BugReport({ client, view }: { client: GameClientApi<GameState, Action>;
 }
 
 function downloadLog(s: GameState, gameId: string) {
-  const text = `Advanced Civilization — game ${gameId}, turn ${s.turn}\n\n${s.log.join('\n')}`;
+  const text = `Advanced Civilization — game ${gameId}, turn ${s.turn}\n\n${s.log.map((l) => typeof l === 'string' ? l : l.msg ?? l.kind).join('\n')}`;
   const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
   const a = document.createElement('a');
   a.href = url; a.download = `civ-${gameId}-log.txt`; a.click();

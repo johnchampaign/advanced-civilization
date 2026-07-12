@@ -81,8 +81,8 @@ describe('trade negotiation (open-offer board)', () => {
     expect(s.players[from]!.hand['calamity:epidemic']).toBeUndefined();
     expect(s.calamityTradedFrom['epidemic']).toBe(from);
     s = endTrade(s);
-    expect(s.log.some((l) => l.includes(to) && l.includes('Epidemic'))).toBe(true);
-    expect(s.log.some((l) => l.includes(from) && l.includes('suffers Epidemic'))).toBe(false);
+    expect(s.log.some((l) => (l.msg ?? '').includes(to) && (l.msg ?? '').includes('Epidemic'))).toBe(true);
+    expect(s.log.some((l) => (l.msg ?? '').includes(from) && (l.msg ?? '').includes('suffers Epidemic'))).toBe(false);
   });
 
   it('rejects illegal offers (too few cards, <2 truthful, dishonest count, non-tradable calamity)', () => {

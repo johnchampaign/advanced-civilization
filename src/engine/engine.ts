@@ -12,7 +12,7 @@
 // decision point or the game is over. This keeps currentActor() always pointing
 // at a real decision.
 
-import { Rng } from 'digital-boardgame-framework';
+import { Rng, appendGameLog, upgradeProseLog } from 'digital-boardgame-framework';
 import type { GameAdapter, GameResult } from 'digital-boardgame-framework';
 import {
   advanceById,
@@ -82,6 +82,31 @@ const AUTO_PHASES: Set<Phase> = new Set([
 
 const clone = <T>(x: T): T => structuredClone(x);
 const has = (p: { advances: string[] }, id: string) => p.advances.includes(id);
+
+// ---- Structured log (framework log-format v2) -----------------------------
+// The ONE choke point for every log append. Keeps the full prose (incl. the
+// rulebook § citation) in `msg`, stamps turn/phase/side, and mirrors any §
+// cited in the prose into payload.rule so analyzers never parse prose.
+// Kind + payload registry: docs/log-events.md.
+
+const LOG_CAP = 500;
+const RULE_RE = /§(\d+(?:\.\d+)*)/;
+
+function log(s: GameState, kind: string, side: PlayerId | null, msg: string, payload?: Record<string, unknown>): void {
+  const rule = RULE_RE.exec(msg)?.[1];
+  const p = rule ? { ...payload, rule } : payload;
+  appendGameLog(s.log, { turn: s.turn, phase: s.phase, side, kind, msg, ...(p ? { payload: p } : {}) }, LOG_CAP);
+}
+
+/** Seq of the newest log entry (or -1) — capture before a sub-resolution, then
+ *  use logMsgsSince to collect the prose of what it appended (robust to the cap
+ *  trimming old entries, unlike array indexes). */
+function lastLogSeq(s: GameState): number {
+  return s.log.length ? s.log[s.log.length - 1]!.seq : -1;
+}
+function logMsgsSince(s: GameState, seq: number): string[] {
+  return s.log.filter((e) => e.seq > seq).map((e) => e.msg ?? e.kind);
+}
 
 // ---- Trade helpers -------------------------------------------------------
 
@@ -166,7 +191,7 @@ function collectTax(s: GameState, id: PlayerId, rate: number): void {
   if (p.stock >= cost || has(p, 'democracy')) {
     const collected = Math.min(p.stock, cost);
     p.stock -= collected; p.treasury += collected;
-    if (collected > 0) s.log.push(`${id} collected ${collected} tax (rate ${r}) from ${cities} cities.`);
+    if (collected > 0) log(s, 'tax.collect', id, `${id} collected ${collected} tax (rate ${r}) from ${cities} cities.`, { amount: collected, rate: r, cities });
     return;
   }
   // §19.31: pay for as many cities as stock allows; the remainder revolt — but
@@ -176,7 +201,7 @@ function collectTax(s: GameState, id: PlayerId, rate: number): void {
   p.stock -= collected; p.treasury += collected;
   const revolting = cities - payable;
   (s.pendingRevolts ??= {})[id] = revolting;
-  s.log.push(`${id} could only pay tax for ${payable}/${cities} cities (rate ${r}) — ${revolting} will revolt (§19.31).`);
+  log(s, 'tax.shortfall', id, `${id} could only pay tax for ${payable}/${cities} cities (rate ${r}) — ${revolting} will revolt (§19.31).`, { amount: collected, rate: r, cities, payable, revolting });
 }
 
 /** §19.31-.33: resolve all recorded tax revolts once every player has paid, in
@@ -204,7 +229,7 @@ function resolvePendingRevolts(s: GameState): boolean {
       const taker = bestRevoltTaker(s, id);
       if (!taker) {
         // §19.33: no one can take the remaining revolting cities — they collapse.
-        for (const aid of citiesOf(s, id).slice(0, n)) { delete s.areas[aid]!.city; player(s, id).citiesAvailable += 1; s.log.push(`The revolting city in ${areaName(aid)} collapses — no one could take it over (§19.33).`); }
+        for (const aid of citiesOf(s, id).slice(0, n)) { delete s.areas[aid]!.city; player(s, id).citiesAvailable += 1; log(s, 'city.collapse', id, `The revolting city in ${areaName(aid)} collapses — no one could take it over (§19.33).`, { area: aid }); }
         n = 0; break;
       }
       // §19.32: the beneficiary picks which of the owner's cities to seize.
@@ -325,7 +350,7 @@ function payShipMaintenance(s: GameState, id: PlayerId): void {
     const [aid, a] = shipArea;
     a.ships![id] = (a.ships![id] ?? 0) - 1; if (a.ships![id]! <= 0) delete a.ships![id];
     p.shipsAvailable += 1; owed -= 1;
-    s.log.push(`${id} could not maintain a ship in ${areaName(aid)}; it is scrapped (§22.3).`);
+    log(s, 'ship.scrap', id, `${id} could not maintain a ship in ${areaName(aid)}; it is scrapped (§22.3).`, { area: aid, count: 1, reason: 'maintenance' });
   }
   if (s.shipMaintOwed) s.shipMaintOwed[id] = 0;
 }
@@ -357,7 +382,7 @@ function applyBuildShips(s: GameState, actor: PlayerId, builds: { area: string; 
       (a.ships ??= {})[actor] = (a.ships[actor] ?? 0) + 1;
       p.shipsAvailable -= 1;
     }
-    s.log.push(`${actor} built ${b.count} ship(s) in ${areaName(b.area)}${b.payFrom === 'treasury' ? ' (paid from treasury)' : ''}.`);
+    log(s, 'ship.build', actor, `${actor} built ${b.count} ship(s) in ${areaName(b.area)}${b.payFrom === 'treasury' ? ' (paid from treasury)' : ''}.`, { area: b.area, count: b.count, paidFrom: b.payFrom ?? 'area' });
   }
 }
 
@@ -384,14 +409,14 @@ function runConflict(s: GameState): void {
     const a = s.areas[aid]!;
     if (Object.keys(a.tokens).filter((o) => (a.tokens[o] ?? 0) > 0).length >= 2) {
       const limit = a.city ? 0 : (areaById.get(aid)?.sustains ?? 0);
-      const l0 = s.log.length; resolveTokenCombat(s, aid, limit); note[aid]!.push(...s.log.slice(l0));
+      const l0 = lastLogSeq(s); resolveTokenCombat(s, aid, limit); note[aid]!.push(...logMsgsSince(s, l0));
     }
   }
   for (const aid of conflictAreas) {
     const a = s.areas[aid]!;
     if (a.city) {
       const attackers = Object.keys(a.tokens).filter((o) => o !== a.city && (a.tokens[o] ?? 0) > 0);
-      if (attackers.length === 1) { const l0 = s.log.length; resolveCityAssault(s, aid, attackers[0]!, rng); note[aid]!.push(...s.log.slice(l0)); }
+      if (attackers.length === 1) { const l0 = lastLogSeq(s); resolveCityAssault(s, aid, attackers[0]!, rng); note[aid]!.push(...logMsgsSince(s, l0)); }
     }
   }
   for (const aid of conflictAreas) combats.push({ area: aid, before: before[aid]!, after: forcesIn(s, aid), modifiers: modifiers[aid]!, note: note[aid]!.join(' ') });
@@ -493,7 +518,7 @@ function resolveTokenCombat(s: GameState, aid: string, limit: number): void {
     if (stop) break;
   }
   const losses = order.map((o) => `${o} -${before[o]! - (a.tokens[o] ?? 0)}`).filter((x) => !x.endsWith('-0'));
-  if (losses.length) s.log.push(`Conflict in ${areaName(aid)}: ${losses.join(', ')}.`);
+  if (losses.length) log(s, 'conflict.losses', null, `Conflict in ${areaName(aid)}: ${losses.join(', ')}.`, { area: aid, losses: Object.fromEntries(order.map((o) => [o, before[o]! - (a.tokens[o] ?? 0)]).filter(([, d]) => (d as number) > 0)) });
 }
 
 /** Token-vs-city assault (§24.3, §24.35, §24.5). The attacker needs 7 tokens to
@@ -512,11 +537,11 @@ function resolveCityAssault(s: GameState, aid: string, attacker: PlayerId, rng: 
   // defended by 6 throwaway tokens; if the attacker brings 7+, it is destroyed
   // and may be pillaged, but there is no card to steal (no victim hand).
   if (defender === PIRATE) {
-    if (atk < 7) { setTokens(s, aid, attacker, 0); returnLostToStock(s, attacker, atk); s.log.push(`${attacker} failed to take the pirate city in ${areaName(aid)}.`); return; }
+    if (atk < 7) { setTokens(s, aid, attacker, 0); returnLostToStock(s, attacker, atk); log(s, 'city.storm.fail', attacker, `${attacker} failed to take the pirate city in ${areaName(aid)}.`, { area: aid, pirate: true, required: 7, lost: atk }); return; }
     delete a.city; delete a.pirateCity;
     setTokens(s, aid, attacker, Math.max(1, atk - 6)); returnLostToStock(s, attacker, Math.min(atk, 6));
     const pa = player(s, attacker); const loot = Math.min(3, pa.stock); pa.stock -= loot; pa.treasury += loot;
-    s.log.push(`${attacker} destroyed the pirate city in ${areaName(aid)}.`);
+    log(s, 'city.storm', attacker, `${attacker} destroyed the pirate city in ${areaName(aid)}.`, { area: aid, pirate: true });
     return;
   }
   const attEng = hasEng(s, attacker), defEng = hasEng(s, defender);
@@ -526,7 +551,7 @@ function resolveCityAssault(s: GameState, aid: string, attacker: PlayerId, rng: 
   if (atk < required) {
     setTokens(s, aid, attacker, 0);
     returnLostToStock(s, attacker, atk);
-    s.log.push(`${attacker} could not storm ${defender}'s city in ${areaName(aid)} (needed ${required}); ${atk} tokens lost.`);
+    log(s, 'city.storm.fail', attacker, `${attacker} could not storm ${defender}'s city in ${areaName(aid)} (needed ${required}); ${atk} tokens lost.`, { area: aid, defender, required, lost: atk });
     return;
   }
   // City eliminated and replaced by defending tokens from stock (§24.32).
@@ -534,7 +559,7 @@ function resolveCityAssault(s: GameState, aid: string, attacker: PlayerId, rng: 
   player(s, defender).citiesAvailable += 1;
   const place = Math.min(replacement, player(s, defender).stock);
   if (place > 0) { a.tokens[defender] = (a.tokens[defender] ?? 0) + place; player(s, defender).stock -= place; }
-  s.log.push(`${attacker} stormed ${defender}'s city in ${areaName(aid)} (defended by ${place}).`);
+  log(s, 'city.storm', attacker, `${attacker} stormed ${defender}'s city in ${areaName(aid)} (defended by ${place}).`, { area: aid, defender, defendedBy: place });
   resolveTokenCombat(s, aid, 0); // resulting fight; a city area holds no tokens
   // Consequences (§24.5) apply only to a direct attack by a player — not when a
   // city is razed by Barbarians or other neutral forces (§24.53).
@@ -558,7 +583,7 @@ function stealCardFromVictim(s: GameState, attacker: PlayerId, victim: PlayerId,
   if (vhand[card]! <= 0) delete vhand[card];
   player(s, attacker).hand[card] = (player(s, attacker).hand[card] ?? 0) + 1;
   if (isCalamityCard(card)) s.calamityTradedFrom[calamityIdOf(card)] = victim;
-  s.log.push(`${attacker} pillages a trade card from ${victim}.`);
+  log(s, 'combat.pillage', attacker, `${attacker} pillages a trade card from ${victim}.`, { victim });
 }
 
 /** Resolve all conflict in one area (§24.3): token attrition first, then a city
@@ -569,7 +594,7 @@ function resolveAreaCombat(s: GameState, aid: string, rng: Rng, combats?: Combat
   const limit = a.city ? 0 : (area?.sustains ?? 0);
   const before = forcesIn(s, aid);
   const modifiers = combatModifiers(s, aid);
-  const logLen = s.log.length;
+  const logSeq = lastLogSeq(s);
   if (Object.keys(a.tokens).filter((o) => (a.tokens[o] ?? 0) > 0).length >= 2) {
     resolveTokenCombat(s, aid, limit);
   }
@@ -577,7 +602,7 @@ function resolveAreaCombat(s: GameState, aid: string, rng: Rng, combats?: Combat
     const attackers = Object.keys(a.tokens).filter((o) => o !== a.city && (a.tokens[o] ?? 0) > 0);
     if (attackers.length === 1) resolveCityAssault(s, aid, attackers[0]!, rng);
   }
-  combats?.push({ area: aid, before, after: forcesIn(s, aid), modifiers, note: s.log.slice(logLen).join(' ') });
+  combats?.push({ area: aid, before, after: forcesIn(s, aid), modifiers, note: logMsgsSince(s, logSeq).join(' ') });
 }
 
 /** The population limit of an area for `owner` (§26.1, §26.11): the printed
@@ -646,7 +671,7 @@ function reduceForSupport(s: GameState, id: PlayerId, lock: number, ctx: Support
     if (cands.length === 0) return false;
     if (cands.length > 1) { s.pendingSupport = { holder: id, candidates: cands, lock, ...ctx }; return true; }
     reduceSpecificCity(s, id, cands[0]!);
-    s.log.push(`${id} lacked city support — reduced the city in ${areaName(cands[0]!)} (§26.32).`);
+    log(s, 'city.reduce', id, `${id} lacked city support — reduced the city in ${areaName(cands[0]!)} (§26.32).`, { area: cands[0]!, reason: 'support' });
   }
   return false;
 }
@@ -695,7 +720,7 @@ function runTradeAcquisition(s: GameState): void {
       }
     }
     // Safe public summary: the count equals city count, which is already visible.
-    if (drawn > 0) s.log.push(`${id} collected ${drawn} trade card${drawn === 1 ? '' : 's'} (1 per city, from stacks 1–${cities}).`);
+    if (drawn > 0) log(s, 'trade.cards.draw', id, `${id} collected ${drawn} trade card${drawn === 1 ? '' : 's'} (1 per city, from stacks 1–${cities}).`, { count: drawn, cities });
   }
   s.rngState = rng.serialize();
 }
@@ -821,7 +846,7 @@ function startPrimary(s: GameState, calId: string, holder: PlayerId, before: Ret
   if (calId === 'slaverevolt') return startSlaveRevolt(s, holder, before, overviewBefore); // §30.42: the victim picks which cities (§26.32)
   if (calId === 'volcano') return startVolcano(s, holder, before, overviewBefore); // §30.21: primary breaks an exact site tie
   if (calId === 'barbarianhordes') return startBarbarians(s, holder, before, overviewBefore, rng); // §30.52: chooser breaks march ties
-  s.log.push(`${holder} suffers ${calamityById.get(calId)?.name ?? calId} (effect not modeled).`);
+  log(s, 'calamity.unmodeled', holder, `${holder} suffers ${calamityById.get(calId)?.name ?? calId} (effect not modeled).`, { calamity: calId });
   return false;
 }
 
@@ -889,7 +914,7 @@ function applyDiscard(s: GameState, holder: PlayerId, cards: string[]): void {
     const stack = commodityById.get(c)?.stack;
     if (stack && s.trade.stacks[stack]) s.trade.stacks[stack]!.unshift(c);
   }
-  s.log.push(`${holder} discards ${cards.length} surplus commodity card${cards.length === 1 ? '' : 's'}, keeping 8 (§31.71).`);
+  log(s, 'hand.discard', holder, `${holder} discards ${cards.length} surplus commodity card${cards.length === 1 ? '' : 's'}, keeping 8 (§31.71).`, { count: cards.length });
 }
 
 /** §31.71: after buying advances, each player may keep at most 8 commodity cards;
@@ -912,7 +937,7 @@ function runAstAdjustment(s: GameState): void {
     if (cities === 0 && p.epoch !== 'stone') {
       // Slide back one space (§33.4).
       p.astSpace = Math.max(0, p.astSpace - 1);
-      s.log.push(`${id} has no cities — AST marker slides back to ${p.astSpace}.`);
+      log(s, 'ast.slideback', id, `${id} has no cities — AST marker slides back to ${p.astSpace}.`, { space: p.astSpace });
       continue;
     }
     const nextSpace = p.astSpace + 1;
@@ -922,10 +947,10 @@ function runAstAdjustment(s: GameState): void {
       p.epoch = nextEpoch.id;
       if (isFinishSpace(id, p.astSpace)) {
         s.finished = true;
-        s.log.push(`${id} reached the finish square at AST space ${p.astSpace}!`);
+        log(s, 'ast.finish', id, `${id} reached the finish square at AST space ${p.astSpace}!`, { space: p.astSpace });
       }
     } else {
-      s.log.push(`${id} is frozen on the AST (epoch entry requirements unmet).`);
+      log(s, 'ast.frozen', id, `${id} is frozen on the AST (epoch entry requirements unmet).`, { space: p.astSpace });
     }
   }
 }
@@ -1108,7 +1133,7 @@ function applyChosenUnits(s: GameState, u: PendingUnitLoss, choice: { tokens: Re
         if (player(s, u.holder).stock > 0) { s.areas[aid]!.tokens[u.holder] = (s.areas[aid]!.tokens[u.holder] ?? 0) + 1; player(s, u.holder).stock -= 1; }
       } else reduceSpecificCity(s, u.holder, aid);
     }
-    s.log.push(`${u.holder} suffers ${calamityById.get(u.calamityId)?.name ?? u.calamityId} (-${u.points} unit point${u.points === 1 ? '' : 's'}).`);
+    log(s, 'calamity.units', u.holder, `${u.holder} suffers ${calamityById.get(u.calamityId)?.name ?? u.calamityId} (-${u.points} unit point${u.points === 1 ? '' : 's'}).`, { calamity: u.calamityId, points: u.points });
     // Flood's secondary loss (§30.512) is directed by the primary — set up as an
     // interactive allocation in the chooseUnits handler, not applied here.
   } else {
@@ -1123,10 +1148,10 @@ function applyChosenUnits(s: GameState, u: PendingUnitLoss, choice: { tokens: Re
       delete s.areas[aid]!.city; player(s, u.holder).citiesAvailable += 1;
       if (player(s, ben).citiesAvailable > 0) { s.areas[aid]!.city = ben; player(s, ben).citiesAvailable -= 1; }
     }
-    s.log.push(`${u.holder} suffers Civil War: a faction worth ${u.points} defects to ${ben}.`);
+    log(s, 'calamity.civilwar.defect', u.holder, `${u.holder} suffers Civil War: a faction worth ${u.points} defects to ${ben}.`, { calamity: 'civilwar', points: u.points, beneficiary: ben });
     if (has(player(s, u.holder), 'military')) {
       removeTokensFromBoard(s, u.holder, 5); removeTokensFromBoard(s, ben, 5);
-      s.log.push(`Military makes the Civil War bloodier — both factions lose 5 (§30.414).`);
+      log(s, 'calamity.civilwar.military', u.holder, `Military makes the Civil War bloodier — both factions lose 5 (§30.414).`, { calamity: 'civilwar', points: 5 });
     }
   }
 }
@@ -1281,15 +1306,15 @@ function enemyCityNear(s: GameState, holder: PlayerId, aid: string): string | un
 
 function resolveEruption(s: GameState, holder: PlayerId, group: readonly string[]): void {
   destroyAllInAreas(s, group);
-  s.log.push(`${holder} suffers a Volcanic Eruption — all units in ${group.map(areaName).join(' & ')} are destroyed (§30.211).`);
+  log(s, 'calamity.volcano', holder, `${holder} suffers a Volcanic Eruption — all units in ${group.map(areaName).join(' & ')} are destroyed (§30.211).`, { calamity: 'volcano', areas: [...group] });
 }
 
 function resolveEarthquake(s: GameState, holder: PlayerId, target: string): void {
   const eng = has(player(s, holder), 'engineering');
-  if (eng) { reduceSpecificCity(s, holder, target); s.log.push(`${holder} suffers an Earthquake — Engineering reduces the city in ${areaName(target)} (§30.213).`); }
-  else { delete s.areas[target]!.city; player(s, holder).citiesAvailable += 1; s.log.push(`${holder} suffers an Earthquake — the city in ${areaName(target)} is destroyed (§30.212).`); }
+  if (eng) { reduceSpecificCity(s, holder, target); log(s, 'calamity.earthquake', holder, `${holder} suffers an Earthquake — Engineering reduces the city in ${areaName(target)} (§30.213).`, { calamity: 'earthquake', area: target, reduced: true }); }
+  else { delete s.areas[target]!.city; player(s, holder).citiesAvailable += 1; log(s, 'calamity.earthquake', holder, `${holder} suffers an Earthquake — the city in ${areaName(target)} is destroyed (§30.212).`, { calamity: 'earthquake', area: target, destroyed: true }); }
   const victimArea = enemyCityNear(s, holder, target);
-  if (victimArea) { const o = s.areas[victimArea]!.city!; reduceSpecificCity(s, o, victimArea); s.log.push(`${o}'s city in ${areaName(victimArea)} is reduced by the Earthquake (§30.212).`); }
+  if (victimArea) { const o = s.areas[victimArea]!.city!; reduceSpecificCity(s, o, victimArea); log(s, 'calamity.earthquake.secondary', o, `${o}'s city in ${areaName(victimArea)} is reduced by the Earthquake (§30.212).`, { calamity: 'earthquake', area: victimArea }); }
 }
 
 /** Volcanic Eruption / Earthquake (§30.21). Resolves the highest-damage site; on
@@ -1307,7 +1332,7 @@ function startVolcano(s: GameState, holder: PlayerId, before: ReturnType<typeof 
   // Earthquake: the destroyed city's damage is the §30.212 secondary (5 if it has
   // an adjacent reducible enemy city, else 0). Greatest damage wins; tie → primary.
   const myCities = Object.keys(s.areas).filter((aid) => s.areas[aid]!.city === holder);
-  if (myCities.length === 0) { s.log.push(`${holder} suffers an Earthquake but holds no city to damage.`); return false; }
+  if (myCities.length === 0) { log(s, 'calamity.earthquake', holder, `${holder} suffers an Earthquake but holds no city to damage.`, { calamity: 'earthquake', noEffect: true }); return false; }
   const dmg = (aid: string) => (enemyCityNear(s, holder, aid) ? 5 : 0);
   const best = Math.max(...myCities.map(dmg));
   const tied = myCities.filter((aid) => dmg(aid) === best);
@@ -1350,7 +1375,7 @@ function floodAllocationSpec(s: GameState, holder: PlayerId, region: string[]): 
 function startSlaveRevolt(s: GameState, holder: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string): boolean {
   const p = player(s, holder);
   const lock = Math.max(0, 15 + (has(p, 'mining') ? 5 : 0) - (has(p, 'enlightenment') ? 5 : 0));
-  s.log.push(`${holder} suffers Slave Revolt: ${lock} tokens withheld from city support (§30.42).`);
+  log(s, 'calamity.slaverevolt', holder, `${holder} suffers Slave Revolt: ${lock} tokens withheld from city support (§30.42).`, { calamity: 'slaverevolt', withheld: lock });
   return reduceForSupport(s, holder, lock, { mode: 'slaverevolt', before, overviewBefore });
 }
 
@@ -1450,14 +1475,14 @@ function annexFaction(s: GameState, victim: PlayerId, beneficiary: PlayerId, set
  *  fizzles (victim richest in stock §30.411, or no second faction §30.413). */
 function startCivilWar(s: GameState, victim: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string): boolean {
   const beneficiary = civilWarBeneficiary(s, victim);
-  if (beneficiary == null) { s.log.push(`${victim}'s Civil War fizzles — it holds the most reserves (§30.411).`); return false; }
+  if (beneficiary == null) { log(s, 'calamity.civilwar.fizzle', victim, `${victim}'s Civil War fizzles — it holds the most reserves (§30.411).`, { calamity: 'civilwar' }); return false; }
   const pp = player(s, victim);
   const philosophy = has(pp, 'philosophy');
   const victimPoints = philosophy ? 0 : 15 + (has(pp, 'music') ? 5 : 0) + (has(pp, 'drama') ? 5 : 0) + (has(pp, 'democracy') ? 10 : 0);
   const beneficiaryPoints = philosophy ? 15 : 20;
   const board = boardUnitPoints(s, victim);
   // §30.413: the first faction can't be the whole nation — there must be a second.
-  if (board <= victimPoints + beneficiaryPoints) { s.log.push(`${victim}'s Civil War: nation too small to leave a second faction — no effect (§30.413).`); return false; }
+  if (board <= victimPoints + beneficiaryPoints) { log(s, 'calamity.civilwar.fizzle', victim, `${victim}'s Civil War: nation too small to leave a second faction — no effect (§30.413).`, { calamity: 'civilwar' }); return false; }
   s.pendingCivilWar = {
     victim, beneficiary, stage: philosophy ? 'beneficiarySelect' : 'victimSelect',
     victimPoints, beneficiaryPoints, philosophy, military: has(pp, 'military'),
@@ -1506,14 +1531,14 @@ function razeCityToPirate(s: GameState, aid: string): void {
   const a = s.areas[aid]; if (!a || !a.city || !isPlayer(s, a.city)) return;
   player(s, a.city).citiesAvailable += 1;
   delete a.city; a.city = PIRATE; a.pirateCity = true;
-  s.log.push(`The city in ${areaName(aid)} is taken by pirates (§30.91).`);
+  log(s, 'calamity.piracy.raze', null, `The city in ${areaName(aid)} is taken by pirates (§30.91).`, { calamity: 'piracy', area: aid });
 }
 
 /** §30.22 Treachery: the trader (or the victim, if drawn) picks one of the
  *  victim's cities. */
 function startTreachery(s: GameState, victim: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string): boolean {
   const cities = citiesOf(s, victim);
-  if (!cities.length) { s.log.push(`${victim} suffers Treachery but holds no city.`); return false; }
+  if (!cities.length) { log(s, 'calamity.treachery', victim, `${victim} suffers Treachery but holds no city.`, { calamity: 'treachery', noEffect: true }); return false; }
   const t = s.calamityTradedFrom['treachery'];
   const trader = t && t !== victim && isPlayer(s, t) ? t : undefined;
   s.pendingPick = { chooser: trader ?? victim, stage: 'treachery', victim, trader, count: 1, candidates: cities, before, overviewBefore };
@@ -1523,7 +1548,7 @@ function startTreachery(s: GameState, victim: PlayerId, before: ReturnType<typeo
 /** §30.514 Flood with no flood-plain units: the primary picks a coastal city. */
 function startFloodCity(s: GameState, victim: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string): boolean {
   const cities = coastalCitiesOf(s, victim);
-  if (!cities.length) { s.log.push(`${victim} is unaffected by Flood (no units on a flood plain).`); return false; }
+  if (!cities.length) { log(s, 'calamity.flood', victim, `${victim} is unaffected by Flood (no units on a flood plain).`, { calamity: 'flood', noEffect: true }); return false; }
   s.pendingPick = { chooser: victim, stage: 'floodCity', victim, count: 1, candidates: cities, before, overviewBefore };
   return true;
 }
@@ -1605,7 +1630,7 @@ function applyPick(s: GameState, pk: PendingPick, areas: string[]): void {
       if (s.areas[aid]?.city !== victim) continue;
       delete s.areas[aid]!.city; player(s, victim).citiesAvailable += 1;
       s.areas[aid]!.city = pk.chooser; player(s, pk.chooser).citiesAvailable -= 1; markCityAcquired(s, pk.chooser, aid);
-      s.log.push(`The revolting city in ${areaName(aid)} is taken over by ${pk.chooser} (§19.32).`);
+      log(s, 'city.takeover', pk.chooser, `The revolting city in ${areaName(aid)} is taken over by ${pk.chooser} (§19.32).`, { area: aid, from: victim });
     }
     if (s.pendingRevolts) s.pendingRevolts[victim] = Math.max(0, (s.pendingRevolts[victim] ?? 0) - areas.length);
     s.pendingPick = undefined;
@@ -1619,21 +1644,21 @@ function applyPick(s: GameState, pk: PendingPick, areas: string[]): void {
     delete a.city; player(s, victim).citiesAvailable += 1;
     if (trader && player(s, trader).citiesAvailable > 0) {
       a.city = trader; player(s, trader).citiesAvailable -= 1; markCityAcquired(s, trader, aid);
-      s.log.push(`${victim} suffers Treachery: the city in ${areaName(aid)} defects to ${trader} (§30.221).`);
+      log(s, 'calamity.treachery', victim, `${victim} suffers Treachery: the city in ${areaName(aid)} defects to ${trader} (§30.221).`, { calamity: 'treachery', area: aid, defectsTo: trader });
     } else if (trader) {
-      s.log.push(`${victim} suffers Treachery: the city in ${areaName(aid)} is destroyed — ${trader} had no city to install (§30.221).`);
+      log(s, 'calamity.treachery', victim, `${victim} suffers Treachery: the city in ${areaName(aid)} is destroyed — ${trader} had no city to install (§30.221).`, { calamity: 'treachery', area: aid, destroyed: true });
     } else {
       const place = Math.min(areaLimitFor(s, aid, victim), player(s, victim).stock);
       if (place > 0) { a.tokens[victim] = (a.tokens[victim] ?? 0) + place; player(s, victim).stock -= place; }
-      s.log.push(`${victim} suffers Treachery: the city in ${areaName(aid)} is reduced (§30.222).`);
+      log(s, 'calamity.treachery', victim, `${victim} suffers Treachery: the city in ${areaName(aid)} is reduced (§30.222).`, { calamity: 'treachery', area: aid, reduced: true });
     }
     finalizePick(s, 'treachery', victim, before, overviewBefore);
     return;
   }
   if (pk.stage === 'floodCity') {
     const aid = areas[0]!;
-    if (has(player(s, victim), 'engineering')) { reduceSpecificCity(s, victim, aid); s.log.push(`${victim}'s Flood reduces the coastal city in ${areaName(aid)} (Engineering, §30.515).`); }
-    else { delete s.areas[aid]!.city; player(s, victim).citiesAvailable += 1; s.log.push(`${victim} loses the coastal city in ${areaName(aid)} to Flood (§30.514).`); }
+    if (has(player(s, victim), 'engineering')) { reduceSpecificCity(s, victim, aid); log(s, 'calamity.flood', victim, `${victim}'s Flood reduces the coastal city in ${areaName(aid)} (Engineering, §30.515).`, { calamity: 'flood', area: aid, reduced: true }); }
+    else { delete s.areas[aid]!.city; player(s, victim).citiesAvailable += 1; log(s, 'calamity.flood', victim, `${victim} loses the coastal city in ${areaName(aid)} to Flood (§30.514).`, { calamity: 'flood', area: aid, destroyed: true }); }
     finalizePick(s, 'flood', victim, before, overviewBefore);
     return;
   }
@@ -1645,7 +1670,7 @@ function applyPick(s: GameState, pk: PendingPick, areas: string[]): void {
     s.pendingPick = undefined;
     if (m.here === null) {
       (s.areas[chosen] ??= { tokens: {} }).tokens[BARBARIAN] = (s.areas[chosen]!.tokens[BARBARIAN] ?? 0) + 15;
-      s.log.push(`Barbarian Hordes (15) descend on ${areaName(chosen)}.`);
+      log(s, 'calamity.barbarians.land', null, `Barbarian Hordes (15) descend on ${areaName(chosen)}.`, { calamity: 'barbarianhordes', area: chosen, count: 15 });
       resolveAreaCombat(s, chosen, rng);
     } else {
       const barbs = s.areas[m.here]!.tokens[BARBARIAN] ?? 0;
@@ -1656,7 +1681,7 @@ function applyPick(s: GameState, pk: PendingPick, areas: string[]): void {
     const paused = marchBarbarians(s, victim, chosen, vis, rng, before, overviewBefore);
     s.rngState = rng.serialize();
     if (paused) return; // another tie — pendingPick already set
-    s.log.push(`${victim} is ravaged by Barbarian Hordes.`);
+    log(s, 'calamity.barbarians', victim, `${victim} is ravaged by Barbarian Hordes.`, { calamity: 'barbarianhordes' });
     finalizePick(s, 'barbarianhordes', victim, before, overviewBefore);
     return;
   }
@@ -1708,7 +1733,7 @@ function barbarianChooser(s: GameState, primary: PlayerId): PlayerId {
 function marchBarbarianStep(s: GameState, here: string, next: string, surplus: number, limit: number, rng: Rng): void {
   s.areas[here]!.tokens[BARBARIAN] = limit;
   (s.areas[next] ??= { tokens: {} }).tokens[BARBARIAN] = (s.areas[next]!.tokens[BARBARIAN] ?? 0) + surplus;
-  s.log.push(`Barbarians march from ${areaName(here)} to ${areaName(next)} (${surplus}).`);
+  log(s, 'calamity.barbarians.march', null, `Barbarians march from ${areaName(here)} to ${areaName(next)} (${surplus}).`, { calamity: 'barbarianhordes', from: here, to: next, count: surplus });
   resolveAreaCombat(s, next, rng);
 }
 
@@ -1743,9 +1768,9 @@ function marchBarbarians(s: GameState, primary: PlayerId, start: string, visited
  *  damage (§30.5211) and march them (§30.523), pausing for the §30.5251 chooser on
  *  any exact tie. Returns true if it paused. */
 function startBarbarians(s: GameState, primary: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string, rng: Rng): boolean {
-  if (primary === 'crete') { s.log.push(`Crete is immune to Barbarian Hordes (§30.527).`); return false; }
+  if (primary === 'crete') { log(s, 'calamity.barbarians', primary, `Crete is immune to Barbarian Hordes (§30.527).`, { calamity: 'barbarianhordes', immune: true }); return false; }
   const startAreas = (civById.get(primary)?.startAreas ?? []).filter((aid) => areaById.has(aid) && inPlay(s, aid));
-  if (startAreas.length === 0) { s.log.push(`${primary} has no start area for Barbarians to land.`); return false; }
+  if (startAreas.length === 0) { log(s, 'calamity.barbarians', primary, `${primary} has no start area for Barbarians to land.`, { calamity: 'barbarianhordes', noEffect: true }); return false; }
   const occupied = startAreas.filter((aid) => damageTo(s, aid, primary) > 0);
   const pool = occupied.length ? occupied : startAreas;
   const best = Math.max(...pool.map((aid) => damageTo(s, aid, primary)));
@@ -1756,10 +1781,10 @@ function startBarbarians(s: GameState, primary: PlayerId, before: ReturnType<typ
   }
   const landing = tied[0]!;
   (s.areas[landing] ??= { tokens: {} }).tokens[BARBARIAN] = (s.areas[landing]!.tokens[BARBARIAN] ?? 0) + 15;
-  s.log.push(`Barbarian Hordes (15) descend on ${areaName(landing)}.`);
+  log(s, 'calamity.barbarians.land', null, `Barbarian Hordes (15) descend on ${areaName(landing)}.`, { calamity: 'barbarianhordes', area: landing, count: 15 });
   resolveAreaCombat(s, landing, rng);
   if (marchBarbarians(s, primary, landing, new Set([landing]), rng, before, overviewBefore)) return true;
-  s.log.push(`${primary} is ravaged by Barbarian Hordes.`);
+  log(s, 'calamity.barbarians', primary, `${primary} is ravaged by Barbarian Hordes.`, { calamity: 'barbarianhordes' });
   return false;
 }
 
@@ -1845,7 +1870,7 @@ function applyConvert(s: GameState, holder: PlayerId, aid: string): void {
   if (tokens > 0) { setTokens(s, aid, holder, tokens); player(s, holder).stock -= tokens; }
   if (hadCity) { a.city = holder; player(s, holder).citiesAvailable -= 1; markCityAcquired(s, holder, aid); }
   player(s, holder).convertedThisTurn = true;
-  s.log.push(`${holder} converts ${areaName(aid)} from ${victim} by Monotheism (§32.94)${hadCity ? ' (city)' : ''}${tokens > 0 ? ` (${tokens} tokens)` : ''}.`);
+  log(s, 'monotheism.convert', holder, `${holder} converts ${areaName(aid)} from ${victim} by Monotheism (§32.94)${hadCity ? ' (city)' : ''}${tokens > 0 ? ` (${tokens} tokens)` : ''}.`, { area: aid, victim, city: hadCity, tokens });
 }
 
 /** §29/§32.941: after calamities resolve, only Monotheism holders who can still
@@ -2088,7 +2113,7 @@ function applyBuildCity(s: GameState, actor: PlayerId, area: string, useTreasury
   a.city = actor;
   p.citiesAvailable -= 1;
   markCityAcquired(s, actor, area); // §26.32: newly built — reduced first if unsupported
-  s.log.push(`${actor} built a city in ${areaName(area)}${treasuryUsed > 0 ? ` (Architecture: ${treasuryUsed} from treasury)` : ''}.`);
+  log(s, 'city.build', actor, `${actor} built a city in ${areaName(area)}${treasuryUsed > 0 ? ` (Architecture: ${treasuryUsed} from treasury)` : ''}.`, { area, treasuryUsed });
 }
 
 function applyBuyAdvance(s: GameState, actor: PlayerId, advanceId: string, spendCommodities: Record<string, number> = {}, spendTreasury = 0): void {
@@ -2135,7 +2160,7 @@ function applyBuyAdvance(s: GameState, actor: PlayerId, advanceId: string, spend
   p.stock += spendTreasury;
   p.advances.push(advanceId);
   (p.advancesThisTurn ??= []).push(advanceId); // §31.53: no credit from it until next turn
-  s.log.push(`${actor} acquired ${adv.name} (paid ${paid} for ${adv.cost}).`);
+  log(s, 'advance.buy', actor, `${actor} acquired ${adv.name} (paid ${paid} for ${adv.cost}).`, { advance: advanceId, cost: adv.cost, paid });
 }
 
 // ---- Trade action handlers ----------------------------------------------
@@ -2165,7 +2190,7 @@ function applyPostOffer(s: GameState, actor: PlayerId, a: { give: { actual: Reco
   n.offers.push({ id: n.nextOfferId, from: actor, give: a.give, wants, responses: [] });
   n.actions = (n.actions ?? 0) + 1;
   n.passStreak = 0;
-  s.log.push(`${actor} posts a trade offer (gives ${bundleSize(a.give.actual)}, wants ${wants.map(commodityName).join(' or ')}).`);
+  log(s, 'trade.offer', actor, `${actor} posts a trade offer (gives ${bundleSize(a.give.actual)}, wants ${wants.map(commodityName).join(' or ')}).`, { gives: bundleSize(a.give.actual), wants });
 }
 
 /** Attach or replace the actor's counter-give to another player's open offer. */
@@ -2179,7 +2204,7 @@ function applyRespondOffer(s: GameState, actor: PlayerId, a: { offerId: number; 
   o.responses.push({ from: actor, give: a.give });
   s.negotiation.actions = (s.negotiation.actions ?? 0) + 1;
   s.negotiation.passStreak = 0;
-  s.log.push(`${actor} responds to ${o.from}'s offer.`);
+  log(s, 'trade.respond', actor, `${actor} responds to ${o.from}'s offer.`, { to: o.from, offerId: o.id });
 }
 
 /** The offer's owner accepts one responder's counter — executes the §28.2 deal. */
@@ -2194,13 +2219,13 @@ function applyAcceptResponse(s: GameState, actor: PlayerId, a: { offerId: number
   if (!isSubMultiset(o.give.actual, player(s, actor).hand)) {
     s.negotiation.offers = s.negotiation.offers.filter((x) => x.id !== o.id);
     s.negotiation.actions = (s.negotiation.actions ?? 0) + 1;
-    s.log.push(`${actor}'s trade offer expired (cards no longer held).`);
+    log(s, 'trade.offer.expire', actor, `${actor}'s trade offer expired (cards no longer held).`);
     return;
   }
   if (!isSubMultiset(r.give.actual, player(s, r.from).hand)) {
     o.responses = o.responses.filter((x) => x.from !== r.from);
     s.negotiation.actions = (s.negotiation.actions ?? 0) + 1;
-    s.log.push(`${r.from}'s trade response expired (cards no longer held).`);
+    log(s, 'trade.response.expire', r.from, `${r.from}'s trade response expired (cards no longer held).`);
     return;
   }
   transferCards(s, actor, r.from, o.give.actual);
@@ -2211,7 +2236,7 @@ function applyAcceptResponse(s: GameState, actor: PlayerId, a: { offerId: number
   s.negotiation.actions = (s.negotiation.actions ?? 0) + 1;
   s.negotiation.passStreak = 0;
   // §28 keeps the actual cards/bluffs private to the two traders — log only the counts.
-  s.log.push(`${actor} and ${r.from} completed a trade (${bundleSize(o.give.actual)}↔${bundleSize(r.give.actual)} cards).`);
+  log(s, 'trade.complete', actor, `${actor} and ${r.from} completed a trade (${bundleSize(o.give.actual)}↔${bundleSize(r.give.actual)} cards).`, { with: r.from, gave: bundleSize(o.give.actual), got: bundleSize(r.give.actual) });
 }
 
 function applyWithdrawOffer(s: GameState, actor: PlayerId): void {
@@ -2234,13 +2259,28 @@ function applyBuyTradeCard(s: GameState, actor: PlayerId, count: number): void {
   }
   p.treasury -= cost;
   p.stock += cost; // spent tokens return to stock (§27.51)
-  s.log.push(`${actor} bought ${count} card(s) from the ninth stack for ${cost} treasury.`);
+  log(s, 'trade.buyNinth', actor, `${actor} bought ${count} card(s) from the ninth stack for ${cost} treasury.`, { count, cost });
 }
 
 // ---- The adapter ---------------------------------------------------------
 
 export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
-  schemaVersion = 1;
+  // v2: log migrated from prose string[] to structured GameLogEntry[] (log-format v2).
+  schemaVersion = 2;
+
+  /** Upgrade snapshots saved by earlier schema versions. v1 → v2: wrap the old
+   *  prose log lines as `kind: 'legacy'` entries so live 100+-turn games keep
+   *  their history rendering. */
+  migrate(rawState: unknown, fromVersion: number): GameState {
+    const s = rawState as GameState;
+    const raw = s.log as unknown[];
+    if (fromVersion < 2 && Array.isArray(raw) && raw.some((l) => typeof l === 'string')) {
+      const lines = raw.filter((l): l is string => typeof l === 'string');
+      s.log = upgradeProseLog<PlayerId>(lines, s.turn).slice(-LOG_CAP);
+    }
+    s.schemaVersion = 2;
+    return s as GameState;
+  }
 
   currentActor(state: GameState): PlayerId | null {
     if (state.finished && state.phase === 'taxation') return null;
@@ -2362,7 +2402,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         player(s, actor).shipsAvailable += 1;
         // §22.3: a scrapped ship owes no maintenance.
         if (s.shipMaintOwed) s.shipMaintOwed[actor] = Math.min(s.shipMaintOwed[actor] ?? 0, shipCount(s, actor));
-        s.log.push(`${actor} scraps a ship in ${areaName(action.area)} (§22.3).`);
+        log(s, 'ship.scrap', actor, `${actor} scraps a ship in ${areaName(action.area)} (§22.3).`, { area: action.area, count: 1, reason: 'voluntary' });
         break; // stays acting; may build/scrap more or pass
       }
       case 'buildCity':
@@ -2399,7 +2439,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
           if (areas.length !== 1) throw new Error('reduce exactly one city for support (§26.32)');
           if (!sup.candidates.includes(areas[0]!)) throw new Error('newly-built cities must be reduced first (§26.32)');
           reduceSpecificCity(s, actor, areas[0]!);
-          s.log.push(`${actor} reduces the city in ${areaName(areas[0]!)} for support (§26.32).`);
+          log(s, 'city.reduce', actor, `${actor} reduces the city in ${areaName(areas[0]!)} for support (§26.32).`, { area: areas[0]!, reason: 'support' });
           const { holder, lock, mode, before, overviewBefore } = sup;
           s.pendingSupport = undefined;
           if (mode === 'slaverevolt') {
@@ -2419,7 +2459,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         if (areas.length !== c.count) throw new Error(`choose exactly ${c.count} cit${c.count === 1 ? 'y' : 'ies'} (§30.321)`);
         if (areas.some((aid) => s.areas[aid]?.city !== actor)) throw new Error('you may only reduce your own cities');
         reduceChosenCities(s, actor, areas);
-        s.log.push(`${actor} reduces ${areas.map(areaName).join(', ')} (${calamityById.get(c.calamityId)?.name ?? c.calamityId}).`);
+        log(s, 'city.reduce', actor, `${actor} reduces ${areas.map(areaName).join(', ')} (${calamityById.get(c.calamityId)?.name ?? c.calamityId}).`, { areas, calamity: c.calamityId });
         s.pendingCityChoice = undefined;
         // A secondary victim (Iconoclasm §30.818) just chose — advance the queue.
         if (s.pendingSecondary && s.pendingSecondary.queue[0]?.victim === actor) {
@@ -2443,7 +2483,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
           const commit = Math.min(action.grainCommit!, Math.max(0, grainCards(pp) - (pp.grainLockedThisTurn ?? 0)), Math.ceil(u.points / 4));
           if (commit > 0) {
             pp.grainLockedThisTurn = (pp.grainLockedThisTurn ?? 0) + commit;
-            s.log.push(`${actor} commits ${commit} Grain card${commit === 1 ? '' : 's'} against Famine (−${4 * commit}, locked until next turn §30.312).`);
+            log(s, 'calamity.famine.grain', actor, `${actor} commits ${commit} Grain card${commit === 1 ? '' : 's'} against Famine (−${4 * commit}, locked until next turn §30.312).`, { calamity: 'famine', grain: commit, reduction: 4 * commit });
             eff = { ...u, points: Math.max(0, u.points - 4 * commit) };
           }
         }
@@ -2478,16 +2518,16 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         if (cw.stage === 'victimSelect') {
           cw.faction1 = sel;
           cw.stage = 'beneficiarySelect';
-          s.log.push(`${cw.victim} chooses ${unitSetPoints(sel)} unit points for the first Civil War faction (§30.4121).`);
+          log(s, 'calamity.civilwar.select', cw.victim, `${cw.victim} chooses ${unitSetPoints(sel)} unit points for the first Civil War faction (§30.4121).`, { calamity: 'civilwar', points: unitSetPoints(sel), by: 'victim' });
         } else {
           for (const [aid, n] of Object.entries(sel.tokens)) cw.faction1.tokens[aid] = (cw.faction1.tokens[aid] ?? 0) + n;
           cw.faction1.cities.push(...sel.cities);
           cw.faction2 = subtractSet(unitInventory(s, cw.victim), cw.faction1);
-          s.log.push(`${cw.beneficiary} adds ${unitSetPoints(sel)} of ${cw.victim}'s units to the first faction (§30.4123).`);
+          log(s, 'calamity.civilwar.select', cw.beneficiary, `${cw.beneficiary} adds ${unitSetPoints(sel)} of ${cw.victim}'s units to the first faction (§30.4123).`, { calamity: 'civilwar', points: unitSetPoints(sel), by: 'beneficiary', victim: cw.victim });
           if (cw.military) {
             militaryReduceFaction(s, cw.victim, cw.faction1, 5);
             militaryReduceFaction(s, cw.victim, cw.faction2, 5);
-            s.log.push(`Military makes ${cw.victim}'s Civil War bloodier — 5 unit points removed from each faction (§30.414).`);
+            log(s, 'calamity.civilwar.military', cw.victim, `Military makes ${cw.victim}'s Civil War bloodier — 5 unit points removed from each faction (§30.414).`, { calamity: 'civilwar', points: 5 });
           }
           cw.stage = 'victimKeep';
         }
@@ -2502,7 +2542,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         const annexed = action.faction === 1 ? cw.faction2! : cw.faction1;
         const kept = action.faction === 1 ? cw.faction1 : cw.faction2!;
         annexFaction(s, cw.victim, cw.beneficiary, annexed);
-        s.log.push(`${cw.victim} keeps the ${action.faction === 1 ? 'first' : 'second'} faction (${unitSetPoints(kept)} pts); ${cw.beneficiary} annexes the other (${unitSetPoints(annexed)} pts) (§30.415).`);
+        log(s, 'calamity.civilwar.keep', cw.victim, `${cw.victim} keeps the ${action.faction === 1 ? 'first' : 'second'} faction (${unitSetPoints(kept)} pts); ${cw.beneficiary} annexes the other (${unitSetPoints(annexed)} pts) (§30.415).`, { calamity: 'civilwar', kept: unitSetPoints(kept), annexed: unitSetPoints(annexed), beneficiary: cw.beneficiary });
         const { victim, before, overviewBefore } = cw;
         s.pendingCivilWar = undefined;
         resumeAfterChoice(s, 'civilwar', victim, before, overviewBefore);

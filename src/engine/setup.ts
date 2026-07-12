@@ -119,7 +119,7 @@ export function createInitialState(opts: NewGameOptions): GameState {
   const trade = buildTradeStacks(rng, seating.length);
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     turn: 1,
     phase: 'taxation',
     board,
@@ -135,7 +135,11 @@ export function createInitialState(opts: NewGameOptions): GameState {
     negotiation: { turnPointer: 0, passStreak: 0, actions: 0, nextOfferId: 0, done: [], offers: [], completed: [] },
     calamityTradedFrom: {},
     rngState: rng.serialize(),
-    log: [`Game started with ${seating.length} players (seed ${seed}).`],
+    log: [{
+      seq: 0, turn: 1, phase: 'taxation', side: null, kind: 'game.start',
+      msg: `Game started with ${seating.length} players (seed ${seed}).`,
+      payload: { players: seating.length, seed },
+    }],
     ...(opts.maxTurns ? { maxTurns: opts.maxTurns } : {}),
   };
 }

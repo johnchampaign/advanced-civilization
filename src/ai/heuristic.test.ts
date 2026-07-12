@@ -60,7 +60,7 @@ describe('AI trade negotiation (open-offer board)', () => {
     // so egypt is immune as a secondary victim (§29.61) and isn't the primary one.
     expect(s.players['egypt']!.hand['calamity:epidemic']).toBeUndefined();
     expect((s.negotiation.completed ?? []).length).toBeGreaterThan(0);
-    expect(s.log.some((l) => l.includes('egypt') && l.includes('suffers Epidemic'))).toBe(false);
+    expect(s.log.some((l) => (l.msg ?? '').includes('egypt') && (l.msg ?? '').includes('suffers Epidemic'))).toBe(false);
   });
 
   it('passes rather than respond to an offer it cannot benefit from', async () => {

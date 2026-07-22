@@ -5,7 +5,7 @@ import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent } from '..
 import { advanceById, advances as ALL_ADVANCES, adjacency, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, playAreas, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
 import { availableNations, boardPresets, unavailableReason, type BoardPreset } from '../engine/boards.js';
-import { handValue, creditTowards, commoditySetValue, advancesFaceValue, outOfPlay } from '../engine/helpers.js';
+import { handValue, creditTowards, commoditySetValue, advancesFaceValue, outOfPlay, citySiteIn } from '../engine/helpers.js';
 import { submitStandaloneReport, fetchMyReports, resolutionNote, type MyReport } from '../client/api.js';
 import { REPORT_CATEGORY } from '../report-meta.js';
 import { anchors, BOARD_OFFSET, BOARD_VIEWBOX, MAP_PANELS, ALL_SHAPES, COAST_SUBS } from './anchors.js';
@@ -208,13 +208,21 @@ export default function App() {
     return () => clearTimeout(t);
   }, [state, actor, result, seats]);
 
+  // Why the last action bounced. A silently-swallowed rejection reads as a dead
+  // button — a player whose ship batch was refused just saw "Finish moving" do
+  // nothing at all (report ce1713db). Show the reason instead.
+  const [rejected, setRejected] = useState<string | null>(null);
   const apply = useCallback((a: Action) => {
     if (!actor) return;
     // Use tryApplyAction so a now-illegal action (e.g. accepting an offer the AI
-    // just consumed) is ignored rather than throwing and blanking the screen.
-    setState((s) => { const r = adapter.tryApplyAction(s, a, actor); if (!r.ok) { console.warn('action rejected:', r.reason, a); return s; } return r.state; });
+    // just consumed) is reported rather than throwing and blanking the screen.
+    const r = adapter.tryApplyAction(state, a, actor);
+    if (!r.ok) { console.warn('action rejected:', r.reason, a); setRejected(r.reason ?? 'That move is not allowed.'); return; }
+    setRejected(null);
+    setState(r.state);
     setSelectedArea(null);
-  }, [actor]);
+  }, [actor, state]);
+  useEffect(() => { setRejected(null); }, [state.phase, state.turn, actor]);
 
   const planner = useMovementPlanner(state, actor, legal, apply);
   const inMovement = !!actor && seats[actor] === 'human' && state.phase === 'movement';
@@ -309,6 +317,12 @@ export default function App() {
               <div className="civ-msg" style={{ padding: '6px 10px', textAlign: 'center' }}>
                 {actor ? <><b style={{ color: civById.get(actor)?.color }}>{civById.get(actor)?.name}</b> — {messageFor(state.phase)}</> : 'Resolving…'}
               </div>
+              {rejected && (
+                <div className="civ-msg" style={{ padding: '6px 10px', background: 'rgba(120,42,42,0.5)', border: '1px solid #c66', display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ flex: 1 }}>⚠ That didn’t go through: {rejected}</span>
+                  <button className="civ-btn" style={{ padding: '0 8px' }} onClick={() => setRejected(null)}>✕</button>
+                </div>
+              )}
               {actor && seats[actor] === 'human'
                 ? (inMovement
                     ? <MovementControls planner={planner} />
@@ -399,16 +413,22 @@ const MAP_BTN: CSSProperties = { cursor: 'pointer', fontSize: 12, padding: '4px 
 /** Board magnification steps (report de3c488e). 1 = fit the window width. */
 const ZOOM_LEVELS = [1, 1.5, 2, 3];
 
-/** Pointy-top regular hexagon centred at (cx,cy). Population tokens use this so
- *  they read distinctly from the square city markers (report 77d720f5). */
-function hexPoints(cx: number, cy: number, r: number): string {
+/** Regular n-gon centred at (cx,cy), `rot` degrees clockwise from "flat top".
+ *  Population tokens are square, like the wooden cubes in the box; cities are a
+ *  flat-topped octagon, reading as a ring of walls rather than another cube
+ *  (reports 77d720f5, 998a60fc — markers must stay distinguishable at a glance). */
+function polyPoints(cx: number, cy: number, r: number, sides: number, rot = 0): string {
   let pts = '';
-  for (let k = 0; k < 6; k++) {
-    const ang = (Math.PI / 180) * (60 * k - 90);
+  for (let k = 0; k < sides; k++) {
+    const ang = (Math.PI / 180) * ((360 / sides) * k - 90 + rot);
     pts += `${(cx + r * Math.cos(ang)).toFixed(1)},${(cy + r * Math.sin(ang)).toFixed(1)} `;
   }
   return pts.trim();
 }
+/** Population token: a square, as on the original board. */
+const tokenPoints = (cx: number, cy: number, r: number) => polyPoints(cx, cy, r * 1.32, 4, 45);
+/** City: a flat-topped octagon (a walled footprint, not a square). */
+const cityPoints = (cx: number, cy: number, r: number) => polyPoints(cx, cy, r * 1.3, 8, 22.5);
 
 export function Board({ state, selected, onSelect, highlight, zoomTo, origin, moved, art }: {
   state: GameState; selected: string | null; onSelect: (a: string | null) => void; highlight: Set<string>;
@@ -552,13 +572,13 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
                 : <circle cx={an.x} cy={an.y} r={an.r + 6} fill="transparent" />}
               {(isHi || isSel || isOrigin) && sh && <polygon points={sh.points} fill="none" stroke={isOrigin ? '#ffd23f' : isSel ? '#fff' : '#5cf'} strokeWidth={isOrigin ? 4 : 3} strokeLinejoin="round" pointerEvents="none" />}
               {isMoved && sh && <polygon points={sh.points} fill="none" stroke="#ffd23f" strokeWidth={2.5} strokeDasharray="8 5" strokeLinejoin="round" pointerEvents="none" />}
-              {a.city && <rect x={an.x - an.r} y={an.y - an.r} width={an.r * 2} height={an.r * 2} fill={cityColor!} stroke="#000" strokeWidth={2} />}
+              {a.city && <polygon points={cityPoints(an.x, an.y, an.r)} fill={cityColor!} stroke="#000" strokeWidth={2} strokeLinejoin="round" />}
               {isPirate && <text x={an.x} y={an.y + an.r * 0.45} textAnchor="middle" fontSize={an.r * 1.3} fill="#fff">☠</text>}
               {owners.map(([owner, n], i) => {
                 const barb = owner === BARB;
                 return (
                   <g key={owner}>
-                    <polygon points={hexPoints(an.x + i * 6, an.y, an.r * 1.15)} fill={barb ? '#1a1a1a' : (civById.get(owner)?.color ?? '#888')} stroke={barb ? '#c33' : '#000'} strokeWidth={2} strokeLinejoin="round" opacity={0.95} />
+                    <polygon points={tokenPoints(an.x + i * 6, an.y, an.r)} fill={barb ? '#1a1a1a' : (civById.get(owner)?.color ?? '#888')} stroke={barb ? '#c33' : '#000'} strokeWidth={2} strokeLinejoin="round" opacity={0.95} />
                     <text x={an.x + i * 6} y={an.y + an.r * 0.4} textAnchor="middle" fontSize={an.r * 1.1} fontWeight="bold" fill={barb ? '#f55' : '#fff'}>{barb ? '⚔' : n}</text>
                   </g>
                 );
@@ -913,12 +933,15 @@ function AdvanceChip({ id, owned }: { id: string; owned: boolean }) {
   const [hover, setHover] = useState(false);
   return (
     <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      // While hovered, lift this cell above its neighbours. Un-bought cells use
-      // opacity < 1, which creates a stacking context that would otherwise trap
-      // the tooltip's z-index inside the cell and let a solid (bought) neighbour
-      // paint over it (report bf94bb5e).
-      style={{ position: 'relative', zIndex: hover ? 10 : undefined, padding: 6, borderRadius: 4, border: '1px solid #555', borderLeft: `5px solid ${GROUP_COLOR[a.groups[0]!] ?? '#999'}`, background: owned ? '#2e6b3a' : '#222', opacity: owned ? 1 : 0.6, cursor: 'help' }}>
-      <b>{a.name}</b><br /><small><GroupDots groups={a.groups} />{a.groups.join('/')} · {a.cost}</small>
+      // While hovered, lift this cell above its neighbours (report bf94bb5e).
+      // The "not yet bought" dimming lives on the label wrapper below, NOT on
+      // this cell: an opacity < 1 here also faded the hover panel (which is a
+      // child) and made it hard to read (report a2c57f6d) — and it created a
+      // stacking context that trapped the panel's z-index inside the cell.
+      style={{ position: 'relative', zIndex: hover ? 10 : undefined, padding: 6, borderRadius: 4, border: '1px solid #555', borderLeft: `5px solid ${GROUP_COLOR[a.groups[0]!] ?? '#999'}`, background: owned ? '#2e6b3a' : '#222', cursor: 'help' }}>
+      <div style={{ opacity: owned ? 1 : 0.6 }}>
+        <b>{a.name}</b><br /><small><GroupDots groups={a.groups} />{a.groups.join('/')} · {a.cost}</small>
+      </div>
       {hover && <AdvanceTip id={id} />}
     </div>
   );
@@ -1002,6 +1025,9 @@ export interface MovementPlanner {
   destinations: { to: string; byShip?: boolean }[];
   /** When a coastal origin offers no embarkation, a plain-language reason why. */
   embarkHint: string | null;
+  /** Areas where, as planned, tokens would be thrown away as surplus population
+   *  at the end of the turn (§26.1) — shown as a confirm step before finishing. */
+  surplusWarnings: { area: string; name: string; tokens: number; keep: number; lost: number; canBuild: boolean }[];
   onBoardClick: (area: string | null) => void;
   setCount: (n: number) => void;
   removeQueued: (i: number) => void;
@@ -1051,16 +1077,31 @@ export function useMovementPlanner(
 
   const queuedFrom = useCallback((area: string) => queued.filter((q) => q.from === area).reduce((s, q) => s + q.count, 0), [queued]);
   const available = useCallback((area: string) => (state.areas?.[area]?.tokens[actor ?? ''] ?? 0) - queuedFrom(area), [state, actor, queuedFrom]);
+  // Ships are consumed by planning too: each planned sailing takes one ship out
+  // of the origin. Without this the planner would let a single ship be sent to
+  // several destinations at once — the preview then showed a ship arriving in
+  // every one of them, and the engine rejected the whole batch, so "Finish
+  // moving" appeared to do nothing (report ce1713db).
+  const shipsLeft = useCallback((area: string) => (state.areas?.[area]?.ships?.[actor ?? ''] ?? 0)
+    - queued.filter((q) => q.byShip && q.from === area).length, [state, actor, queued]);
 
   const origins = useMemo(() => {
     const set = new Set<string>();
     // An area is a move origin if it has tokens to move, OR a ship that can relocate
     // (even with no tokens to carry) — §23.5.
-    for (const [from, opts] of moveOpts) if (available(from) > 0 || [...opts.values()].some((o) => o.byShip)) set.add(from);
+    for (const [from, opts] of moveOpts) if (available(from) > 0 || (shipsLeft(from) > 0 && [...opts.values()].some((o) => o.byShip))) set.add(from);
     return set;
-  }, [moveOpts, available]);
+  }, [moveOpts, available, shipsLeft]);
 
-  const dests = origin ? moveOpts.get(origin) : undefined;
+  // Hide sailings once the origin's ships are all committed; a land option to the
+  // same area stays available.
+  const dests = useMemo(() => {
+    const all = origin ? moveOpts.get(origin) : undefined;
+    if (!all || !origin || shipsLeft(origin) > 0) return all;
+    const out = new Map(all);
+    for (const [to, o] of all) if (o.byShip) out.delete(to);
+    return out;
+  }, [origin, moveOpts, shipsLeft]);
   const highlight = useMemo(() => new Set(origin && dests ? [...dests.keys()] : [...origins]), [origin, dests, origins]);
 
   const setCount = useCallback((n: number) => {
@@ -1122,6 +1163,11 @@ export function useMovementPlanner(
     if (dests && [...dests.values()].some((o) => o.byShip)) return null; // embarking is available — no hint
     const meta = areaById.get(origin);
     if (!meta || meta.isWater) return null;
+    // Every ship here is already carrying a planned sailing this phase (§23.52:
+    // one voyage per ship per movement phase in our model).
+    if ((state.areas?.[origin]?.ships?.[actor] ?? 0) > 0 && shipsLeft(origin) <= 0) {
+      return 'every ship here already has a sailing planned this phase — undo one of the planned moves to send it somewhere else.';
+    }
     const a = state.areas?.[origin];
     if ((a?.tokens?.[actor] ?? 0) <= 0) return null; // no tokens here to embark
     const waters = (adjacency[origin] ?? []).filter((n) => areaById.get(n)?.isWater);
@@ -1132,13 +1178,51 @@ export function useMovementPlanner(
     if (allOpenSea && !hasAstronomy) return 'This coast faces only open sea, which ships can enter only with the Astronomy advance (§23.52). Move overland to a coast on an enclosed sea, or acquire Astronomy.';
     return null;
   })();
-  return { active, origin, count, queued, highlight, available, destinations, embarkHint, onBoardClick, setCount, removeQueued, undoLast, commit, pass, previewState, moved };
+
+  // Surplus-population check on the planned board (§26.1). Anything above an
+  // area's population limit is returned to stock at the end of the turn, and an
+  // area holding a city may keep no tokens at all — so a stack left one short of
+  // (or a few over) a city is silently thrown away. Warn before movement is
+  // finalised, while the tokens can still be redistributed (report 88068532).
+  const surplusWarnings = useMemo(() => {
+    if (!active || !actor) return [];
+    const agriculture = !!state.players[actor]?.advances?.includes('agriculture');
+    const out: MovementPlanner['surplusWarnings'] = [];
+    for (const [aid, a] of Object.entries(previewState.areas)) {
+      const tokens = a.tokens[actor] ?? 0;
+      if (tokens <= 0) continue;
+      const meta = areaById.get(aid);
+      if (!meta || meta.isWater) continue;
+      // Only flag quiet areas: where someone else is present the conflict phase
+      // decides the count first, so any number here is a fighting decision.
+      const contested = Object.entries(a.tokens).some(([o, n]) => o !== actor && (n ?? 0) > 0);
+      if (contested) continue;
+      const limit = a.city ? 0 : meta.sustains + (agriculture ? 1 : 0);
+      // A stack big enough for a city is deliberate — only the leftovers are lost.
+      const needed = citySiteIn(previewState, aid) ? 6 : 12;
+      const canBuild = !a.city && tokens >= needed && (state.players[actor]?.citiesAvailable ?? 0) > 0;
+      const keep = canBuild ? needed : limit;
+      const lost = tokens - keep;
+      if (lost > 0) out.push({ area: aid, name: meta.name, tokens, keep, lost, canBuild });
+    }
+    return out.sort((x, y) => y.lost - x.lost);
+  }, [active, actor, state, previewState]);
+
+  return { active, origin, count, queued, highlight, available, destinations, embarkHint, surplusWarnings, onBoardClick, setCount, removeQueued, undoLast, commit, pass, previewState, moved };
 }
 
 export function MovementControls({ planner }: { planner: MovementPlanner }) {
-  const { origin, count, queued, available, setCount, removeQueued, undoLast, commit, pass } = planner;
+  const { origin, count, queued, available, setCount, removeQueued, undoLast, commit, pass, surplusWarnings } = planner;
   const cap = origin ? available(origin) : 0;
   const name = (a: string) => areaById.get(a)?.name ?? a;
+  // "Are you sure?" step before finishing, when the plan would throw tokens away
+  // as surplus population (report 88068532). Confirm once, then it goes through.
+  const [confirming, setConfirming] = useState(false);
+  useEffect(() => { setConfirming(false); }, [queued]);
+  const finish = () => {
+    if (surplusWarnings.length && !confirming) { setConfirming(true); return; }
+    if (queued.length) commit(); else pass();
+  };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {!origin ? (
@@ -1190,10 +1274,24 @@ export function MovementControls({ planner }: { planner: MovementPlanner }) {
         </div>
       )}
 
+      {confirming && (
+        <div className="civ-msg" style={{ padding: '6px 10px', border: '1px solid #c9a24a', background: 'rgba(120,90,30,0.35)', fontSize: 12, display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <b style={{ color: '#ffd98a' }}>⚠ Surplus population — tokens would be thrown away</b>
+          {surplusWarnings.map((w) => (
+            <span key={w.area}>
+              <b>{w.name}</b>: {w.tokens} token{w.tokens === 1 ? '' : 's'}, but only {w.keep} {w.canBuild ? `are needed to build the city` : `can stay (population limit)`} — <b style={{ color: '#ffb0b0' }}>{w.lost} lost</b>.
+            </span>
+          ))}
+          <span className="civ-lbl">Move them somewhere they can live, or finish anyway.</span>
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 4 }}>
-        <button className="civ-btn" onClick={() => (queued.length ? commit() : pass())}>
-          {queued.length ? `Finish moving — make ${queued.length} move${queued.length === 1 ? '' : 's'} official` : 'Finish moving (no move)'}
+        <button className="civ-btn" onClick={finish}>
+          {confirming ? 'Finish anyway — I accept the losses'
+            : queued.length ? `Finish moving — make ${queued.length} move${queued.length === 1 ? '' : 's'} official` : 'Finish moving (no move)'}
         </button>
+        {confirming && <button className="civ-btn" onClick={() => setConfirming(false)}>↩ Keep moving</button>}
       </div>
     </div>
   );

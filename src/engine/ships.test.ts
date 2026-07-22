@@ -123,6 +123,36 @@ describe('§23.5 naval movement', () => {
     s.areas[x]!.ships = { egypt: 1 };
     expect(() => adapter.applyAction(s, { type: 'move', moves: [{ from: x, to: y, count: 6, byShip: true }] }, 'egypt')).toThrow();
   });
+
+  it('one ship makes one sailing: a second sailing from the same area is rejected (report ce1713db)', () => {
+    let x = '', y = '', z = '';
+    for (const a of coastal) {
+      const d = [...navalDestinations(null, a.id, 4, false)];
+      if (d.length >= 2) { x = a.id; y = d[0]!; z = d[1]!; break; }
+    }
+    expect(x).not.toBe('');
+    const s = base();
+    s.areas[x] = { tokens: { egypt: 6 }, ships: { egypt: 1 } };
+    fixSupply(s);
+    s.phase = 'movement'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    // The lone ship cannot drop tokens in two places — the batch must be refused
+    // whole, not silently split into two ships.
+    expect(() => adapter.applyAction(s, { type: 'move', moves: [
+      { from: x, to: y, count: 2, byShip: true },
+      { from: x, to: z, count: 2, byShip: true },
+    ] }, 'egypt')).toThrow();
+    // Two ships, two sailings — fine, and each ship ends at its own destination.
+    s.areas[x]!.ships = { egypt: 2 };
+    fixSupply(s);
+    const out = adapter.applyAction(s, { type: 'move', moves: [
+      { from: x, to: y, count: 2, byShip: true },
+      { from: x, to: z, count: 2, byShip: true },
+    ] }, 'egypt');
+    expect(out.areas[y]!.ships!['egypt']).toBe(1);
+    expect(out.areas[z]!.ships!['egypt']).toBe(1);
+    expect(out.areas[x]!.ships?.['egypt'] ?? 0).toBe(0);
+    expect(pieceConservationProblems(out, pieceCounts)).toEqual([]);
+  });
 });
 
 describe('naval range helper', () => {
@@ -164,5 +194,22 @@ describe('§23.3 islands are all-water — population must embark to leave (issu
     expect(dests.has('phaestos->argos')).toBe(false);
     expect(dests.has('phaestos->sparta')).toBe(false);
     expect(dests.has('syracus->campania')).toBe(false); // Messina is ship-only
+  });
+  it('does not walk Thapsus->Tripoli: their shared border is all water (report 96195bca)', () => {
+    // The two meet only out in the gulf — no land boundary — so §23.3 gives no
+    // overland move. The land route runs inland through Sabrata.
+    expect(adjacency['thapsus']).not.toContain('tripoli');
+    expect(adjacency['tripoli']).not.toContain('thapsus');
+    expect(adjacency['thapsus']).toContain('sabrata');
+    expect(adjacency['sabrata']).toContain('tripoli');
+    let s = base();
+    s.areas['thapsus'] = { tokens: { egypt: 3 } };
+    s.phase = 'movement'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    const dests = new Set<string>();
+    for (const a of adapter.legalActions(s, 'egypt'))
+      if (a.type === 'move') for (const m of (a as { moves: { from: string; to: string; byShip?: boolean }[] }).moves)
+        if (!m.byShip) dests.add(`${m.from}->${m.to}`);
+    expect(dests.has('thapsus->tripoli')).toBe(false);
+    expect(dests.has('thapsus->sabrata')).toBe(true);
   });
 });

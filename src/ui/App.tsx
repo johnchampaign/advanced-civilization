@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { Rng, recordPlay } from 'digital-boardgame-framework';
 import { adapter, createGame, victoryScore } from '../engine/index.js';
 import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent } from '../engine/index.js';
-import { advanceById, advances as ALL_ADVANCES, adjacency, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, playAreas, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
+import { advanceById, advances as ALL_ADVANCES, adjacency, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, playAreas, shipNeighbors, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
 import { availableNations, boardPresets, unavailableReason, type BoardPreset } from '../engine/boards.js';
 import { handValue, creditTowards, commoditySetValue, advancesFaceValue, outOfPlay, citySiteIn } from '../engine/helpers.js';
@@ -276,7 +276,7 @@ export default function App() {
               selected={inMovement ? planner.origin : selectedArea}
               onSelect={inMovement ? planner.onBoardClick : inPlacement ? onPlaceClick : setSelectedArea}
               highlight={inMovement ? planner.highlight : inPlacement ? placeHighlight : legalAreas(legal, state.phase)}
-              origin={inMovement ? planner.origin : null}
+              origin={inMovement ? (planner.voyage ? planner.voyage[planner.voyage.length - 1]!.area : planner.origin) : null}
               moved={inMovement ? planner.moved : undefined}
               zoomTo={inMovement ? planner.origin : null}
               art={mapArt.art}
@@ -1010,6 +1010,43 @@ function GoodsView({ state, focus }: { state: GameState; focus: PlayerId }) {
 // ---- Movement planner (click origin → set count → click destination) -----
 
 interface QueuedMove { from: string; to: string; count: number; byShip?: boolean; via?: string }
+interface VoyageStep { area: string; load?: number; unload?: number }
+
+/** Walk a planned voyage from its start, mirroring the engine's §23.5 rules:
+ *  areas entered, cargo aboard after each stop (unload then load, as the engine
+ *  applies them), the §23.57 coastline side the ship is currently on, and which
+ *  areas are legal next hops. Pure — used for live planning feedback. */
+function walkVoyage(steps: VoyageStep[], range: number, astronomy: boolean, outSet: ReadonlySet<string>) {
+  let side: string | null = null;
+  let cargo = 0;
+  const cargoAfter: number[] = [];
+  for (const [i, st] of steps.entries()) {
+    cargo -= st.unload ?? 0;
+    cargo += st.load ?? 0;
+    cargoAfter.push(cargo);
+    if (i < steps.length - 1) {
+      const next = steps[i + 1]!.area;
+      const hop = (shipNeighbors.get(st.area) ?? []).find((h) => h.to === next
+        && (i === 0 || side == null || h.side == null || h.side === side));
+      side = hop ? hop.toSide : null;
+    }
+  }
+  const used = steps.length - 1;
+  const last = steps[steps.length - 1]!;
+  const legalNext = new Set<string>();
+  if (used < range) {
+    for (const h of shipNeighbors.get(last.area) ?? []) {
+      if (steps.length > 1 && side != null && h.side != null && h.side !== side) continue; // §23.57
+      const a = areaById.get(h.to);
+      if (!a || outSet.has(h.to)) continue;
+      if (a.isOpenSea && !astronomy) continue; // §23.52/.54
+      legalNext.add(h.to);
+    }
+  }
+  const endsAtSea = !!areaById.get(last.area)?.isWater;
+  const endsOnOpenSea = !!areaById.get(last.area)?.isOpenSea;
+  return { used, cargo, cargoAfter, legalNext, endsAtSea, endsOnOpenSea };
+}
 
 export interface MovementPlanner {
   active: boolean;
@@ -1031,6 +1068,22 @@ export interface MovementPlanner {
   onBoardClick: (area: string | null) => void;
   setCount: (n: number) => void;
   removeQueued: (i: number) => void;
+  /** Multi-stop voyage being planned (§23.56 ferrying), null when not planning.
+   *  steps[0] is the ship's start; later stops were added by map clicks. */
+  voyage: VoyageStep[] | null;
+  /** Live §23.5 numbers for the voyage in progress. */
+  voyageInfo: { used: number; range: number; cargo: number; cargoAfter: number[]; canFinish: boolean } | null;
+  startVoyage: () => void;
+  cancelVoyage: () => void;
+  undoStop: () => void;
+  finishVoyage: () => void;
+  /** Adjust cargo at a stop; values are clamped to what the engine will accept. */
+  setStopLoad: (i: number, n: number) => void;
+  setStopUnload: (i: number, n: number) => void;
+  queuedVoyages: VoyageStep[][];
+  removeQueuedVoyage: (i: number) => void;
+  /** Ships still unassigned at an area (after planned sailings/voyages). */
+  shipsAt: (area: string) => number;
   /** Undo the most recently planned move. */
   undoLast: () => void;
   /** Submit the queued moves as one `move` action (player then done for phase). */
@@ -1055,9 +1108,16 @@ export function useMovementPlanner(
   const [origin, setOrigin] = useState<string | null>(null);
   const [count, setCountRaw] = useState(1);
   const [queued, setQueued] = useState<QueuedMove[]>([]);
+  const [voyage, setVoyage] = useState<VoyageStep[] | null>(null);
+  const [queuedVoyages, setQueuedVoyages] = useState<VoyageStep[][]>([]);
 
   // Reset whenever the turn, phase, or seat changes (e.g. after a commit/pass).
-  useEffect(() => { setOrigin(null); setQueued([]); setCountRaw(1); }, [actor, state.phase, state.turn]);
+  useEffect(() => { setOrigin(null); setQueued([]); setCountRaw(1); setVoyage(null); setQueuedVoyages([]); }, [actor, state.phase, state.turn]);
+
+  const advancesOf = state.players[actor ?? '']?.advances ?? [];
+  const range = 4 + (advancesOf.includes('clothmaking') ? 1 : 0); // §23.52/.53
+  const astronomy = advancesOf.includes('astronomy');
+  const outSet = useMemo(() => outOfPlay(state), [state]);
 
   // Legal move options grouped by origin: to-area -> { max, byShip, via }.
   const moveOpts = useMemo(() => {
@@ -1075,15 +1135,18 @@ export function useMovementPlanner(
     return byFrom;
   }, [legal]);
 
-  const queuedFrom = useCallback((area: string) => queued.filter((q) => q.from === area).reduce((s, q) => s + q.count, 0), [queued]);
+  const queuedFrom = useCallback((area: string) => queued.filter((q) => q.from === area).reduce((s, q) => s + q.count, 0)
+    + [...queuedVoyages, ...(voyage ? [voyage] : [])].flat().filter((st) => st.area === area).reduce((s, st) => s + (st.load ?? 0), 0), [queued, queuedVoyages, voyage]);
   const available = useCallback((area: string) => (state.areas?.[area]?.tokens[actor ?? ''] ?? 0) - queuedFrom(area), [state, actor, queuedFrom]);
-  // Ships are consumed by planning too: each planned sailing takes one ship out
-  // of the origin. Without this the planner would let a single ship be sent to
-  // several destinations at once — the preview then showed a ship arriving in
-  // every one of them, and the engine rejected the whole batch, so "Finish
-  // moving" appeared to do nothing (report ce1713db).
+  // Ships are consumed by planning too: each planned sailing (or voyage) takes
+  // one ship out of its start area. Without this the planner would let a single
+  // ship be sent to several destinations at once — the preview then showed a
+  // ship arriving in every one of them, and the engine rejected the whole batch,
+  // so "Finish moving" appeared to do nothing (report ce1713db).
   const shipsLeft = useCallback((area: string) => (state.areas?.[area]?.ships?.[actor ?? ''] ?? 0)
-    - queued.filter((q) => q.byShip && q.from === area).length, [state, actor, queued]);
+    - queued.filter((q) => q.byShip && q.from === area).length
+    - queuedVoyages.filter((v) => v[0]!.area === area).length
+    - (voyage && voyage[0]!.area === area ? 1 : 0), [state, actor, queued, queuedVoyages, voyage]);
 
   const origins = useMemo(() => {
     const set = new Set<string>();
@@ -1102,7 +1165,63 @@ export function useMovementPlanner(
     for (const [to, o] of all) if (o.byShip) out.delete(to);
     return out;
   }, [origin, moveOpts, shipsLeft]);
-  const highlight = useMemo(() => new Set(origin && dests ? [...dests.keys()] : [...origins]), [origin, dests, origins]);
+  // ---- §23.56 voyage planning (multi-stop ferrying) ----
+  const walk = useMemo(() => (voyage ? walkVoyage(voyage, range, astronomy, outSet) : null), [voyage, range, astronomy, outSet]);
+  const voyageInfo = useMemo(() => (voyage && walk ? {
+    used: walk.used, range, cargo: walk.cargo, cargoAfter: walk.cargoAfter,
+    canFinish: walk.used >= 1 && walk.cargo === 0 && !walk.endsOnOpenSea,
+  } : null), [voyage, walk, range]);
+
+  const startVoyage = useCallback(() => {
+    if (!origin || shipsLeft(origin) <= 0) return;
+    setVoyage([{ area: origin }]);
+    setOrigin(null);
+  }, [origin, shipsLeft]);
+  const cancelVoyage = useCallback(() => setVoyage(null), []);
+  const undoStop = useCallback(() => setVoyage((v) => (v && v.length > 1 ? v.slice(0, -1) : v)), []);
+  const finishVoyage = useCallback(() => {
+    // NOTE: read `voyage` directly — enqueueing inside a setVoyage updater
+    // double-fires under StrictMode (updaters must be pure).
+    if (voyage && voyage.length >= 2) {
+      setQueuedVoyages((qs) => [...qs, voyage]);
+      setVoyage(null);
+    }
+  }, [voyage]);
+  const setStopLoad = useCallback((i: number, n: number) => {
+    setVoyage((v) => {
+      if (!v) return v;
+      const st = v[i]!;
+      const meta = areaById.get(st.area);
+      if (!meta || meta.isWater) return v; // tokens embark from land only
+      // Clamp: what the area still has (adding back this stop's current load),
+      // and the 5-token hold after this stop's unload (§23.51).
+      const w = walkVoyage(v, range, astronomy, outSet);
+      const cargoBefore = (w.cargoAfter[i] ?? 0) - (st.load ?? 0);
+      const maxByHold = 5 - cargoBefore;
+      const maxByTokens = available(st.area) + (st.load ?? 0);
+      const load = Math.max(0, Math.min(n, maxByHold, maxByTokens));
+      return v.map((s, j) => (j === i ? { ...s, load: load || undefined } : s));
+    });
+  }, [range, astronomy, outSet, available]);
+  const setStopUnload = useCallback((i: number, n: number) => {
+    setVoyage((v) => {
+      if (!v) return v;
+      const st = v[i]!;
+      const meta = areaById.get(st.area);
+      if (!meta || meta.isWater) return v; // tokens debark onto land only
+      const w = walkVoyage(v, range, astronomy, outSet);
+      // Cargo aboard when arriving at this stop (before its own unload/load).
+      const cargoArriving = (w.cargoAfter[i] ?? 0) + (st.unload ?? 0) - (st.load ?? 0);
+      const unload = Math.max(0, Math.min(n, cargoArriving));
+      return v.map((s, j) => (j === i ? { ...s, unload: unload || undefined } : s));
+    });
+  }, [range, astronomy, outSet]);
+  const removeQueuedVoyage = useCallback((i: number) => setQueuedVoyages((qs) => qs.filter((_, j) => j !== i)), []);
+
+  const highlight = useMemo(() => new Set(
+    voyage && walk ? [...walk.legalNext]
+      : origin && dests ? [...dests.keys()] : [...origins],
+  ), [voyage, walk, origin, dests, origins]);
 
   const setCount = useCallback((n: number) => {
     const cap = origin ? available(origin) : 1;
@@ -1111,6 +1230,11 @@ export function useMovementPlanner(
 
   const onBoardClick = useCallback((area: string | null) => {
     if (!active || !area) return;
+    if (voyage && walk) {
+      // Planning a voyage: a click on a legal next hop appends it as a stop.
+      if (walk.legalNext.has(area)) setVoyage([...voyage, { area }]);
+      return;
+    }
     if (!origin) {
       if (origins.has(area)) { setOrigin(area); setCountRaw(1); }
       return;
@@ -1126,16 +1250,20 @@ export function useMovementPlanner(
       return;
     }
     if (origins.has(area)) { setOrigin(area); setCountRaw(1); } // switch origin
-  }, [active, origin, origins, dests, count, available]);
+  }, [active, origin, origins, dests, count, available, voyage, walk]);
 
   const removeQueued = useCallback((i: number) => setQueued((q) => q.filter((_, j) => j !== i)), []);
   const undoLast = useCallback(() => setQueued((q) => q.slice(0, -1)), []);
-  const commit = useCallback(() => { if (queued.length) onApply({ type: 'move', moves: queued }); }, [queued, onApply]);
+  const commit = useCallback(() => {
+    if (queued.length || queuedVoyages.length) {
+      onApply({ type: 'move', moves: queued, ...(queuedVoyages.length ? { voyages: queuedVoyages } : {}) });
+    }
+  }, [queued, queuedVoyages, onApply]);
   const pass = useCallback(() => onApply({ type: 'pass' }), [onApply]);
 
-  // Preview: apply queued moves to a clone so the board shows them as done.
+  // Preview: apply queued moves + voyages to a clone so the board shows them as done.
   const previewState = useMemo(() => {
-    if (!active || !actor || queued.length === 0) return state;
+    if (!active || !actor || (queued.length === 0 && queuedVoyages.length === 0)) return state;
     const clone: GameState = JSON.parse(JSON.stringify(state));
     for (const q of queued) {
       const from = clone.areas[q.from] ?? (clone.areas[q.from] = { tokens: {} });
@@ -1150,10 +1278,26 @@ export function useMovementPlanner(
         to.ships[actor] = (to.ships[actor] ?? 0) + 1;
       }
     }
+    for (const v of queuedVoyages) {
+      for (const st of v) {
+        const a = clone.areas[st.area] ?? (clone.areas[st.area] = { tokens: {} });
+        if (st.unload) a.tokens[actor] = (a.tokens[actor] ?? 0) + st.unload;
+        if (st.load) { a.tokens[actor] = (a.tokens[actor] ?? 0) - st.load; if ((a.tokens[actor] ?? 0) <= 0) delete a.tokens[actor]; }
+      }
+      const from = clone.areas[v[0]!.area]!;
+      const to = clone.areas[v[v.length - 1]!.area] ?? (clone.areas[v[v.length - 1]!.area] = { tokens: {} });
+      from.ships = from.ships ?? {}; to.ships = to.ships ?? {};
+      from.ships[actor] = (from.ships[actor] ?? 0) - 1;
+      if ((from.ships[actor] ?? 0) <= 0) delete from.ships[actor];
+      to.ships[actor] = (to.ships[actor] ?? 0) + 1;
+    }
     return clone;
-  }, [active, actor, state, queued]);
+  }, [active, actor, state, queued, queuedVoyages]);
 
-  const moved = useMemo(() => new Set(queued.map((q) => q.to)), [queued]);
+  const moved = useMemo(() => new Set([
+    ...queued.map((q) => q.to),
+    ...queuedVoyages.flatMap((v) => v.filter((st) => st.unload).map((st) => st.area)),
+  ]), [queued, queuedVoyages]);
 
   const destinations = origin && dests ? [...dests.entries()].map(([to, o]) => ({ to, ...(o.byShip ? { byShip: true as const } : {}) })) : [];
   // Explain WHY a selected coastal area offers no embarkation — otherwise the
@@ -1208,7 +1352,9 @@ export function useMovementPlanner(
     return out.sort((x, y) => y.lost - x.lost);
   }, [active, actor, state, previewState]);
 
-  return { active, origin, count, queued, highlight, available, destinations, embarkHint, surplusWarnings, onBoardClick, setCount, removeQueued, undoLast, commit, pass, previewState, moved };
+  return { active, origin, count, queued, highlight, available, destinations, embarkHint, surplusWarnings, onBoardClick, setCount, removeQueued, undoLast, commit, pass, previewState, moved,
+    voyage, voyageInfo, startVoyage, cancelVoyage, undoStop, finishVoyage, setStopLoad, setStopUnload, queuedVoyages, removeQueuedVoyage,
+    shipsAt: shipsLeft };
 }
 
 export function MovementControls({ planner }: { planner: MovementPlanner }) {
@@ -1221,11 +1367,56 @@ export function MovementControls({ planner }: { planner: MovementPlanner }) {
   useEffect(() => { setConfirming(false); }, [queued]);
   const finish = () => {
     if (surplusWarnings.length && !confirming) { setConfirming(true); return; }
-    if (queued.length) commit(); else pass();
+    if (queued.length || planner.queuedVoyages.length) commit(); else pass();
   };
+  const voyage = planner.voyage, vInfo = planner.voyageInfo;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {!origin ? (
+      {voyage && vInfo ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span className="civ-lbl">
+            ⛵ <b>Voyage</b> from <b>{name(voyage[0]!.area)}</b> — click highlighted areas to add stops (the ship may retrace its route).
+            {' '}Areas entered: <b>{vInfo.used}</b> of {vInfo.range}{vInfo.range === 5 ? ' (Cloth Making)' : ''} · aboard: <b>{vInfo.cargo}</b>/5
+          </span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 130, overflowY: 'auto', paddingRight: 4 }}>
+            {voyage.map((st, i) => {
+              const meta = areaById.get(st.area);
+              const water = !!meta?.isWater;
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                  <span style={{ width: 14, textAlign: 'right', color: '#8a8570' }}>{i === 0 ? '⚓' : i}</span>
+                  <span style={{ minWidth: 110, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name(st.area)}{water ? ' 〜' : ''}</span>
+                  {!water && (
+                    <>
+                      <span className="civ-lbl">load</span>
+                      <button className="civ-btn" style={{ padding: '0 5px' }} onClick={() => planner.setStopLoad(i, (st.load ?? 0) - 1)} disabled={!st.load}>−</button>
+                      <b>{st.load ?? 0}</b>
+                      <button className="civ-btn" style={{ padding: '0 5px' }} onClick={() => planner.setStopLoad(i, (st.load ?? 0) + 1)}>+</button>
+                      {i > 0 && (
+                        <>
+                          <span className="civ-lbl" style={{ marginLeft: 6 }}>drop</span>
+                          <button className="civ-btn" style={{ padding: '0 5px' }} onClick={() => planner.setStopUnload(i, (st.unload ?? 0) - 1)} disabled={!st.unload}>−</button>
+                          <b>{st.unload ?? 0}</b>
+                          <button className="civ-btn" style={{ padding: '0 5px' }} onClick={() => planner.setStopUnload(i, (st.unload ?? 0) + 1)}>+</button>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {vInfo.cargo > 0 && <span className="civ-lbl" style={{ color: '#e0b060' }}>⚠ {vInfo.cargo} token{vInfo.cargo === 1 ? '' : 's'} still aboard — every token must be dropped at a land stop before the voyage ends (§23.56).</span>}
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            <button className="civ-btn" onClick={planner.finishVoyage} disabled={!vInfo.canFinish}
+              title={vInfo.canFinish ? undefined : 'Needs at least one stop, no cargo left aboard, and may not end on open sea (§23.55/.56)'}>
+              ✓ Done — add voyage to the plan
+            </button>
+            <button className="civ-btn" onClick={planner.undoStop} disabled={voyage.length < 2}>↶ Undo stop</button>
+            <button className="civ-btn" onClick={planner.cancelVoyage}>Cancel voyage</button>
+          </div>
+        </div>
+      ) : !origin ? (
         <span className="civ-lbl">Click an area with your tokens to move <b>from</b>. Planned moves show on the map right away (dashed marker) and aren't final until you finish.</span>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1247,12 +1438,35 @@ export function MovementControls({ planner }: { planner: MovementPlanner }) {
               </button>
             ))}
           </div>
+          {planner.shipsAt(origin) > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <button className="civ-btn" style={{ borderColor: '#5cf', color: '#cfe8ff' }} onClick={planner.startVoyage}
+                title="Plan the ship's route stop by stop: load and drop tokens at several coasts in one movement phase (§23.56), or anchor at sea.">
+                ⛵ Plan a voyage (multi-stop ferry)
+              </button>
+              <span className="civ-lbl">…or click a ⛵ destination for a simple one-way sailing.</span>
+            </div>
+          )}
           {planner.destinations.some((d) => d.byShip) && (
             <span className="civ-lbl" style={{ color: '#9cd' }}>⛵ These tokens can <b>embark</b> onto a ship here — click a ⛵ sea zone to load them aboard, then move the ship (and debark on a far coast) on a later click.</span>
           )}
           {planner.embarkHint && (
             <span className="civ-lbl" style={{ color: '#e0b060' }}>⚓ No embarkation from here: {planner.embarkHint}</span>
           )}
+        </div>
+      )}
+
+      {planner.queuedVoyages.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span className="civ-lbl">Planned voyages — {planner.queuedVoyages.length} (not final):</span>
+          {planner.queuedVoyages.map((v, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+              <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                ⛵ {v.map((st) => `${name(st.area)}${st.load ? ` +${st.load}` : ''}${st.unload ? ` −${st.unload}` : ''}`).join(' → ')}
+              </span>
+              <button className="civ-btn" style={{ padding: '0 6px', lineHeight: '18px' }} onClick={() => planner.removeQueuedVoyage(i)}>✕</button>
+            </div>
+          ))}
         </div>
       )}
 
@@ -1289,7 +1503,7 @@ export function MovementControls({ planner }: { planner: MovementPlanner }) {
       <div style={{ display: 'flex', gap: 4 }}>
         <button className="civ-btn" onClick={finish}>
           {confirming ? 'Finish anyway — I accept the losses'
-            : queued.length ? `Finish moving — make ${queued.length} move${queued.length === 1 ? '' : 's'} official` : 'Finish moving (no move)'}
+            : (queued.length + planner.queuedVoyages.length) ? `Finish moving — make ${queued.length + planner.queuedVoyages.length} move${queued.length + planner.queuedVoyages.length === 1 ? '' : 's'} official` : 'Finish moving (no move)'}
         </button>
         {confirming && <button className="civ-btn" onClick={() => setConfirming(false)}>↩ Keep moving</button>}
       </div>

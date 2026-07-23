@@ -14,13 +14,36 @@ The engine's `state.log` is an array of the framework's `GameLogEntry<PlayerId>`
   it automatically, so analyzers never parse prose.
 - `side` is the acting/affected civ id, or `null` for neutral events
   (Barbarians, pirates, multi-party conflict).
-- The in-state log is capped at 500 entries (`LOG_CAP`); `seq` is monotonic and
+- The in-state log is capped at 2000 entries (`LOG_CAP`); `seq` is monotonic and
   stable across trims.
 - Snapshots saved under schemaVersion 1 (prose `string[]`) are upgraded by
   `CivAdapter.migrate()` via the framework's `upgradeProseLog` — those entries
   have `kind: 'legacy'` and the old line in `msg`.
 
 ## Kinds by phase
+
+### Turn rollover / census (§21)
+| kind | payload |
+|---|---|
+| `census.order` | `{order: civ[], populations: Record<civ, n>}` (side = null) |
+
+### Population expansion (§18)
+| kind | payload |
+|---|---|
+| `tokens.grow` | `{total, areas: Record<area, n>}` — automatic §13 growth (stock sufficient) |
+| `tokens.place` | `{placements: Record<area, n>}` — hand-placed growth when stock is short |
+
+### Movement (§23)
+| kind | payload |
+|---|---|
+| `move.land` | `{from, to, count, via?}` — one entry per land move (`via` = Roadbuilding §32.251) |
+| `move.voyage` | `{steps: {area, load?, unload?}[]}` — one entry per ship voyage (§23.5); byShip single-destination sailings log as a voyage too |
+| `phase.pass` | `{}` — deliberate "did nothing" in movement / cityConstruction / acquireAdvances |
+
+### Surplus removal (§26.1)
+| kind | payload |
+|---|---|
+| `surplus.removed` | `{area, lost, kept}` — tokens over the population limit returned to stock |
 
 ### Setup
 | kind | payload | notes |

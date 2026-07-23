@@ -93,7 +93,10 @@ const has = (p: { advances: string[] }, id: string) => p.advances.includes(id);
 // cited in the prose into payload.rule so analyzers never parse prose.
 // Kind + payload registry: docs/log-events.md.
 
-const LOG_CAP = 500;
+// Raised 500 → 2000 (report 283a6cda): with movement/placement/census/surplus
+// now logged, a full game runs well past 500 entries and the reporter wants the
+// whole record scrollable. ~150 B/entry keeps worst-case state growth ~300 KB.
+const LOG_CAP = 2000;
 const RULE_RE = /§(\d+(?:\.\d+)*)/;
 
 function log(s: GameState, kind: string, side: PlayerId | null, msg: string, payload?: Record<string, unknown>): void {
@@ -284,6 +287,7 @@ function setupPopulationExpansion(s: GameState): void {
     const needed = Object.values(caps).reduce((a, b) => a + b, 0);
     if (p.stock >= needed) {
       for (const [aid, cap] of Object.entries(caps)) { s.areas[aid]!.tokens[id] = (s.areas[aid]!.tokens[id] ?? 0) + cap; p.stock -= cap; }
+      if (needed > 0) log(s, 'tokens.grow', id, `${id}'s population grew by ${needed} token${needed === 1 ? '' : 's'} across ${Object.keys(caps).length} area${Object.keys(caps).length === 1 ? '' : 's'} (§13).`, { total: needed, areas: caps });
       if (!s.actedThisPhase.includes(id)) s.actedThisPhase.push(id);
     } else if (p.stock <= 0) {
       if (!s.actedThisPhase.includes(id)) s.actedThisPhase.push(id); // nothing to place
@@ -308,6 +312,10 @@ function applyPlaceTokens(s: GameState, actor: PlayerId, placements: Record<stri
     p.stock -= n; caps[aid] = (caps[aid] ?? 0) - n; rem -= n;
   }
   exp!.remaining[actor] = rem;
+  const placed = Object.entries(placements).filter(([, n]) => n > 0);
+  if (placed.length) {
+    log(s, 'tokens.place', actor, `${actor} placed ${placed.reduce((t, [, n]) => t + n, 0)} token${placed.reduce((t, [, n]) => t + n, 0) === 1 ? '' : 's'}: ${placed.map(([aid, n]) => `${areaName(aid)} +${n}`).join(', ')} (§18).`, { placements: Object.fromEntries(placed) });
+  }
   if (rem <= 0 || Object.values(caps).every((c) => c <= 0)) { if (!s.actedThisPhase.includes(actor)) s.actedThisPhase.push(actor); }
 }
 
@@ -636,6 +644,7 @@ function runRemoveSurplus(s: GameState): void {
       if (t > limit) {
         setTokens(s, aid, o, limit);
         returnLostToStock(s, o, t - limit);
+        log(s, 'surplus.removed', o, `${o} lost ${t - limit} surplus token${t - limit === 1 ? '' : 's'} in ${areaName(aid)} — ${a.city ? 'the city stands alone' : `population limit ${limit}`} (§26.1).`, { area: aid, lost: t - limit, kept: limit });
       }
     }
   }
@@ -2017,6 +2026,7 @@ export function normalize(s: GameState): void {
         s.turn += 1;
         s.censusOrder = s.activeOrder = censusOrder(s);
         s.actedThisPhase = [];
+        log(s, 'census.order', null, `Turn ${s.turn} census: ${s.censusOrder.map((id) => `${id} ${populationCount(s, id)}`).join(', ')} (§21).`, { order: [...s.censusOrder], populations: Object.fromEntries(s.censusOrder.map((id) => [id, populationCount(s, id)])) });
         for (const id of s.seating) { const q = player(s, id); q.convertedThisTurn = false; q.builtWithTreasuryThisTurn = false; q.grainLockedThisTurn = 0; q.citiesBuiltThisTurn = []; q.advancesThisTurn = []; } // §32.941/.631/.312/26.32/31.53 once-per-turn
       }
       enterPhase(s, np);
@@ -2108,6 +2118,10 @@ function applyVoyage(s: GameState, actor: PlayerId, steps: VoyageStep[],
   fromShips.ships![actor] = (fromShips.ships![actor] ?? 0) - 1; if (fromShips.ships![actor]! <= 0) delete fromShips.ships![actor];
   const destA = (s.areas[last] ??= { tokens: {} });
   (destA.ships ??= {})[actor] = (destA.ships[actor] ?? 0) + 1;
+  const legs = steps.map((st) => `${areaName(st.area)}${st.load ? ` +${st.load}` : ''}${st.unload ? ` −${st.unload}` : ''}`).join(' → ');
+  log(s, 'move.voyage', actor, `${actor}'s ship sailed ${legs} (§23.5).`, {
+    steps: steps.map((st) => ({ area: st.area, ...(st.load ? { load: st.load } : {}), ...(st.unload ? { unload: st.unload } : {}) })),
+  });
 }
 
 function applyMovement(s: GameState, actor: PlayerId, moves: { from: string; to: string; count: number; via?: string; byShip?: boolean }[],
@@ -2153,6 +2167,7 @@ function applyMovement(s: GameState, actor: PlayerId, moves: { from: string; to:
     const to = (s.areas[m.to] ??= { tokens: {} });
     to.tokens[actor] = (to.tokens[actor] ?? 0) + m.count;
     arrivedOverland[m.to] = (arrivedOverland[m.to] ?? 0) + m.count; // §23.51: these can't then embark
+    log(s, 'move.land', actor, `${actor} moved ${m.count} token${m.count === 1 ? '' : 's'} ${areaName(m.from)} → ${areaName(m.to)}${m.via ? ` via ${areaName(m.via)} (§32.251)` : ' (§23.3)'}.`, { from: m.from, to: m.to, count: m.count, ...(m.via ? { via: m.via } : {}) });
   }
   // Explicit multi-stop voyages (§23.56 ferrying) — after land moves so the
   // §23.51 overland-then-embark tracking covers the whole order set.
@@ -2421,6 +2436,11 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
           if (s.phase === 'taxation') collectTax(s, actor, 2);
           // §22.3: finishing Ship Construction pays maintenance on the ships kept.
           if (s.phase === 'shipConstruction') payShipMaintenance(s, actor);
+          // Record deliberate "did nothing" decisions in the phases where that
+          // is a real choice (report 283a6cda: every decision on the record).
+          if (s.phase === 'movement' || s.phase === 'cityConstruction' || s.phase === 'acquireAdvances') {
+            log(s, 'phase.pass', actor, `${actor} passed — no ${s.phase === 'movement' ? 'moves made' : s.phase === 'cityConstruction' ? 'city built' : 'advances bought'} this phase.`, {});
+          }
           s.actedThisPhase.push(actor);
         }
         break;

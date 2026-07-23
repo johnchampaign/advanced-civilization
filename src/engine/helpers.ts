@@ -11,6 +11,7 @@ import {
   civById,
   commodities as COMMODITIES,
   commodityById,
+  shipNeighbors,
   type AdvanceGroup,
 } from '../data/index.js';
 import type { GameState, PlayerId, PlayerState } from './types.js';
@@ -129,31 +130,53 @@ export function landNeighbors(s: GameState | null | undefined, areaId: string): 
   return neighbors(s, areaId).filter((n) => !areaById.get(n)?.isWater);
 }
 
-/** Coastal land areas a ship docked at `start` can reach (§23.5): BFS across up
- *  to `range` water areas (4, or 5 with Cloth Making §23.53); open-sea areas are
- *  only traversable with Astronomy (§23.52/.54). Returns the debark candidates
- *  (land areas adjacent to a reachable water area), excluding `start`. */
-export function navalDestinations(s: GameState | null | undefined, start: string, range: number, astronomy: boolean): Set<string> {
+/** Ship-voyage BFS over the §23.52 ship-move graph (data/ship-edges): a ship
+ *  hops area-to-area, each hop crossing a border that includes water, entering
+ *  up to `range` areas per phase (4, or 5 with Cloth Making §23.53). Open-sea
+ *  areas may only be ENTERED with Astronomy (§23.52/.54), and a voyage may
+ *  never END on open sea (§23.55). §23.57: a two-coastline area must be left
+ *  by the coastline it was entered — BFS states are (area, entry-side).
+ *  Returns, for every reachable end area, one shortest legal path (the areas
+ *  entered after `start`, in order). */
+export function shipReachable(s: GameState | null | undefined, start: string, range: number, astronomy: boolean): Map<string, string[]> {
   const out = outOfPlay(s);
-  const a0 = areaById.get(start);
-  const dests = new Set<string>();
-  if (!a0 || a0.isWater || out.has(start)) return dests; // ships dock at coastal land areas
-  const passable = (id: string) => { const a = areaById.get(id); return !!a?.isWater && !out.has(id) && (astronomy || !a.isOpenSea); };
-  const visited = new Set<string>();
-  let frontier = (adjacency[start] ?? []).filter(passable);
+  const found = new Map<string, string[]>();
+  if (out.has(start) || !areaById.get(start)) return found;
+  // state key: area + entry side (start is unrestricted — a docked ship has no recorded entry)
+  const seen = new Set<string>([`${start}|*`]);
+  let frontier: { area: string; side: string | null; path: string[] }[] = [{ area: start, side: null, path: [] }];
   for (let depth = 1; depth <= range && frontier.length; depth++) {
-    const next: string[] = [];
-    for (const w of frontier) {
-      if (visited.has(w)) continue;
-      visited.add(w);
-      for (const nb of adjacency[w] ?? []) {
-        const a = areaById.get(nb);
-        if (!a || out.has(nb)) continue;
-        if (a.isWater) { if (passable(nb) && !visited.has(nb)) next.push(nb); }
-        else if (nb !== start) dests.add(nb);
+    const next: typeof frontier = [];
+    for (const cur of frontier) {
+      for (const hop of shipNeighbors.get(cur.area) ?? []) {
+        // §23.57: leaving cur.area requires the same coastline it was entered by
+        // (unrestricted at the voyage start or when either side is unknown).
+        if (cur.path.length > 0 && cur.side != null && hop.side != null && hop.side !== cur.side) continue;
+        const a = areaById.get(hop.to);
+        if (!a || out.has(hop.to)) continue;
+        if (a.isOpenSea && !astronomy) continue; // §23.54
+        const key = `${hop.to}|${hop.toSide ?? '*'}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const path = [...cur.path, hop.to];
+        // §23.55: an open-sea area may be transited, never an end point.
+        if (!a.isOpenSea && !found.has(hop.to)) found.set(hop.to, path);
+        next.push({ area: hop.to, side: hop.toSide, path });
       }
     }
     frontier = next;
+  }
+  found.delete(start);
+  return found;
+}
+
+/** Coastal LAND areas a ship at `start` can sail to (§23.5) — the debark
+ *  candidates offered as simple one-hop-list ship moves. Water end points
+ *  (§23.55 anchoring) are available via voyages, not this list. */
+export function navalDestinations(s: GameState | null | undefined, start: string, range: number, astronomy: boolean): Set<string> {
+  const dests = new Set<string>();
+  for (const [dest] of shipReachable(s, start, range, astronomy)) {
+    if (!areaById.get(dest)?.isWater) dests.add(dest);
   }
   return dests;
 }

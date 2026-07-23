@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { adapter, createGame, normalize } from './index.js';
-import { areas, adjacency, areaById, pieceCounts } from '../data/index.js';
+import { areas, adjacency, areaById, pieceCounts, shipNeighbors } from '../data/index.js';
 import { navalDestinations, pieceConservationProblems } from './helpers.js';
 import type { GameState, PlayerId } from './types.js';
 
@@ -152,6 +152,108 @@ describe('§23.5 naval movement', () => {
     expect(out.areas[z]!.ships!['egypt']).toBe(1);
     expect(out.areas[x]!.ships?.['egypt'] ?? 0).toBe(0);
     expect(pieceConservationProblems(out, pieceCounts)).toEqual([]);
+  });
+});
+
+describe('§23.5 ship model: area-to-area voyages (reports 5d177c1b, 2811ba36)', () => {
+  function movePhase(s: GameState) { s.phase = 'movement'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = []; }
+
+  it('sails Thapsus->Carthago->Palermo->Milazzo->Campania: 4 areas, legal at range 4 without Astronomy (§23.52, report 5d177c1b)', () => {
+    expect(navalDestinations(null, 'thapsus', 4, false).has('campania')).toBe(true);
+    const s = base();
+    s.areas['thapsus'] = { tokens: { egypt: 4 }, ships: { egypt: 1 } };
+    fixSupply(s); movePhase(s);
+    const out = adapter.applyAction(s, { type: 'move', moves: [{ from: 'thapsus', to: 'campania', count: 3, byShip: true }] }, 'egypt');
+    expect(out.areas['campania']!.tokens['egypt']).toBe(3);
+    expect(out.areas['campania']!.ships!['egypt']).toBe(1);
+    expect(pieceConservationProblems(out, pieceCounts)).toEqual([]);
+  });
+
+  it('ferries two loads across the Carthago|Palermo strait with one ship (§23.56, report 2811ba36)', () => {
+    const s = base();
+    s.areas['carthago'] = { tokens: { egypt: 8 }, ships: { egypt: 1 } };
+    fixSupply(s); movePhase(s);
+    const out = adapter.applyAction(s, { type: 'move', moves: [], voyages: [[
+      { area: 'carthago', load: 5 }, { area: 'palermo', unload: 5 },
+      { area: 'carthago', load: 3 }, { area: 'palermo', unload: 3 },
+    ]] }, 'egypt');
+    expect(out.areas['palermo']!.tokens['egypt']).toBe(8); // 8 tokens crossed with ONE ship
+    expect(out.areas['carthago']!.tokens['egypt'] ?? 0).toBe(0);
+    expect(out.areas['palermo']!.ships!['egypt']).toBe(1);
+    expect(pieceConservationProblems(out, pieceCounts)).toEqual([]);
+  });
+
+  it('rejects a voyage that leaves tokens aboard at phase end (§23.56)', () => {
+    const s = base();
+    s.areas['carthago'] = { tokens: { egypt: 4 }, ships: { egypt: 1 } };
+    fixSupply(s); movePhase(s);
+    expect(() => adapter.applyAction(s, { type: 'move', moves: [], voyages: [[
+      { area: 'carthago', load: 2 }, { area: 'palermo' },
+    ]] }, 'egypt')).toThrow(/23\.56/);
+  });
+
+  it('a debarked token has moved: it may not board a second ship this phase (§23.56)', () => {
+    const s = base();
+    s.areas['carthago'] = { tokens: { egypt: 2 }, ships: { egypt: 1 } };
+    s.areas['palermo'] = { tokens: {}, ships: { egypt: 1 } };
+    fixSupply(s); movePhase(s);
+    expect(() => adapter.applyAction(s, { type: 'move', moves: [], voyages: [
+      [{ area: 'carthago', load: 2 }, { area: 'palermo', unload: 2 }],
+      [{ area: 'palermo', load: 2 }, { area: 'milazzo', unload: 2 }],
+    ] }, 'egypt')).toThrow(/23\.5/);
+  });
+
+  it('caps cargo at 5 at every moment of the voyage (§23.51)', () => {
+    const s = base();
+    s.areas['carthago'] = { tokens: { egypt: 3 }, ships: { egypt: 1 } };
+    s.areas['palermo'] = { tokens: { egypt: 5 } };
+    fixSupply(s); movePhase(s);
+    expect(() => adapter.applyAction(s, { type: 'move', moves: [], voyages: [[
+      { area: 'carthago', load: 3 }, { area: 'palermo', load: 3 }, { area: 'milazzo', unload: 6 },
+    ]] }, 'egypt')).toThrow(/23\.51/);
+  });
+
+  it('blocks open sea without Astronomy, and forbids ENDING on open sea even with it (§23.52/.54/.55)', () => {
+    const s = base();
+    s.areas['phaestos'] = { tokens: { egypt: 1 }, ships: { egypt: 1 } };
+    fixSupply(s); movePhase(s);
+    expect(() => adapter.applyAction(s, { type: 'move', moves: [], voyages: [[
+      { area: 'phaestos' }, { area: 'central-mediterranean' },
+    ]] }, 'egypt')).toThrow(/Astronomy|23\.5/);
+    s.players['egypt']!.advances.push('astronomy');
+    expect(() => adapter.applyAction(s, { type: 'move', moves: [], voyages: [[
+      { area: 'phaestos' }, { area: 'central-mediterranean' },
+    ]] }, 'egypt')).toThrow(/23\.55/);
+  });
+
+  it('anchors: a voyage may end in a non-open water area (§23.55), and the ship can sail on next phase', () => {
+    const s = base();
+    s.areas['phaestos'] = { tokens: {}, ships: { egypt: 1 } };
+    fixSupply(s); movePhase(s);
+    const out = adapter.applyAction(s, { type: 'move', moves: [], voyages: [[
+      { area: 'phaestos' }, { area: 'aegean-sea' },
+    ]] }, 'egypt');
+    expect(out.areas['aegean-sea']!.ships!['egypt']).toBe(1);
+    expect(navalDestinations(null, 'aegean-sea', 4, false).size).toBeGreaterThan(0);
+    expect(pieceConservationProblems(out, pieceCounts)).toEqual([]);
+  });
+
+  it('a two-coastline area must be left by the coastline it was entered (§23.57)', () => {
+    // Find, from the data, a middle area M entered from X on one coastline where
+    // some exit Y uses a different coastline.
+    let X = '', M = '', Y = '';
+    outer: for (const [m, hops] of shipNeighbors) {
+      for (const h1 of hops) for (const h2 of hops) {
+        if (h1.side != null && h2.side != null && h1.side !== h2.side && h1.to !== h2.to) { M = m; X = h1.to; Y = h2.to; break outer; }
+      }
+    }
+    expect(M).not.toBe('');
+    const s = base();
+    s.areas[X] = { tokens: {}, ships: { egypt: 1 } };
+    fixSupply(s); movePhase(s);
+    expect(() => adapter.applyAction(s, { type: 'move', moves: [], voyages: [[
+      { area: X }, { area: M }, { area: Y },
+    ]] }, 'egypt')).toThrow(/23\.57/);
   });
 });
 

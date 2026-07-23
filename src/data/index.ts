@@ -4,6 +4,7 @@
 
 import areasRaw from './areas.json' with { type: 'json' };
 import adjacencyRaw from './adjacency.json' with { type: 'json' };
+import shipEdgesRaw from './ship-edges.json' with { type: 'json' };
 import advancesRaw from './advances.json' with { type: 'json' };
 import commoditiesRaw from './commodities.json' with { type: 'json' };
 import calamitiesRaw from './calamities.json' with { type: 'json' };
@@ -119,6 +120,25 @@ export interface Epoch {
 
 export const areas: Area[] = areasRaw as Area[];
 export const adjacency: Record<string, string[]> = adjacencyRaw as Record<string, string[]>;
+
+/** RAW §23.52 ship-move graph (scripts/build-ship-edges.mjs): a ship hops
+ *  area-to-area across any border that includes water. Distinct from
+ *  `adjacency` (the land graph) — it adds printed all-water borders (straits,
+ *  island chains) that land tokens must not walk. `side` = which coastline
+ *  sub-area the crossing uses on THIS area's shore (§23.57: a ship in a
+ *  two-coastline area must leave by the side it entered); null = unambiguous. */
+export interface ShipHop { to: string; side: string | null; toSide: string | null; }
+export const shipNeighbors: Map<string, ShipHop[]> = (() => {
+  const m = new Map<string, ShipHop[]>();
+  const edges = (shipEdgesRaw as { edges: { a: string; b: string; aSide: string | null; bSide: string | null }[] }).edges;
+  for (const e of edges) {
+    if (!m.has(e.a)) m.set(e.a, []);
+    if (!m.has(e.b)) m.set(e.b, []);
+    m.get(e.a)!.push({ to: e.b, side: e.aSide, toSide: e.bSide });
+    m.get(e.b)!.push({ to: e.a, side: e.bSide, toSide: e.aSide });
+  }
+  return m;
+})();
 export const advances: Advance[] = (advancesRaw as unknown as { advances: Advance[] }).advances;
 export const advanceGroups: AdvanceGroup[] = (advancesRaw as unknown as { groups: AdvanceGroup[] }).groups;
 export const commodities: Commodity[] = (commoditiesRaw as unknown as { commodities: Commodity[] }).commodities;

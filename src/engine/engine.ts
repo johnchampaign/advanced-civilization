@@ -23,6 +23,7 @@ import {
   commodityById,
   astTrackFor,
   epochs,
+  shipNeighbors,
   victoryScoring,
 } from '../data/index.js';
 import {
@@ -40,13 +41,16 @@ import {
   landNeighbors,
   navalDestinations,
   neighbors,
+  outOfPlay,
   player,
   populationCount,
+  shipReachable,
 } from './helpers.js';
 import {
   PHASE_ORDER,
   type Action,
   type CalamityEvent,
+  type VoyageStep,
   type CalamityStep,
   type CombatEvent,
   type CombatForce,
@@ -2037,30 +2041,102 @@ export function normalize(s: GameState): void {
 
 // ---- Action application for interactive phases ----------------------------
 
-function applyMovement(s: GameState, actor: PlayerId, moves: { from: string; to: string; count: number; via?: string; byShip?: boolean }[]): void {
+/** Validate and execute one ship voyage (§23.5). `steps[0]` is the ship's
+ *  start; each later step crosses one ship edge (a border that includes water,
+ *  §23.52) and costs one movement point. Loads/unloads may happen at any land
+ *  stop (§23.56). Shared phase trackers enforce the one-move-per-token rules:
+ *  `arrivedOverland` (§23.51 — an overland mover may not then embark) and
+ *  `debarked` (§23.56 — a token rides at most one ship, and a debarked token
+ *  has moved, so it may not board again). */
+function applyVoyage(s: GameState, actor: PlayerId, steps: VoyageStep[],
+  arrivedOverland: Record<string, number>, debarked: Record<string, number>): void {
+  const p = player(s, actor);
+  if (steps.length < 2) throw new Error('a voyage must enter at least one area (§23.52)');
+  const range = 4 + (has(p, 'clothmaking') ? 1 : 0);
+  if (steps.length - 1 > range) throw new Error(`a ship may enter at most ${range} areas per phase (§23.52${range === 5 ? '/§23.53' : ''})`);
+  const astro = has(p, 'astronomy');
+  const outSet = outOfPlay(s);
+  const start = steps[0]!.area;
+  const startArea = s.areas[start];
+  if ((startArea?.ships?.[actor] ?? 0) <= 0) throw new Error(`no ship in ${start} to sail`);
+  // Walk the route first (pure validation of the path), then apply cargo moves.
+  let side: string | null = null; // coastline the ship is currently on (§23.57); null = unrestricted
+  for (let i = 1; i < steps.length; i++) {
+    const from = steps[i - 1]!.area, to = steps[i]!.area;
+    const hop = (shipNeighbors.get(from) ?? []).find((h) => h.to === to
+      && (i === 1 || side == null || h.side == null || h.side === side));
+    if (!hop) {
+      const anyEdge = (shipNeighbors.get(from) ?? []).some((h) => h.to === to);
+      throw new Error(anyEdge
+        ? `illegal sea move ${from}->${to}: a ship must leave by the coastline it entered (§23.57)`
+        : `illegal sea move ${from}->${to}: no water boundary to cross (§23.52)`);
+    }
+    const a = areaById.get(to);
+    if (!a || outSet.has(to)) throw new Error(`illegal sea move ${from}->${to}: out of play`);
+    if (a.isOpenSea && !astro) throw new Error(`ships may not enter open sea without Astronomy (§23.52/§23.54): ${to}`);
+    side = hop.toSide;
+  }
+  const last = steps[steps.length - 1]!.area;
+  if (areaById.get(last)?.isOpenSea) throw new Error(`a ship may not end its movement on open sea (§23.55): ${last}`);
+  // Cargo: replay the stops, moving tokens on and off.
+  let aboard = 0;
+  for (const [i, st] of steps.entries()) {
+    const meta = areaById.get(st.area);
+    if ((st.load ?? 0) < 0 || (st.unload ?? 0) < 0) throw new Error('voyage load/unload must be non-negative');
+    if (st.unload) {
+      if (!meta || meta.isWater) throw new Error(`cannot debark tokens at sea (${st.area})`);
+      if (st.unload > aboard) throw new Error(`debarking ${st.unload} at ${st.area} but only ${aboard} aboard`);
+      aboard -= st.unload;
+      const at = (s.areas[st.area] ??= { tokens: {} });
+      at.tokens[actor] = (at.tokens[actor] ?? 0) + st.unload;
+      debarked[st.area] = (debarked[st.area] ?? 0) + st.unload; // §23.56: these have moved
+    }
+    if (st.load) {
+      if (!meta || meta.isWater) throw new Error(`cannot embark tokens at sea (${st.area})`);
+      const at = s.areas[st.area];
+      const avail = (at?.tokens[actor] ?? 0) - (arrivedOverland[st.area] ?? 0) - (debarked[st.area] ?? 0);
+      if (st.load > avail) throw new Error(`tokens that already moved this phase may not board a ship at ${st.area} (§23.51/§23.56)`);
+      aboard += st.load;
+      if (aboard > 5) throw new Error('a ship carries at most 5 tokens (§23.51)');
+      setTokens(s, st.area, actor, (at!.tokens[actor] ?? 0) - st.load);
+    }
+    if (i === steps.length - 1 && aboard > 0) throw new Error('no token may remain aboard a ship at the end of the movement phase (§23.56)');
+  }
+  // Relocate the ship from start to the voyage's end (§23.55: may be a
+  // non-open water area).
+  const fromShips = s.areas[start]!;
+  fromShips.ships![actor] = (fromShips.ships![actor] ?? 0) - 1; if (fromShips.ships![actor]! <= 0) delete fromShips.ships![actor];
+  const destA = (s.areas[last] ??= { tokens: {} });
+  (destA.ships ??= {})[actor] = (destA.ships[actor] ?? 0) + 1;
+}
+
+function applyMovement(s: GameState, actor: PlayerId, moves: { from: string; to: string; count: number; via?: string; byShip?: boolean }[],
+  voyages?: VoyageStep[][]): void {
   const p = player(s, actor);
   const road = has(p, 'roadbuilding');
   // §23.3/§23.51: a token may not move overland and then board a ship in the same
   // phase. Track how many of an area's tokens arrived there overland this phase, so
   // only the tokens that were already present (or arrived by ship) may embark.
   const arrivedOverland: Record<string, number> = {};
+  const debarked: Record<string, number> = {}; // §23.56: one ship per token per phase
   for (const m of moves) {
     const from = s.areas[m.from];
     if (!from || (from.tokens[actor] ?? 0) < m.count) throw new Error(`illegal move: not enough tokens in ${m.from}`);
     if (m.byShip) {
-      const embarkable = (from.tokens[actor] ?? 0) - (arrivedOverland[m.from] ?? 0);
+      // One-destination sugar (§23.5): sail the shortest legal voyage from->to
+      // carrying `count` tokens; full validation happens in applyVoyage.
+      const embarkable = (from.tokens[actor] ?? 0) - (arrivedOverland[m.from] ?? 0) - (debarked[m.from] ?? 0);
       if (m.count > embarkable) throw new Error(`tokens that moved overland into ${m.from} this phase may not then board a ship (§23.51)`);
-      // Naval transport (§23.5): a ship at `from` carries up to 5 tokens to a
-      // coastal `to` within range, then relocates there.
-      if ((from.ships?.[actor] ?? 0) <= 0) throw new Error(`no ship in ${m.from} to embark`);
       if (m.count > 5) throw new Error('a ship carries at most 5 tokens (§23.51)');
       const range = 4 + (has(p, 'clothmaking') ? 1 : 0);
-      if (!navalDestinations(s, m.from, range, has(p, 'astronomy')).has(m.to)) throw new Error(`illegal sea move ${m.from}->${m.to}: out of range`);
-      setTokens(s, m.from, actor, (from.tokens[actor] ?? 0) - m.count);
-      const dest = (s.areas[m.to] ??= { tokens: {} });
-      dest.tokens[actor] = (dest.tokens[actor] ?? 0) + m.count;
-      from.ships![actor] = (from.ships![actor] ?? 0) - 1; if (from.ships![actor]! <= 0) delete from.ships![actor];
-      (dest.ships ??= {})[actor] = (dest.ships[actor] ?? 0) + 1;
+      const path = shipReachable(s, m.from, range, has(p, 'astronomy')).get(m.to);
+      if (!path) throw new Error(`illegal sea move ${m.from}->${m.to}: out of range`);
+      const steps: VoyageStep[] = [
+        { area: m.from, ...(m.count > 0 ? { load: m.count } : {}) },
+        ...path.slice(0, -1).map((area) => ({ area })),
+        { area: m.to, ...(m.count > 0 ? { unload: m.count } : {}) },
+      ];
+      applyVoyage(s, actor, steps, arrivedOverland, debarked);
       continue;
     }
     const adjacent = neighbors(s, m.from).includes(m.to);
@@ -2078,6 +2154,9 @@ function applyMovement(s: GameState, actor: PlayerId, moves: { from: string; to:
     to.tokens[actor] = (to.tokens[actor] ?? 0) + m.count;
     arrivedOverland[m.to] = (arrivedOverland[m.to] ?? 0) + m.count; // §23.51: these can't then embark
   }
+  // Explicit multi-stop voyages (§23.56 ferrying) — after land moves so the
+  // §23.51 overland-then-embark tracking covers the whole order set.
+  for (const v of voyages ?? []) applyVoyage(s, actor, v, arrivedOverland, debarked);
 }
 
 function applyBuildCity(s: GameState, actor: PlayerId, area: string, useTreasury = 0): void {
@@ -2386,7 +2465,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         break;
       case 'move':
         if (s.phase !== 'movement') throw new Error('move only in movement phase');
-        applyMovement(s, actor, action.moves);
+        applyMovement(s, actor, action.moves, action.voyages);
         // A player may move once, then is done for the phase.
         if (!s.actedThisPhase.includes(actor)) s.actedThisPhase.push(actor);
         break;

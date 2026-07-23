@@ -461,10 +461,21 @@ export interface PlaceTokensAction {
   placements: Record<string, number>;
 }
 
+/** One stop of a ship voyage (§23.5). `steps[0]` is where the ship starts;
+ *  each later step enters one adjacent area across a water boundary (§23.52)
+ *  and costs one movement point. `load`/`unload` move the actor's tokens
+ *  between the stop's (land) area and the ship — any number of embarkations
+ *  and debarkations along the way, retracing allowed (§23.56). */
+export interface VoyageStep { area: string; load?: number; unload?: number; }
+
 export interface MoveAction {
   type: 'move';
-  /** Ordered moves: from area, to area, count, optional via for roadbuilding. */
+  /** Ordered moves: from area, to area, count, optional via for roadbuilding.
+   *  `byShip` is one-destination sugar: the engine sails the shortest legal
+   *  voyage from->to carrying `count` tokens. */
   moves: { from: string; to: string; count: number; via?: string; byShip?: boolean }[];
+  /** Explicit multi-stop ship voyages (§23.56 ferrying). Applied after `moves`. */
+  voyages?: VoyageStep[][];
 }
 
 export interface BuildCityAction {

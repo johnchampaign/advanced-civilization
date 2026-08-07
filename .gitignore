@@ -47,9 +47,10 @@ src/data/areas.vassal-backup.json
 _coasts.png
 _c_*.png
 
-# NOT a FAQ despite the name: 11 fan-made variants/expansions scraped from The
-# Civ Page (Grand Imperial, Cthulhoid Civil War, GWUGS cards, ...). It contains
-# no rules clarifications and no strategy commentary. This engine implements RAW
-# only, with § citations -- do not source rules from this file, it will
-# contradict the rulebook. Kept out of the repo (and don't redistribute it).
+# Deleted -- kept here as a guard in case it gets downloaded again. Despite the
+# name it is NOT a FAQ: 11 fan-made variants/expansions from The Civ Page (Grand
+# Imperial, Cthulhoid Civil War, GWUGS cards, ...), with no rules clarifications
+# and no strategy commentary. This engine implements RAW only, with § citations,
+# so do not source rules from it -- it contradicts the rulebook. The
+# authoritative reference is civ_rules_and_guide_ocr.pdf.
 ADV_CIV.FAQ.txt

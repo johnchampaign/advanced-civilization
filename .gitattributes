@@ -1,0 +1,17 @@
+# This repo is worked on from both Windows and Linux. Without this, checking a
+# file out on one platform and saving it on the other rewrites every line ending
+# and shows up as a whole-file diff with zero content change.
+# Everything git detects as text is stored AND checked out as LF.
+* text=auto eol=lf
+
+# Binaries git shouldn't sniff or ever line-ending-convert.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.pdf   binary
+*.tgz   binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
+*.vmod  binary

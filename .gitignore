@@ -4,6 +4,9 @@ dist/
 dist-ui/
 *.tgz
 package/
+# versionStamp() writes <outDir>/version.json; under vitest the resolved outDir
+# is this placeholder, so every `npm test` rewrites it. Pure build artifact.
+dummy-non-existing-folder/
 
 # downloaded + extracted source artifacts (re-creatable via scripts/; the
 # committed game data lives in src/data/*.json). Anchored to the top-level dir
@@ -43,3 +46,8 @@ src/data/areas.vassal-backup.json
 /territories.json
 _coasts.png
 _c_*.png
+
+# Third-party reference text kept locally for rules research only. Same policy
+# as the board artwork: we don't redistribute other people's Civilization
+# material, so it stays out of the repo.
+ADV_CIV.FAQ.txt

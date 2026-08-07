@@ -47,7 +47,9 @@ src/data/areas.vassal-backup.json
 _coasts.png
 _c_*.png
 
-# Third-party reference text kept locally for rules research only. Same policy
-# as the board artwork: we don't redistribute other people's Civilization
-# material, so it stays out of the repo.
+# NOT a FAQ despite the name: 11 fan-made variants/expansions scraped from The
+# Civ Page (Grand Imperial, Cthulhoid Civil War, GWUGS cards, ...). It contains
+# no rules clarifications and no strategy commentary. This engine implements RAW
+# only, with § citations -- do not source rules from this file, it will
+# contradict the rulebook. Kept out of the repo (and don't redistribute it).
 ADV_CIV.FAQ.txt

@@ -15,7 +15,7 @@
     "build:board": "node scripts/build-board.mjs",
     "dev": "vite",
     "build:ui": "vite build",
-    "deploy": "vite build && wrangler pages deploy dist-ui --branch main",
+    "deploy": "vite build && npx wrangler pages deploy dist-ui --branch main",
     "serve": "tsc -p tsconfig.json && node dist/server/http.js",
     "build:coasts": "node scripts/build-coasts.mjs"
   },

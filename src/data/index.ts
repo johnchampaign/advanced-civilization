@@ -27,8 +27,9 @@ export interface PlayAreas {
   outOfPlay: Record<CropKey, string[]>;
   suppressedCitySites: Record<CropKey, string[]>;
   islandCitySites: string[];
-  /** Each crop's greyout cover outline (main-board coordinates), for drawing
-   *  the out-of-play veil over the board. */
+  /** Each crop's greyout cover outline, in NATIVE VASSAL main-panel coordinates
+   *  — NOT the combined space `Area.path` uses. Map through anchors.ts
+   *  `mainToCombined` before drawing the out-of-play veil over the board. */
   coverPolygons: Record<CropKey, [number, number][]>;
 }
 

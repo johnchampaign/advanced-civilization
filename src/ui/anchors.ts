@@ -32,6 +32,16 @@ export const MAP_PANELS: { key: 'western' | 'main' | 'eastern'; x: number; y: nu
   { key: 'eastern', x: (782.177 + 2323.12) * _SX, y: 0, w: 1189.066 * _SX, h: 1587.4 * _SY },
 ];
 
+/** Map a point from the native VASSAL MAIN-panel space (2323.12x1587.4) into the
+ *  combined canvas. `playAreas.coverPolygons` (the §16 greyout outlines) are still
+ *  in that original space — scripts/build-board.mjs rebuilt every area `path` into
+ *  the combined 3800x1405 image but left the cover outlines alone — so the veil must
+ *  be transformed here or it draws shifted left and ~13% too tall. Same numbers
+ *  build-board.mjs uses (OFF.main = WEST_W, then scale). */
+export function mainToCombined([x, y]: readonly [number, number]): [number, number] {
+  return [(x + 782.177) * _SX, y * _SY];
+}
+
 /** Every area as a filled polygon in the combined canvas — the board we draw
  *  from our own geometry when no map artwork has been loaded. */
 export interface Shape { id: string; isWater: boolean; points: string; cx: number; cy: number; }

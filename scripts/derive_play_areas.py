@@ -6,7 +6,10 @@ calls (see rules 16.6-16.11):
 
 - The module's Greyout overlay SVGs (overlay-panel*.svg) each contain one
   visible cover polygon defining a board configuration's out-of-play region,
-  in main-board coordinates (the same space as areas.json paths).
+  in NATIVE VASSAL main-panel coordinates. That is NO LONGER the space
+  areas.json paths live in -- build-board.mjs rebuilt those into the combined
+  3800x1405 canvas -- so any consumer must map cover points through
+  anchors.ts `mainToCombined` before drawing them over the board.
 - A LAND area is out of play iff its printed population number sits inside the
   cover region (16.11's own criterion for areas straddling a panel boundary).
   The printed positions are the `#_x3N_pop` <use> symbols in map-main.svg's

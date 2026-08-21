@@ -8,7 +8,7 @@ import { availableNations, boardPresets, unavailableReason, type BoardPreset } f
 import { handValue, creditTowards, commoditySetValue, advancesFaceValue, outOfPlay, citySiteIn } from '../engine/helpers.js';
 import { submitStandaloneReport, fetchMyReports, resolutionNote, type MyReport } from '../client/api.js';
 import { REPORT_CATEGORY } from '../report-meta.js';
-import { anchors, BOARD_OFFSET, BOARD_VIEWBOX, MAP_PANELS, ALL_SHAPES, COAST_SUBS } from './anchors.js';
+import { anchors, BOARD_VIEWBOX, MAP_PANELS, ALL_SHAPES, COAST_SUBS, mainToCombined } from './anchors.js';
 // Territory polygon per area id, for full-polygon selection/highlight on the board.
 const SHAPE_BY_ID = new Map(ALL_SHAPES.map((s) => [s.id, s]));
 import { useMapArt, type MapArt } from './mapArt.js';
@@ -479,10 +479,17 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
   const outSet = outOfPlay(state);
   const panelOn = (k: 'western' | 'main' | 'eastern') =>
     !state.board || (k === 'western' ? state.board.west : k === 'eastern' ? state.board.east : true);
-  // The module's own greyout cover outline for each active crop, shifted into
-  // the stitched canvas (cover coordinates are main-board space).
+  // The module's own greyout cover outline for each active crop, mapped into the
+  // stitched canvas. Cover coordinates are NATIVE VASSAL main-panel space, which is
+  // no longer the space area polygons live in, so they need the real transform —
+  // the old BOARD_OFFSET.main shift is (0,0) and left the veil badly misregistered.
   const cropCovers = (state.board?.crops ?? [])
-    .map((c) => ({ key: c, pts: (playAreas.coverPolygons?.[c] ?? []).map(([x, y]) => `${(x + BOARD_OFFSET.main!.x).toFixed(1)},${y.toFixed(1)}`).join(' ') }))
+    .map((c) => ({
+      key: c,
+      pts: (playAreas.coverPolygons?.[c] ?? [])
+        .map((p) => { const [x, y] = mainToCombined(p); return `${x.toFixed(1)},${y.toFixed(1)}`; })
+        .join(' '),
+    }))
     .filter((c) => c.pts.length > 0);
   return (
     <div ref={wrapRef} style={{ position: 'relative', width: zoom === 1 ? BOARD_VIEWBOX.w : `${zoom * 100}%`, maxWidth: zoom === 1 ? '100%' : undefined, margin: '0 auto' }}>

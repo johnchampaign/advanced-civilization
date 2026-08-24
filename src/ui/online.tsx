@@ -8,7 +8,7 @@ import { civilizations, civById } from '../data/index.js';
 import { availableNations, unavailableReason } from '../engine/boards.js';
 import { claimSeat, createCivClient, createNetworkGame, fetchMyReports, realtimeSubscribe, resolutionNote, tokenFromInvite, type MyReport } from '../client/api.js';
 import { REPORT_CATEGORY } from '../report-meta.js';
-import { ActionList, Board, BoardPicker, CalamityModal, CombatModal, InfoView, MovementControls, ReportModal, StatusPanel, effectiveBoardPreset, legalAreas, nationFocusArea, prettyPhase, scrollBoardTo, useMovementPlanner, type View } from './App.js';
+import { ActionList, AreaPeekProvider, Board, BoardPicker, CalamityModal, CombatModal, InfoView, MovementControls, ReportModal, StatusPanel, effectiveBoardPreset, legalAreas, nationFocusArea, prettyPhase, scrollBoardTo, useMovementPlanner, type View } from './App.js';
 
 const API = ''; // same-origin; Vite proxies /api -> the GameServer host
 // Placeholder so the movement-planner hook can run before the game view loads.
@@ -142,7 +142,7 @@ export function OnlineGame({ gameId, token }: { gameId: string; token: string })
   const onPlaceClick = (area: string | null) => { if (area && (placeCaps[area] ?? 0) > 0) submitAction({ type: 'placeTokens', placements: { [area]: 1 } }); };
 
   return (
-    <>
+    <AreaPeekProvider>
       <div ref={boardRef} style={{ flex: 1, position: 'relative', overflow: 'auto', background: '#0d3a4a' }}>
         <CombatModal events={s.lastCombats ?? []} you={you} />
         <CalamityModal events={s.phase === 'calamity' ? [] : (s.lastCalamities ?? [])} you={you} />
@@ -202,7 +202,7 @@ export function OnlineGame({ gameId, token }: { gameId: string; token: string })
           <BugReport client={client} view={s} />
         </div>
       </div>
-    </>
+    </AreaPeekProvider>
   );
 }
 

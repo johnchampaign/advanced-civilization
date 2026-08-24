@@ -545,7 +545,12 @@ export interface BuyTradeCardAction {
 
 export interface BuyAdvanceAction {
   type: 'buyAdvance';
-  advance: string;
+  /** A single card's id. Equivalent to `advances: [advance]`. */
+  advance?: string;
+  /** §31.1/§31.58: the whole batch bought as ONE transaction — one pooled
+   *  payment of cards + treasury + credits against the summed cost, with any
+   *  excess lost. Takes precedence over `advance` when present. */
+  advances?: string[];
   /** Commodity cards spent (id -> count). */
   spendCommodities?: Record<string, number>;
   /** Treasury tokens spent. */

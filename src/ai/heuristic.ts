@@ -87,9 +87,10 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
         // Score: prefer advances that add a new color group, then highest face
         // value per net cost.
         const scored = buys.map((b) => {
-          const adv = advanceById.get(b.advance)!;
+          const id = b.advance ?? b.advances?.[0] ?? '';
+          const adv = advanceById.get(id)!;
           const addsGroup = adv.groups.some((g) => !groups.has(g)) ? 1 : 0;
-          const net = Math.max(1, netAdvanceCost(owned, b.advance));
+          const net = Math.max(1, netAdvanceCost(owned, id));
           return { b, score: addsGroup * 1000 + adv.cost / net };
         });
         scored.sort((x, y) => y.score - x.score);

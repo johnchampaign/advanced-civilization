@@ -105,6 +105,34 @@ describe('advance credits', () => {
     // would be affordable; §31.53 forbids it, so this must be rejected.
     expect(() => adapter.applyAction(after, { type: 'buyAdvance', advance: 'clothmaking', spendCommodities: {}, spendTreasury: 35 }, 'egypt')).toThrow(/insufficient/);
   });
+  it('buys several cards as one pooled transaction, excess lost (§31.1/§31.58)', () => {
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 1, maxTurns: 60 });
+    s.phase = 'acquireAdvances'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    // 7 ochre = 49 (a set of 7 in stack 1). Pottery 45 + Cloth Making 45 = 90.
+    s.players['egypt']!.hand = { ochre: 7 }; s.players['egypt']!.treasury = 60;
+    const after = adapter.applyAction(s, { type: 'buyAdvance', advances: ['pottery', 'clothmaking'], spendCommodities: { ochre: 7 }, spendTreasury: 60 }, 'egypt');
+    const p = after.players['egypt']!;
+    expect(p.advances).toContain('pottery');
+    expect(p.advances).toContain('clothmaking');
+    // 90 owed, 49 from cards — exactly 41 comes out of treasury (§31.41: no
+    // deliberate overpay), and the 4 points of card value over the top are lost.
+    expect(p.treasury).toBe(19);
+  });
+  it('gives no basket-mate discount inside one transaction (§31.53)', () => {
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 1, maxTurns: 60 });
+    s.phase = 'acquireAdvances'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    s.players['egypt']!.hand = {}; s.players['egypt']!.treasury = 89; // 90 - the illegal 10 credit
+    expect(() => adapter.applyAction(s, { type: 'buyAdvance', advances: ['pottery', 'clothmaking'], spendCommodities: {}, spendTreasury: 89 }, 'egypt')).toThrow(/insufficient/);
+  });
+  it('requires a prerequisite acquired in an earlier turn (§31.62)', () => {
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 1, maxTurns: 60 });
+    s.phase = 'acquireAdvances'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    s.players['egypt']!.hand = {}; s.players['egypt']!.treasury = 400;
+    // Engineering (140) is required for Mining (60) — but not in the same turn.
+    expect(() => adapter.applyAction(s, { type: 'buyAdvance', advances: ['engineering', 'mining'], spendCommodities: {}, spendTreasury: 200 }, 'egypt')).toThrow(/§31.62/);
+    const after = adapter.applyAction(s, { type: 'buyAdvance', advance: 'engineering', spendCommodities: {}, spendTreasury: 140 }, 'egypt');
+    expect(() => adapter.applyAction(after, { type: 'buyAdvance', advance: 'mining', spendCommodities: {}, spendTreasury: 60 }, 'egypt')).toThrow(/§31.62/);
+  });
 });
 
 describe('game setup', () => {

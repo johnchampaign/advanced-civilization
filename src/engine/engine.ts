@@ -2210,12 +2210,30 @@ function applyBuildCity(s: GameState, actor: PlayerId, area: string, useTreasury
   log(s, 'city.build', actor, `${actor} built a city in ${areaName(area)}${treasuryUsed > 0 ? ` (Architecture: ${treasuryUsed} from treasury)` : ''}.`, { area, treasuryUsed });
 }
 
-function applyBuyAdvance(s: GameState, actor: PlayerId, advanceId: string, spendCommodities: Record<string, number> = {}, spendTreasury = 0): void {
+/** §31: acquire one or more civilization cards. A batch is ONE transaction —
+ *  the summed cost is met by a single pooled payment of commodity-card sets,
+ *  treasury and credits, and any excess value is lost (§31.58). Credits come
+ *  only from cards owned BEFORE this turn (§31.53), so nothing bought in this
+ *  batch (or earlier this turn) discounts anything else in it. */
+function applyBuyAdvance(s: GameState, actor: PlayerId, advanceIds: string[], spendCommodities: Record<string, number> = {}, spendTreasury = 0): void {
   const p = player(s, actor);
-  const adv = advanceById.get(advanceId);
-  if (!adv) throw new Error(`unknown advance ${advanceId}`);
-  if (has(p, advanceId)) throw new Error('already owned');
-  for (const pre of adv.prerequisites ?? []) if (!has(p, pre)) throw new Error(`missing prerequisite ${pre}`);
+  const ids = [...new Set(advanceIds.filter(Boolean))];
+  if (ids.length === 0) throw new Error('pick at least one civilization advance to buy');
+  const advs = ids.map((id) => {
+    const adv = advanceById.get(id);
+    if (!adv) throw new Error(`unknown advance ${id}`);
+    if (has(p, id)) throw new Error('already owned'); // §31.61
+    return adv;
+  });
+  // §31.62: a prerequisite must have been acquired in a PREVIOUS turn — it can
+  // neither be bought earlier this turn nor sit alongside in the same batch.
+  const boughtThisTurn = new Set([...(p.advancesThisTurn ?? []), ...ids]);
+  for (const adv of advs) {
+    for (const pre of adv.prerequisites ?? []) {
+      if (boughtThisTurn.has(pre)) throw new Error(`${advanceById.get(pre)?.name ?? pre} must have been acquired in an earlier turn (§31.62)`);
+      if (!has(p, pre)) throw new Error(`missing prerequisite ${pre}`);
+    }
+  }
   // Validate the player owns the commodity cards being spent (calamity cards
   // are never spendable currency).
   for (const [cid, n] of Object.entries(spendCommodities)) {
@@ -2230,15 +2248,18 @@ function applyBuyAdvance(s: GameState, actor: PlayerId, advanceId: string, spend
   const spentHand: Record<string, number> = {};
   for (const [cid, n] of Object.entries(spendCommodities)) if (n > 0) spentHand[cid] = n;
   const cardValue = handValue(spentHand, { mining: has(p, 'mining') });
-  // §31.53: credits from advances acquired THIS turn may not be used until next turn.
+  // §31.53: credits from advances acquired THIS turn (including the rest of this
+  // batch) may not be used until next turn. §31.54: an older card's credit counts
+  // once towards each new card.
   const creditEligible = p.advances.filter((a) => !(p.advancesThisTurn ?? []).includes(a));
-  const credit = creditTowards(creditEligible, advanceId);
+  const credit = advs.reduce((t, adv) => t + creditTowards(creditEligible, adv.id), 0);
+  const cost = advs.reduce((t, adv) => t + adv.cost, 0);
   // Treasury is paid in single tokens, so you pay EXACTLY the remaining cost from
-  // it — never overpay. (Commodity sets are indivisible, so card value may exceed
-  // the cost; that excess is unavoidable, but treasury must not be wasted.)
-  spendTreasury = Math.min(spendTreasury, Math.max(0, adv.cost - cardValue - credit));
+  // it — never overpay (§31.41). (Commodity sets are indivisible, so card value
+  // may exceed the cost; §31.58 says that excess is simply lost.)
+  spendTreasury = Math.min(spendTreasury, Math.max(0, cost - cardValue - credit));
   const paid = cardValue + spendTreasury + credit;
-  if (paid < adv.cost) throw new Error(`insufficient payment: ${paid} < ${adv.cost}`);
+  if (paid < cost) throw new Error(`insufficient payment: ${paid} < ${cost}`);
   // Deduct, returning spent commodity cards to the bottom of their stack (§31 —
   // they are placed face down at the bottom, not removed from the game).
   for (const [cid, n] of Object.entries(spendCommodities)) {
@@ -2252,9 +2273,12 @@ function applyBuyAdvance(s: GameState, actor: PlayerId, advanceId: string, spend
   // permanently removed from the game).
   p.treasury -= spendTreasury;
   p.stock += spendTreasury;
-  p.advances.push(advanceId);
-  (p.advancesThisTurn ??= []).push(advanceId); // §31.53: no credit from it until next turn
-  log(s, 'advance.buy', actor, `${actor} acquired ${adv.name} (paid ${paid} for ${adv.cost}).`, { advance: advanceId, cost: adv.cost, paid });
+  for (const adv of advs) {
+    p.advances.push(adv.id);
+    (p.advancesThisTurn ??= []).push(adv.id); // §31.53: no credit from it until next turn
+  }
+  const names = advs.map((a) => a.name).join(', ');
+  log(s, 'advance.buy', actor, `${actor} acquired ${names} (paid ${paid} for ${cost}).`, { advance: advs[0]!.id, advances: ids, cost, paid });
 }
 
 // ---- Trade action handlers ----------------------------------------------
@@ -2439,7 +2463,10 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
           // Record deliberate "did nothing" decisions in the phases where that
           // is a real choice (report 283a6cda: every decision on the record).
           if (s.phase === 'movement' || s.phase === 'cityConstruction' || s.phase === 'acquireAdvances') {
-            log(s, 'phase.pass', actor, `${actor} passed — no ${s.phase === 'movement' ? 'moves made' : s.phase === 'cityConstruction' ? 'city built' : 'advances bought'} this phase.`, {});
+            const bought = (player(s, actor).advancesThisTurn ?? []).length;
+            const what = s.phase === 'movement' ? 'no moves made this phase' : s.phase === 'cityConstruction' ? 'no city built this phase'
+              : bought > 0 ? `done buying advances (${bought} bought this turn)` : 'no advances bought this phase';
+            log(s, 'phase.pass', actor, `${actor} passed — ${what}.`, {});
           }
           s.actedThisPhase.push(actor);
         }
@@ -2510,7 +2537,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         break; // stays acting; may build again or pass
       case 'buyAdvance':
         if (s.phase !== 'acquireAdvances') throw new Error('buyAdvance only in acquireAdvances phase');
-        applyBuyAdvance(s, actor, action.advance, action.spendCommodities, action.spendTreasury);
+        applyBuyAdvance(s, actor, action.advances ?? (action.advance ? [action.advance] : []), action.spendCommodities, action.spendTreasury);
         break; // stays acting; may buy again or pass
       case 'convertArea':
         if (s.phase !== 'calamity') throw new Error('Monotheism conversion happens at the end of the calamity phase (§29/§32.941)');
@@ -2797,7 +2824,8 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         const creditEligible = p.advances.filter((a) => !(p.advancesThisTurn ?? []).includes(a)); // §31.53
         for (const adv of advanceById.values()) {
           if (has(p, adv.id)) continue;
-          if ((adv.prerequisites ?? []).some((pre) => !has(p, pre))) continue;
+          // §31.62: a prerequisite only counts if it was acquired in an earlier turn.
+          if ((adv.prerequisites ?? []).some((pre) => !has(p, pre) || (p.advancesThisTurn ?? []).includes(pre))) continue;
           const credit = creditTowards(creditEligible, adv.id);
           const maxPay = handValue(commHand, { mining: has(p, 'mining') }) + p.treasury + credit;
           if (maxPay >= adv.cost) {

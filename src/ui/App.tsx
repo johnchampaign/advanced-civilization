@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties } from 'react';
 import { Rng, recordPlay } from 'digital-boardgame-framework';
 import { adapter, createGame, victoryScore } from '../engine/index.js';
 import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent } from '../engine/index.js';
@@ -264,7 +264,7 @@ export default function App() {
   const focus = actor ?? state.seating[0]!;
 
   return (
-    <>
+    <AreaPeekProvider>
       <div ref={boardRef} style={{ flex: 1, position: 'relative', overflow: 'auto', background: '#0d3a4a' }}>
         <CombatModal events={state.lastCombats ?? []} you={focus} />
         {/* Replay calamities only once the phase is fully resolved (interactive
@@ -361,7 +361,7 @@ export default function App() {
           </div>
         ))}
       </div>
-    </>
+    </AreaPeekProvider>
   );
 }
 
@@ -430,6 +430,29 @@ const tokenPoints = (cx: number, cy: number, r: number) => polyPoints(cx, cy, r 
 /** City: a flat-topped octagon (a walled footprint, not a square). */
 const cityPoints = (cx: number, cy: number, r: number) => polyPoints(cx, cy, r * 1.3, 8, 22.5);
 
+/** Hover-to-locate (report d0217cc6). Panels that list areas — cities to build,
+ *  cities to reduce, units to give up — flag the area under the pointer here, and
+ *  the board outlines it so you can see WHERE the name on the button is. */
+const PeekCtx = createContext<{ peek: string | null; setPeek: (a: string | null) => void }>({ peek: null, setPeek: () => {} });
+
+export function AreaPeekProvider({ children }: { children: ReactNode }) {
+  const [peek, setPeek] = useState<string | null>(null);
+  const value = useMemo(() => ({ peek, setPeek }), [peek]);
+  return <PeekCtx.Provider value={value}>{children}</PeekCtx.Provider>;
+}
+
+/** Returns a factory for the hover/focus handlers that light an area up on the
+ *  board — spread it onto a button: `{...peek(areaId)}`. */
+export function useAreaPeek() {
+  const { setPeek } = useContext(PeekCtx);
+  return useCallback((area: string) => ({
+    onMouseEnter: () => setPeek(area),
+    onMouseLeave: () => setPeek(null),
+    onFocus: () => setPeek(area),
+    onBlur: () => setPeek(null),
+  }), [setPeek]);
+}
+
 export function Board({ state, selected, onSelect, highlight, zoomTo, origin, moved, art }: {
   state: GameState; selected: string | null; onSelect: (a: string | null) => void; highlight: Set<string>;
   /** When set, the board zooms in toward this area's anchor (e.g. a chosen move origin). */
@@ -442,6 +465,8 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
   art?: MapArt | null;
 }) {
   const [hovered, setHovered] = useState<string | null>(null);
+  // The area a side-panel button is currently pointing at (report d0217cc6).
+  const { peek } = useContext(PeekCtx);
   // Optional terrain HUD (report e6de51c9): overlay glyphs for the printed
   // volcano / city-site / flood-plain markers so they can be read at a glance
   // without hovering each area. Off by default to keep the board uncluttered.
@@ -565,6 +590,7 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
           const showCap = !!meta && !meta.isWater && (owners.length > 0 || !!a.city) && meta.sustains > 0;
           const isHi = highlight.has(aid);
           const isSel = selected === aid;
+          const isPeek = peek === aid;
           const isOrigin = origin === aid;
           const isMoved = !!moved?.has(aid);
           const isPirate = a.city === PIRATE;
@@ -579,6 +605,10 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
                 : <circle cx={an.x} cy={an.y} r={an.r + 6} fill="transparent" />}
               {(isHi || isSel || isOrigin) && sh && <polygon points={sh.points} fill="none" stroke={isOrigin ? '#ffd23f' : isSel ? '#fff' : '#5cf'} strokeWidth={isOrigin ? 4 : 3} strokeLinejoin="round" pointerEvents="none" />}
               {isMoved && sh && <polygon points={sh.points} fill="none" stroke="#ffd23f" strokeWidth={2.5} strokeDasharray="8 5" strokeLinejoin="round" pointerEvents="none" />}
+              {/* Hover-to-locate: the area named by the button under the pointer. */}
+              {isPeek && (sh
+                ? <polygon points={sh.points} fill="#ff5cf133" stroke="#ff5cf1" strokeWidth={5} strokeLinejoin="round" pointerEvents="none" />
+                : <circle cx={an.x} cy={an.y} r={an.r + 9} fill="none" stroke="#ff5cf1" strokeWidth={5} pointerEvents="none" />)}
               {a.city && <polygon points={cityPoints(an.x, an.y, an.r)} fill={cityColor!} stroke="#000" strokeWidth={2} strokeLinejoin="round" />}
               {isPirate && <text x={an.x} y={an.y + an.r * 0.45} textAnchor="middle" fontSize={an.r * 1.3} fill="#fff">☠</text>}
               {owners.map(([owner, n], i) => {
@@ -1540,6 +1570,7 @@ export function MovementControls({ planner }: { planner: MovementPlanner }) {
 export function ActionList({ legal, selectedArea, phase, onApply, state, actor }: {
   legal: Action[]; selectedArea: string | null; phase: string; onApply: (a: Action) => void; state: GameState; actor: PlayerId;
 }) {
+  const peek = useAreaPeek();
   const pass = legal.find((a) => a.type === 'pass');
   if (state.pendingDiscard?.holder === actor) return <DiscardControls state={state} onApply={onApply} />;
   if (state.pendingSupport?.holder === actor) return <SupportControls state={state} legal={legal} onApply={onApply} />;
@@ -1563,7 +1594,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <span className="civ-lbl">Not enough tokens in stock for full growth — place your <b>{rem}</b> remaining token{rem === 1 ? '' : 's'} (§13): <b>click a highlighted area on the map</b> to add one, or use a button below.</span>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {places.map((b, i) => { const aid = Object.keys(b.placements)[0]!; return <button className="civ-btn" key={i} onClick={() => onApply(b)}>+1 {areaById.get(aid)?.name}</button>; })}
+          {places.map((b, i) => { const aid = Object.keys(b.placements)[0]!; return <button className="civ-btn" key={i} {...peek(aid)} onClick={() => onApply(b)}>+1 {areaById.get(aid)?.name}</button>; })}
         </div>
         {pass && <button className="civ-btn" onClick={() => onApply(pass)}>Done placing (forfeit rest)</button>}
       </div>
@@ -1606,7 +1637,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
           {builds.map((b, i) => {
             const unsupported = supportAfter(b.area) < 2 * (cities + 1);
             return (
-              <button className="civ-btn" key={i} style={unsupported ? { borderColor: '#c0392b' } : undefined}
+              <button className="civ-btn" key={i} style={unsupported ? { borderColor: '#c0392b' } : undefined} {...peek(b.area)}
                 title={unsupported ? 'You lack 2 supporting tokens elsewhere — this city would be reduced immediately (§26.31).' : ''}
                 onClick={() => { if (!unsupported || confirm(`You don't have 2 supporting tokens elsewhere, so the city in ${areaById.get(b.area)?.name} will be lost immediately (§26.31). Build anyway?`)) onApply(b); }}>
                 Build city in {areaById.get(b.area)?.name}{unsupported ? ' ⚠' : ''}
@@ -1660,6 +1691,7 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
   const [tok, setTok] = useState<Record<string, number>>({});
   const [cities, setCities] = useState<string[]>([]);
   const [grain, setGrain] = useState(0);
+  const peek = useAreaPeek();
   // §30.312: a Pottery holder MAY commit Grain to soften Famine (−4 each, locks it).
   const holderP = state.players[u.holder]!;
   const grainAvail = (holderP.hand['grain'] ?? 0) - (holderP.grainLockedThisTurn ?? 0);
@@ -1698,7 +1730,7 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
       {CALAMITY_DESC[u.calamityId] && <span className="civ-lbl" style={{ color: '#cfc7b4' }}>{CALAMITY_DESC[u.calamityId]}</span>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: '30vh', overflowY: 'auto' }}>
         {inv.map((x) => (
-          <div key={x.aid} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div key={x.aid} style={{ display: 'flex', alignItems: 'center', gap: 6 }} {...peek(x.aid)}>
             <span style={{ width: 110, color: nationColor(u.holder) }}>{areaById.get(x.aid)?.name ?? x.aid}</span>
             {x.removable > 0 && <>
               <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setT(x.aid, x.removable, -1)}>−</button>
@@ -1800,6 +1832,7 @@ function CivilWarControls({ state, legal, onApply }: { state: GameState; legal: 
  *  city to reduce, newly-built cities first. */
 function SupportControls({ state, legal, onApply }: { state: GameState; legal: Action[]; onApply: (a: Action) => void }) {
   const sup = state.pendingSupport!;
+  const peek = useAreaPeek();
   const suggested = (legal.find((a) => a.type === 'chooseCities') as Extract<Action, { type: 'chooseCities' }> | undefined)?.areas[0];
   const cities = Object.values(state.areas).filter((a) => a.city === sup.holder).length;
   return (
@@ -1807,7 +1840,7 @@ function SupportControls({ state, legal, onApply }: { state: GameState; legal: A
       <span className="civ-lbl">{sup.mode === 'slaverevolt' ? '⛓ Slave Revolt' : '🏛 City support'} — you can't support all your cities ({cities}). Reduce one{sup.candidates.length < cities ? ' of your newly-built cities (§26.32)' : ''}:</span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
         {sup.candidates.map((aid) => (
-          <button key={aid} className={`civ-btn ${suggested === aid ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => onApply({ type: 'chooseCities', areas: [aid] })}>
+          <button key={aid} className={`civ-btn ${suggested === aid ? 'on' : ''}`} style={{ fontSize: 11 }} {...peek(aid)} onClick={() => onApply({ type: 'chooseCities', areas: [aid] })}>
             {areaById.get(aid)?.name ?? aid}{areaById.get(aid)?.isCitySite ? ' (site)' : ''}
           </button>
         ))}
@@ -1820,6 +1853,7 @@ function SupportControls({ state, legal, onApply }: { state: GameState; legal: A
  *  cities are affected by Treachery / Flood / Piracy. */
 function PickControls({ state, legal, onApply }: { state: GameState; legal: Action[]; onApply: (a: Action) => void }) {
   const pk = state.pendingPick!;
+  const peek = useAreaPeek();
   const suggested = (legal.find((a) => a.type === 'pickAreas') as Extract<Action, { type: 'pickAreas' }> | undefined)?.areas ?? [];
   const need = suggested.length;
   const [sel, setSel] = useState<string[]>([]);
@@ -1845,7 +1879,7 @@ function PickControls({ state, legal, onApply }: { state: GameState; legal: Acti
       <span className="civ-lbl">⚓ {prompt} — pick <b>{need}</b>:</span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
         {pk.candidates.map((aid) => (
-          <button key={aid} className={`civ-btn ${sel.includes(aid) ? 'on' : ''}`} style={{ fontSize: 11, borderLeft: `5px solid ${nationColor(ownerOf(aid) ?? '')}` }} onClick={() => toggle(aid)}>
+          <button key={aid} className={`civ-btn ${sel.includes(aid) ? 'on' : ''}`} style={{ fontSize: 11, borderLeft: `5px solid ${nationColor(ownerOf(aid) ?? '')}` }} {...peek(aid)} onClick={() => toggle(aid)}>
             {sel.includes(aid) ? '✓ ' : ''}{areaById.get(aid)?.name ?? aid}{ownerOf(aid) && ownerOf(aid) !== pk.victim ? ` (${nationName(ownerOf(aid)!)})` : ''}
           </button>
         ))}
@@ -1897,6 +1931,7 @@ function DiscardControls({ state, onApply }: { state: GameState; onApply: (a: Ac
  *  Iconoclasm, choose which of your cities to reduce. */
 function CityChoiceControls({ state, legal, onApply }: { state: GameState; legal: Action[]; onApply: (a: Action) => void }) {
   const c = state.pendingCityChoice!;
+  const peek = useAreaPeek();
   const cities = Object.keys(state.areas).filter((a) => state.areas[a]!.city === c.holder);
   const suggested = (legal.find((x) => x.type === 'chooseCities') as Extract<Action, { type: 'chooseCities' }> | undefined)?.areas ?? [];
   const [sel, setSel] = useState<string[]>(suggested);
@@ -1907,7 +1942,7 @@ function CityChoiceControls({ state, legal, onApply }: { state: GameState; legal
       <span className="civ-lbl">Choose <b>{c.count}</b> of your cit{c.count === 1 ? 'y' : 'ies'} to reduce:</span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
         {cities.map((aid) => (
-          <button key={aid} className={`civ-btn ${sel.includes(aid) ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => toggle(aid)}>
+          <button key={aid} className={`civ-btn ${sel.includes(aid) ? 'on' : ''}`} style={{ fontSize: 11 }} {...peek(aid)} onClick={() => toggle(aid)}>
             {sel.includes(aid) ? '✗ ' : ''}{areaById.get(aid)?.name ?? aid}{areaById.get(aid)?.isCitySite ? ' ⬚' : ''}
           </button>
         ))}
@@ -1986,55 +2021,68 @@ function ConversionControls({ state, legal, onApply }: { state: GameState; legal
 function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: PlayerId; onApply: (a: Action) => void }) {
   const p = state.players[actor]!;
   const mining = p.advances.includes('mining');
-  const [sel, setSel] = useState<string>('');
+  const [sel, setSel] = useState<string[]>([]);
   const [tip, setTip] = useState<string>('');
   const [spend, setSpend] = useState<Record<string, number>>({});
   const [treasury, setTreasury] = useState(0);
   const cName = (c: string) => commodityById.get(c)?.name ?? c;
   const owned = new Set(p.advances);
-  // Advances whose prerequisites are met and not yet owned.
-  const available = ALL_ADVANCES.filter((a) => !owned.has(a.id) && (a.prerequisites ?? []).every((pre) => owned.has(pre)));
-  const adv = sel ? advanceById.get(sel) : null;
+  const boughtThisTurn = p.advancesThisTurn ?? [];
+  // §31.53: credits only count from cards owned BEFORE this turn — anything
+  // bought this turn (or sitting in this basket) gives no discount yet.
+  const creditEligible = p.advances.filter((a) => !boughtThisTurn.includes(a));
+  const creditFor = (id: string) => creditTowards(creditEligible, id);
+  // §31.62: a prerequisite only counts if it was acquired in an EARLIER turn, so
+  // a card whose prerequisite you bought this turn isn't available yet.
+  const available = ALL_ADVANCES.filter((a) => !owned.has(a.id)
+    && (a.prerequisites ?? []).every((pre) => owned.has(pre) && !boughtThisTurn.includes(pre)));
+  const basket = sel.map((id) => advanceById.get(id)!).filter(Boolean);
   const commHand = Object.entries(p.hand).filter(([c, n]) => !isCal(c) && n > 0).sort((a, b) => byCardValue(a[0], b[0]));
   // Most a player could pay from cards: their WHOLE commodity hand (§30.312: Grain
   // locked against Famine isn't spendable). Used to flag which advances are within
-  // reach with all their goods + whole treasury + credits.
+  // reach with all their goods + treasury + credits.
   const spendableHand: Record<string, number> = Object.fromEntries(commHand);
   if (spendableHand['grain']) { spendableHand['grain'] -= (p.grainLockedThisTurn ?? 0); if (spendableHand['grain'] <= 0) delete spendableHand['grain']; }
   const maxCardVal = handValue(spendableHand, { mining });
-  const affordable = (a: { id: string; cost: number }) => maxCardVal + p.treasury + creditTowards(p.advances, a.id) >= a.cost;
+  const affordable = (a: { id: string; cost: number }) => maxCardVal + p.treasury + creditFor(a.id) >= a.cost;
   const cardVal = handValue(spend, { mining });
-  const credit = adv ? creditTowards(p.advances, adv.id) : 0;
-  // You pay only the remaining cost from treasury — never overpay.
-  const treasuryNeeded = adv ? Math.max(0, adv.cost - cardVal - credit) : 0;
+  // §31.54: an older card's credit applies once towards EACH new card, so the
+  // basket's credits simply add up. §31.58: any excess value is lost — no change.
+  const credit = basket.reduce((t, a) => t + creditFor(a.id), 0);
+  const cost = basket.reduce((t, a) => t + a.cost, 0);
+  // You pay only the remaining cost from treasury — never overpay (§31.41).
+  const treasuryNeeded = Math.max(0, cost - cardVal - credit);
   const maxTreasury = Math.min(p.treasury, treasuryNeeded);
   const treasuryUsed = Math.min(treasury, maxTreasury);
   const paid = cardVal + treasuryUsed + credit;
-  const canBuy = !!adv && paid >= adv.cost;
+  const canBuy = basket.length > 0 && paid >= cost;
   const addSpend = (c: string) => setSpend((s) => ((s[c] ?? 0) >= (p.hand[c] ?? 0) ? s : { ...s, [c]: (s[c] ?? 0) + 1 }));
   const rmSpend = (c: string) => setSpend((s) => { const n = (s[c] ?? 0) - 1; const o = { ...s }; if (n <= 0) delete o[c]; else o[c] = n; return o; });
-  const buy = () => { onApply({ type: 'buyAdvance', advance: sel, spendCommodities: spend, spendTreasury: treasuryUsed }); setSel(''); setSpend({}); setTreasury(0); };
+  const toggle = (id: string) => setSel((l) => (l.includes(id) ? l.filter((x) => x !== id) : [...l, id]));
+  const buy = () => { onApply({ type: 'buyAdvance', advances: sel, spendCommodities: spend, spendTreasury: treasuryUsed }); setSel([]); setSpend({}); setTreasury(0); };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span className="civ-lbl">Acquire an advance — pick one, then choose how to pay (cards + treasury). Treasury available: {p.treasury}. <span style={{ color: '#7fd17f', fontWeight: 700 }}>Green-bordered advances are affordable</span> with all your goods + treasury.</span>
+      <span className="civ-lbl">Acquire advances — pick <b>as many as you want</b>, then pay for the whole basket at once (cards + treasury + credits). Treasury available: {p.treasury}. <span style={{ color: '#7fd17f', fontWeight: 700 }}>Green-bordered advances are affordable</span> on their own with all your goods + treasury. Leftover value is lost (§31.58), so buying several together wastes less.</span>
+      {boughtThisTurn.length > 0 && <span className="civ-lbl" style={{ color: '#c9a227' }}>Bought this turn: {boughtThisTurn.map((id) => advanceById.get(id)?.name ?? id).join(', ')} — their credits don’t apply until next turn (§31.53).</span>}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
         {available.length === 0 && <span className="civ-lbl">No advance available (prerequisites unmet).</span>}
         {available.map((a) => {
           const aff = affordable(a);
+          const on = sel.includes(a.id);
           return (
           <span key={a.id} style={{ position: 'relative', display: 'inline-block' }} onMouseEnter={() => setTip(a.id)} onMouseLeave={() => setTip((t) => (t === a.id ? '' : t))}>
-            <button className={`civ-btn ${sel === a.id ? 'on' : ''}`} style={{ fontSize: 11, border: `2px solid ${aff ? '#5fbf6a' : 'transparent'}`, opacity: aff ? 1 : 0.55 }} onClick={() => { setSel(a.id); setSpend({}); setTreasury(0); }}>
-              {aff ? '✓ ' : ''}{a.name} ({a.cost}{creditTowards(p.advances, a.id) ? `, −${creditTowards(p.advances, a.id)} credit` : ''})
+            <button className={`civ-btn ${on ? 'on' : ''}`} style={{ fontSize: 11, border: `2px solid ${on ? '#e6b85a' : aff ? '#5fbf6a' : 'transparent'}`, opacity: aff || on ? 1 : 0.55 }} onClick={() => toggle(a.id)}>
+              {on ? '● ' : aff ? '✓ ' : ''}{a.name} ({a.cost}{creditFor(a.id) ? `, −${creditFor(a.id)} credit` : ''})
             </button>
             {tip === a.id && <AdvanceTip id={a.id} />}
           </span>
           );
         })}
       </div>
-      {adv && (
+      {basket.length > 0 && (
         <div style={{ border: '1px solid #7a4a18', borderRadius: 4, padding: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div className="civ-lbl">Pay for <b>{adv.name}</b> — cost {adv.cost}{credit ? `, ${credit} free from cards you own` : ''}. Click cards to spend:</div>
+          <div className="civ-lbl">Buying <b>{basket.map((a) => a.name).join(' + ')}</b> — total cost {cost}{credit ? `, ${credit} free from cards you already owned` : ''}. Click cards to spend:</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
             {commHand.length === 0 && <span className="civ-lbl">(no commodity cards)</span>}
             {commHand.map(([c, n]) => (
@@ -2048,9 +2096,12 @@ function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: Pla
             <span className="civ-lbl">Treasury</span>
             <input type="range" min={0} max={Math.max(0, maxTreasury)} value={treasuryUsed} onChange={(e) => setTreasury(+e.target.value)} style={{ width: 110 }} disabled={maxTreasury <= 0} />
             <b>{treasuryUsed}</b>
-            <span className="civ-lbl">· paid <b style={{ color: canBuy ? '#2e6b3a' : '#8a3b12' }}>{paid}</b> / {adv.cost} (cards {cardVal}{credit ? ` + ${credit} credit` : ''} + {treasuryUsed} treasury) — exact, no overpay</span>
+            <span className="civ-lbl">· paid <b style={{ color: canBuy ? '#2e6b3a' : '#8a3b12' }}>{paid}</b> / {cost} (cards {cardVal}{credit ? ` + ${credit} credit` : ''} + {treasuryUsed} treasury){paid > cost ? ` — ${paid - cost} wasted, add another advance to soak it up` : ''}</span>
           </div>
-          <button className="civ-btn" disabled={!canBuy} onClick={buy}>{canBuy ? `Buy ${adv.name}` : `Need ${adv.cost - paid} more`}</button>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            <button className="civ-btn" disabled={!canBuy} onClick={buy}>{canBuy ? `Buy ${basket.length === 1 ? basket[0]!.name : `${basket.length} advances`}` : `Need ${cost - paid} more`}</button>
+            <button className="civ-btn" onClick={() => { setSel([]); setSpend({}); setTreasury(0); }}>Clear basket</button>
+          </div>
         </div>
       )}
       <button className="civ-btn" onClick={() => onApply({ type: 'pass' })}>Done buying (pass)</button>
@@ -2345,13 +2396,25 @@ const stepHead = (kicker: string, title: string, titleColor: string, sub?: React
  *  overview, each behind an Acknowledge (§29). */
 export function CalamityModal({ events, you }: { events: CalamityEvent[]; you?: PlayerId }) {
   const pages: ReactNode[] = [];
-  // Skip your OWN calamities that you resolved interactively (you saw those step
-  // by step inline as you chose) — only replay what you didn't actively handle.
-  for (const e of events.filter((e) => !(e.holder === you && e.interactive))) {
+  // Calamities resolve mildest-first (§29.6). Your OWN interactive ones you
+  // already walked through inline as you chose, so they don't get replayed in
+  // full — but they still take their place in the sequence (report b1703708),
+  // as a single "you handled this one" card, so the order stays legible.
+  const replayed = events.filter((e) => !(e.holder === you && e.interactive));
+  const shown = replayed.length ? events : [];
+  shown.forEach((e, idx) => {
     const mine = e.holder === you;
     const nm = nationName(e.holder);
-    const head = (kicker: string) => stepHead(`Calamity · ${kicker}`, `⚠ ${e.calamity}`, mine ? '#ff6b5a' : '#fff',
+    const seq = `Calamity ${idx + 1} of ${shown.length} (mildest first, §29.6)`;
+    const head = (kicker: string) => stepHead(`${seq} · ${kicker}`, `⚠ ${e.calamity}`, mine ? '#ff6b5a' : '#fff',
       <div style={{ marginBottom: 10 }}>strikes <b style={{ color: nationColor(e.holder) }}>{nm}</b>{mine ? ' — that’s you!' : ''}</div>);
+    if (mine && e.interactive) {
+      pages.push(<div key={`${e.calamityId}-own`}>{head('you handled this one')}
+        <p style={{ fontSize: 13, color: '#cfc7b4', lineHeight: 1.5 }}>You made these choices yourself a moment ago — shown here only to keep the order straight.</p>
+        <div style={{ fontSize: 13, lineHeight: 1.6 }}><b style={{ color: '#9a8d6a' }}>Start:</b> {e.overviewBefore}</div>
+        <div style={{ fontSize: 13, lineHeight: 1.6, marginTop: 4 }}><b style={{ color: '#9a8d6a' }}>End:</b> {e.overviewAfter}</div></div>);
+      return;
+    }
     const primary = e.steps.filter((st) => !st.secondary);
     const secondary = e.steps.filter((st) => st.secondary);
     const list = (steps: typeof e.steps) => (
@@ -2365,7 +2428,7 @@ export function CalamityModal({ events, you }: { events: CalamityEvent[]; you?: 
     pages.push(<div key={`${e.calamityId}-o`}>{head('before & after')}
       <div style={{ fontSize: 13, lineHeight: 1.6 }}><b style={{ color: '#9a8d6a' }}>Start:</b> {e.overviewBefore}</div>
       <div style={{ fontSize: 13, lineHeight: 1.6, marginTop: 4 }}><b style={{ color: '#9a8d6a' }}>End:</b> {e.overviewAfter}</div></div>);
-  }
+  });
   return <StepModal token={`cal:${JSON.stringify(events)}`} pages={pages} accent="#c0392b" />;
 }
 

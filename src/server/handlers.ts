@@ -48,7 +48,7 @@ export async function handleApi(
     if (!reporter) return { status: 422, body: { error: 'reporter required' } };
     const marker = `reporter:${reporter}`;
     try {
-      const all = await server.listReports();
+      const all = await server.listReports({ bodies: false });   // inbox shows no state; skip the blobs
       const mine = all
         .filter((r) => {
           const msg = r.message ?? '';
@@ -175,8 +175,11 @@ export async function handleApi(
         const severity = query.get('severity'); if (severity) filter.severity = severity;
         const since = query.get('since'); if (since) filter.since = since;
         const gameId = query.get('gameId'); if (gameId) filter.gameId = gameId;
-        const hasFilter = Object.keys(filter).length > 0;
-        return { status: 200, body: await server.listReports(hasFilter ? filter : undefined) };
+        // ?full=1 → include the state blobs (serverSnapshot/reporterView/
+        // clientLog). Otherwise the DB isn't even asked for them: a 670-row
+        // listing on the shared backend was 40 MB / 10–12 s when it was.
+        filter.bodies = query.get('full') === '1';
+        return { status: 200, body: await server.listReports(filter) };
       }
       if (segs[3] === 'resolve' && method === 'POST') {
         await server.resolveReport(segs[2]!, (body as { note?: string })?.note ?? '');

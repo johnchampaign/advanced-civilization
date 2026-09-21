@@ -45,6 +45,7 @@ import {
   player,
   populationCount,
   shipReachable,
+  civilWarSelectionOk,
 } from './helpers.js';
 import {
   PHASE_ORDER,
@@ -1426,13 +1427,20 @@ function civilWarBeneficiary(s: GameState, victim: PlayerId): PlayerId | null {
 
 const unitSetPoints = (set: UnitSet) => Object.values(set.tokens).reduce((t, n) => t + n, 0) + set.cities.length * 5;
 
-/** Pick ~`points` unit points from `inv`. `valuable` grabs cities first (the
- *  beneficiary wants the victim's best); otherwise tokens first (cheapest). */
+/** Pick `points` unit points from `inv` — exactly, whenever the pieces allow
+ *  (§30.412). `valuable` takes as many cities as fit (the beneficiary wants the
+ *  victim's best); otherwise as few as possible (cheapest). */
 function pickUnits(inv: UnitSet, points: number, valuable: boolean): UnitSet {
-  const tokens: Record<string, number> = {}; const cities: string[] = []; let got = 0;
-  const takeCities = () => { for (const aid of inv.cities) { if (got >= points) break; cities.push(aid); got += 5; } };
-  const takeTokens = () => { for (const aid of Object.keys(inv.tokens)) { let n = inv.tokens[aid]!; while (n > 0 && got < points) { tokens[aid] = (tokens[aid] ?? 0) + 1; n--; got++; } } };
-  if (valuable) { takeCities(); takeTokens(); } else { takeTokens(); takeCities(); }
+  const T = Object.values(inv.tokens).reduce((t, n) => t + n, 0), C = inv.cities.length;
+  const ks = Array.from({ length: C + 1 }, (_, k) => k);
+  if (valuable) ks.reverse();
+  // Exact city count if one exists; else the fewest cities that reach the total.
+  const k = ks.find((k) => points - 5 * k >= 0 && points - 5 * k <= T)
+    ?? Array.from({ length: C + 1 }, (_, k) => k).find((k) => 5 * k + T >= points) ?? C;
+  const cities = inv.cities.slice(0, k);
+  const tokens: Record<string, number> = {};
+  let need = Math.max(0, Math.min(T, points - 5 * k));
+  for (const aid of Object.keys(inv.tokens)) { const n = Math.min(need, inv.tokens[aid]!); if (n > 0) { tokens[aid] = n; need -= n; } }
   return { tokens, cities };
 }
 
@@ -1519,8 +1527,8 @@ function civilWarActor(cw: PendingCivilWar): PlayerId {
 }
 
 /** Validate a Civil War faction selection: only the victim's available units, and
- *  totalling the step's target (a city's worth of overshoot allowed when a token
- *  selection can't land exactly). */
+ *  totalling exactly the step's target (a sub-city overshoot is allowed only
+ *  when the available pieces can't land exactly). */
 function validateCivilWarSelect(s: GameState, cw: PendingCivilWar, sel: UnitSet, target: number): void {
   const avail = cw.stage === 'victimSelect' ? unitInventory(s, cw.victim) : subtractSet(unitInventory(s, cw.victim), cw.faction1);
   for (const [aid, n] of Object.entries(sel.tokens)) {
@@ -1529,7 +1537,8 @@ function validateCivilWarSelect(s: GameState, cw: PendingCivilWar, sel: UnitSet,
   }
   for (const aid of sel.cities) if (!avail.cities.includes(aid)) throw new Error(`${areaName(aid)} is not an available city to select`);
   const pts = unitSetPoints(sel);
-  if (pts < target || pts - target >= 5) throw new Error(`select ${target} unit points for this faction (§30.412)`);
+  const availTokens = Object.values(avail.tokens).reduce((t, n) => t + n, 0);
+  if (!civilWarSelectionOk(pts, target, availTokens, avail.cities.length)) throw new Error(`select exactly ${target} unit points for this faction (§30.412) — ${pts} chosen`);
 }
 
 // ---- Player-directed city picks (Treachery §30.22 / Flood §30.514 / Piracy §30.91)
@@ -2070,11 +2079,15 @@ function applyVoyage(s: GameState, actor: PlayerId, steps: VoyageStep[],
   const startArea = s.areas[start];
   if ((startArea?.ships?.[actor] ?? 0) <= 0) throw new Error(`no ship in ${start} to sail`);
   // Walk the route first (pure validation of the path), then apply cargo moves.
-  let side: string | null = null; // coastline the ship is currently on (§23.57); null = unrestricted
+  // Coastlines the ship may currently be on (§23.57); null = unrestricted. A
+  // border can be crossed on more than one coastline, so keep every possibility
+  // rather than committing to the first matching crossing.
+  let sides: (string | null)[] = [null];
   for (let i = 1; i < steps.length; i++) {
     const from = steps[i - 1]!.area, to = steps[i]!.area;
-    const hop = (shipNeighbors.get(from) ?? []).find((h) => h.to === to
-      && (i === 1 || side == null || h.side == null || h.side === side));
+    const hops = (shipNeighbors.get(from) ?? []).filter((h) => h.to === to
+      && (i === 1 || sides.some((side) => side == null || h.side == null || h.side === side)));
+    const hop = hops[0];
     if (!hop) {
       const anyEdge = (shipNeighbors.get(from) ?? []).some((h) => h.to === to);
       throw new Error(anyEdge
@@ -2084,7 +2097,7 @@ function applyVoyage(s: GameState, actor: PlayerId, steps: VoyageStep[],
     const a = areaById.get(to);
     if (!a || outSet.has(to)) throw new Error(`illegal sea move ${from}->${to}: out of play`);
     if (a.isOpenSea && !astro) throw new Error(`ships may not enter open sea without Astronomy (§23.52/§23.54): ${to}`);
-    side = hop.toSide;
+    sides = [...new Set(hops.map((h) => h.toSide))];
   }
   const last = steps[steps.length - 1]!.area;
   if (areaById.get(last)?.isOpenSea) throw new Error(`a ship may not end its movement on open sea (§23.55): ${last}`);

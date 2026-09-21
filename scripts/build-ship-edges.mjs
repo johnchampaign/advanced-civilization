@@ -48,10 +48,20 @@ const MANUAL = { ur: ['charax#sea1', 'susa#sea2', 'chaldaea#sea1'] };
 
 const edges = [];
 const seen = new Set();
+// One entry per distinct (aSide, bSide) crossing: a border can be wet on more
+// than one coastline (Corinth|Delphi touch both inside the Gulf and at its mouth
+// on the Ionian side, report 0354a3c2), and a ship on either coast may cross.
 const addEdge = (a, b, aSide, bSide) => {
-  const k = a < b ? `${a}|${b}` : `${b}|${a}`;
+  const e = a < b ? { a, b, aSide, bSide } : { a: b, b: a, aSide: bSide, bSide: aSide };
+  const k = `${e.a}|${e.b}|${e.aSide}|${e.bSide}`;
   if (seen.has(k)) return; seen.add(k);
-  edges.push(a < b ? { a, b, aSide, bSide } : { a: b, b: a, aSide: bSide, bSide: aSide });
+  edges.push(e);
+};
+/** Every touching (seaSubOfA, seaSubOfB) pair across the a|b border. */
+const touchingPairs = (a, b) => {
+  const out = [];
+  for (const sa of seaSubs.get(a) ?? []) for (const sb of seaSubs.get(b) ?? []) if (subsTouch(sa, sb)) out.push([sa, sb]);
+  return out;
 };
 
 for (const [a, nbrs] of Object.entries(adjacency)) {
@@ -59,12 +69,9 @@ for (const [a, nbrs] of Object.entries(adjacency)) {
   for (const b of nbrs) {
     const B = byId.get(b); if (!B || a >= b) continue; // each pair once
     if (A.isWater && B.isWater) { addEdge(a, b, null, null); continue; }
-    // find a touching (seaSubOfA, seaSubOfB) pair across the border
-    const subsA = seaSubs.get(a) ?? [];
-    const subsB = seaSubs.get(b) ?? [];
-    let hit = null;
-    for (const sa of subsA) { for (const sb of subsB) if (subsTouch(sa, sb)) { hit = [sa, sb]; break; } if (hit) break; }
-    if (hit) { addEdge(a, b, sideOf(a, hit[0]), sideOf(b, hit[1])); continue; }
+    // every touching (seaSubOfA, seaSubOfB) pair across the border
+    const hits = touchingPairs(a, b);
+    if (hits.length) { for (const [sa, sb] of hits) addEdge(a, b, sideOf(a, sa), sideOf(b, sb)); continue; }
     // land↔water: bordering a sea IS a water boundary — always crossable, even
     // when coast extraction found no touching sub (tolerance gaps caused the
     // original Phaestos embark-lock; the printed adjacency is authoritative).
@@ -81,10 +88,9 @@ for (const r of terr.regions) { if (r.name && byId.has(r.name)) polys[r.name] = 
 let waterBorders = 0;
 for (const [a, b] of adjacencyFromPolygons(polys, 4)) {
   if ((adjacency[a] ?? []).includes(b)) continue; // base-adjacent: handled above
-  const subsA = seaSubs.get(a) ?? [], subsB = seaSubs.get(b) ?? [];
-  let hit = null;
-  for (const sa of subsA) { for (const sb of subsB) if (subsTouch(sa, sb)) { hit = [sa, sb]; break; } if (hit) break; }
-  addEdge(a, b, hit ? sideOf(a, hit[0]) : null, hit ? sideOf(b, hit[1]) : null);
+  const hits = touchingPairs(a, b);
+  if (hits.length) for (const [sa, sb] of hits) addEdge(a, b, sideOf(a, sa), sideOf(b, sb));
+  else addEdge(a, b, null, null);
   waterBorders++;
 }
 // manual coastal corrections: ur's shore water lives in neighbour polygons

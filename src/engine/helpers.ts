@@ -293,3 +293,13 @@ export function player(state: GameState, id: PlayerId): PlayerState {
   if (!p) throw new Error(`unknown player ${id}`);
   return p;
 }
+
+/** §30.412 Civil War faction selection: the step's unit points must be exactly
+ *  `target` whenever the available pieces (`tokens` tokens at 1 point, `cities`
+ *  cities at 5) can make it; only when they can't may the pick run over, and
+ *  then by less than a city's worth (report acf32a84: 18 was accepted for 15). */
+export function civilWarSelectionOk(points: number, target: number, tokens: number, cities: number): boolean {
+  if (points === target) return true;
+  for (let k = 0; k <= cities; k++) { const t = target - 5 * k; if (t >= 0 && t <= tokens) return false; }
+  return points > target && points - target < 5;
+}

@@ -85,6 +85,10 @@ const REMOVE_EDGES = [
   ['lesbos', 'ionia'], ['lesbos', 'sardes'], ['lesbos', 'troy'],
   ['palermo', 'carthago'],   // Sicilian channel to Africa
   ['syracus', 'campania'], ['milazzo', 'campania'], // Strait of Messina — ship-only in AC
+  // Euboea{chalkis,eretria} is an island on the board (report d4cb0ffe): the
+  // Euripus / Gulf of Euboea is water, so it is left only by ship.
+  ['chalkis', 'athens'], ['chalkis', 'delphi'], ['chalkis', 'thessaly'], ['chalkis', 'thessalonica'],
+  ['eretria', 'athens'],
 ];
 for (const [a, b] of REMOVE_EDGES) {
   if (adjacency[a]) adjacency[a] = adjacency[a].filter((x) => x !== b);

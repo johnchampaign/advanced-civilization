@@ -5,7 +5,7 @@ import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent } from '..
 import { advanceById, advances as ALL_ADVANCES, adjacency, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, playAreas, shipNeighbors, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
 import { availableNations, boardPresets, unavailableReason, type BoardPreset } from '../engine/boards.js';
-import { handValue, creditTowards, commoditySetValue, advancesFaceValue, outOfPlay, citySiteIn } from '../engine/helpers.js';
+import { handValue, creditTowards, commoditySetValue, advancesFaceValue, outOfPlay, citySiteIn, civilWarSelectionOk } from '../engine/helpers.js';
 import { submitStandaloneReport, fetchMyReports, resolutionNote, type MyReport } from '../client/api.js';
 import { REPORT_CATEGORY } from '../report-meta.js';
 import { anchors, BOARD_VIEWBOX, MAP_PANELS, ALL_SHAPES, COAST_SUBS, mainToCombined } from './anchors.js';
@@ -1071,7 +1071,7 @@ interface VoyageStep { area: string; load?: number; unload?: number }
  *  applies them), the §23.57 coastline side the ship is currently on, and which
  *  areas are legal next hops. Pure — used for live planning feedback. */
 function walkVoyage(steps: VoyageStep[], range: number, astronomy: boolean, outSet: ReadonlySet<string>) {
-  let side: string | null = null;
+  let sides: (string | null)[] = [null]; // every coastline the ship may be on (§23.57)
   let cargo = 0;
   const cargoAfter: number[] = [];
   for (const [i, st] of steps.entries()) {
@@ -1080,9 +1080,9 @@ function walkVoyage(steps: VoyageStep[], range: number, astronomy: boolean, outS
     cargoAfter.push(cargo);
     if (i < steps.length - 1) {
       const next = steps[i + 1]!.area;
-      const hop = (shipNeighbors.get(st.area) ?? []).find((h) => h.to === next
-        && (i === 0 || side == null || h.side == null || h.side === side));
-      side = hop ? hop.toSide : null;
+      const hops = (shipNeighbors.get(st.area) ?? []).filter((h) => h.to === next
+        && (i === 0 || sides.some((side) => side == null || h.side == null || h.side === side)));
+      sides = hops.length ? [...new Set(hops.map((h) => h.toSide))] : [null];
     }
   }
   const used = steps.length - 1;
@@ -1090,7 +1090,7 @@ function walkVoyage(steps: VoyageStep[], range: number, astronomy: boolean, outS
   const legalNext = new Set<string>();
   if (used < range) {
     for (const h of shipNeighbors.get(last.area) ?? []) {
-      if (steps.length > 1 && side != null && h.side != null && h.side !== side) continue; // §23.57
+      if (steps.length > 1 && h.side != null && !sides.some((side) => side == null || side === h.side)) continue; // §23.57
       const a = areaById.get(h.to);
       if (!a || outSet.has(h.to)) continue;
       if (a.isOpenSea && !astronomy) continue; // §23.52/.54
@@ -1758,7 +1758,10 @@ function CivilWarControls({ state, legal, onApply }: { state: GameState; legal: 
   const factionDesc = (f: { tokens: Record<string, number>; cities: string[] }) => {
     const toks = Object.values(f.tokens).reduce((t, n) => t + n, 0);
     const parts: string[] = [];
-    if (toks) parts.push(`${toks} token${toks === 1 ? '' : 's'}`);
+    // Say WHERE the tokens are, not just how many (report acf32a84).
+    const where = Object.entries(f.tokens).filter(([, n]) => n > 0)
+      .map(([a, n]) => `${areaById.get(a)?.name ?? a} ${n}`).join(', ');
+    if (toks) parts.push(`${toks} token${toks === 1 ? '' : 's'}: ${where}`);
     if (f.cities.length) parts.push(`${f.cities.length} cit${f.cities.length === 1 ? 'y' : 'ies'} (${f.cities.map((a) => areaById.get(a)?.name ?? a).join(', ')})`);
     return parts.join(' + ') || 'nothing';
   };
@@ -1794,7 +1797,7 @@ function CivilWarControls({ state, legal, onApply }: { state: GameState; legal: 
   const inv = Object.keys(tokensAvail).map((aid) => ({ aid, tokens: tokensAvail[aid]!, city: false }))
     .concat(citiesAvail.map((aid) => ({ aid, tokens: 0, city: true })));
   const total = Object.values(tok).reduce((t, n) => t + n, 0) + cities.length * 5;
-  const ok = total >= target && total - target < 5;
+  const ok = civilWarSelectionOk(total, target, Object.values(tokensAvail).reduce((t, n) => t + n, 0), citiesAvail.length);
   const setT = (aid: string, max: number, d: number) => setTok((s) => ({ ...s, [aid]: Math.max(0, Math.min(max, (s[aid] ?? 0) + d)) }));
   const sugg = legal.find((x) => x.type === 'civilWarSelect') as Extract<Action, { type: 'civilWarSelect' }> | undefined;
   return (

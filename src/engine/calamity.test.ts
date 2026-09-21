@@ -453,6 +453,26 @@ describe('interactive unit loss & Civil War cede (§29.63 / §30.41)', () => {
   });
 });
 
+describe('§30.412 Civil War selections are exact (report acf32a84)', () => {
+  it('rejects an 18-point pick for a 15-point step when 15 exactly is possible', () => {
+    let s = scenario({
+      tokens: { egypt: { [land[0]!.id]: 40 } },
+      cities: { egypt: [land[1]!.id] },
+      hands: { egypt: { 'calamity:civilwar': 1 } },
+    });
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    expect(s.pendingCivilWar?.stage).toBe('victimSelect');
+    expect(() => adapter.applyAction(s, { type: 'civilWarSelect', tokens: { [land[0]!.id]: 18 }, cities: [] }, 'egypt')).toThrow(/exactly 15/);
+    expect(() => adapter.applyAction(s, { type: 'civilWarSelect', tokens: { [land[0]!.id]: 13 }, cities: [land[1]!.id] }, 'egypt')).toThrow(/exactly 15/);
+    // the suggested pick lands exactly, for the victim and then the beneficiary
+    const sug = adapter.legalActions(s, 'egypt').find((a) => a.type === 'civilWarSelect') as Extract<Action, { type: 'civilWarSelect' }>;
+    expect(Object.values(sug.tokens).reduce((t, n) => t + n, 0) + sug.cities.length * 5).toBe(15);
+    s = adapter.applyAction(s, { type: 'civilWarSelect', tokens: { [land[0]!.id]: 10 }, cities: [land[1]!.id] }, 'egypt');
+    const bsug = adapter.legalActions(s, 'babylon').find((a) => a.type === 'civilWarSelect') as Extract<Action, { type: 'civilWarSelect' }>;
+    expect(Object.values(bsug.tokens).reduce((t, n) => t + n, 0) + bsug.cities.length * 5).toBe(20);
+  });
+});
+
 describe('interactive city-reduction choice (§30.321/.711/.811)', () => {
   it('lets the primary victim choose which cities to reduce', () => {
     const cityAreas = [land[1]!.id, land[2]!.id, land[3]!.id, land[4]!.id, land[5]!.id];

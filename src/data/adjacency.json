@@ -287,10 +287,8 @@
  "athens": [
   "argos",
   "athens#sea1",
-  "chalkis",
   "corinth",
-  "delphi",
-  "eretria"
+  "delphi"
  ],
  "athens#sea1": [
   "argos#sea2",
@@ -683,12 +681,8 @@
  ],
  "chalkis": [
   "aegean-sea",
-  "athens",
   "chalkis#sea1",
-  "delphi",
-  "eretria",
-  "thessalonica",
-  "thessaly"
+  "eretria"
  ],
  "chalkis#sea1": [
   "aegean-sea",
@@ -912,7 +906,6 @@
  "delphi": [
   "athens",
   "central-mediterranean",
-  "chalkis",
   "corinth",
   "delphi#sea3",
   "delphi#sea4",
@@ -1039,7 +1032,6 @@
  ],
  "eretria": [
   "aegean-sea",
-  "athens",
   "chalkis",
   "eretria#sea1"
  ],
@@ -2690,7 +2682,6 @@
  ],
  "thessalonica": [
   "aegean-sea",
-  "chalkis",
   "lemnos",
   "macedonia",
   "thessalonica#sea2",
@@ -2706,7 +2697,6 @@
   "thrace#sea2"
  ],
  "thessaly": [
-  "chalkis",
   "delphi",
   "epirus",
   "macedonia",

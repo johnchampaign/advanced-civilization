@@ -1691,6 +1691,13 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
   const [tok, setTok] = useState<Record<string, number>>({});
   const [cities, setCities] = useState<string[]>([]);
   const [grain, setGrain] = useState(0);
+  // §29.62: tokens left standing where a surrendered city was (each makes it
+  // count one point less). Default: none — Epidemic's mandatory one (§30.612).
+  const [keep, setKeep] = useState<Record<string, number>>({});
+  const keepMin = epidemic ? 1 : 0;
+  const keepMax = (aid: string) => Math.max(keepMin, (areaById.get(aid)?.sustains ?? 0) + (state.players[u.holder]!.advances.includes('agriculture') ? 1 : 0));
+  const keepOf = (aid: string) => Math.max(keepMin, Math.min(keepMax(aid), keep[aid] ?? keepMin));
+  const cityPts = (aid: string) => u.cityWorth - (keepOf(aid) - keepMin);
   const peek = useAreaPeek();
   // §30.312: a Pottery holder MAY commit Grain to soften Famine (−4 each, locks it).
   const holderP = state.players[u.holder]!;
@@ -1700,7 +1707,7 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
   const reducedPoints = u.calamityId === 'famine' ? Math.max(0, u.points - 4 * g) : u.points;
   const avail = inv.reduce((t, x) => t + x.removable + (x.city ? u.cityWorth : 0), 0);
   const target = Math.min(reducedPoints, avail);
-  const total = Object.values(tok).reduce((t, n) => t + n, 0) + cities.length * u.cityWorth;
+  const total = Object.values(tok).reduce((t, n) => t + n, 0) + cities.reduce((t, aid) => t + cityPts(aid), 0);
   const remaining = Math.max(0, target - total);
   const ok = total >= target && total - target < u.cityWorth;
   const setT = (aid: string, max: number, d: number) => setTok((s) => ({ ...s, [aid]: Math.max(0, Math.min(max, (s[aid] ?? 0) + d)) }));
@@ -1716,7 +1723,7 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
       <div style={{ background: 'rgba(0,0,0,0.28)', border: `2px solid ${bannerColor}`, borderRadius: 8, padding: '8px 12px' }}>
         <div style={{ fontWeight: 800, color: '#ffd23f', textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 12 }}>⚠ {calName} — choose units to lose{u.areas ? ' (flood plain)' : ''}</div>
         <div style={{ fontSize: 22, fontWeight: 800, color: bannerColor, lineHeight: 1.2 }}>{banner}</div>
-        <div style={{ fontSize: 12, color: '#cdc4ad' }}>You must give up <b>{target}</b> unit point{target === 1 ? '' : 's'} (a token = 1, a city = {u.cityWorth}).</div>
+        <div style={{ fontSize: 12, color: '#cdc4ad' }}>You must give up <b>{target}</b> unit point{target === 1 ? '' : 's'} (a token = 1, a city = {u.cityWorth}{keepMin ? ', leaving 1 token' : ''} — one less for each extra token you leave in its place).</div>
       </div>
       {maxGrain > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', background: 'rgba(80,140,60,0.18)', border: '1px solid #5a8c4a', borderRadius: 6, padding: '5px 9px' }}>
@@ -1738,13 +1745,20 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
               <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setT(x.aid, x.removable, +1)}>+</button>
               <span className="civ-lbl" style={{ color: '#9a8d6a' }}>tokens{epidemic ? ' (1 stays)' : ''}</span>
             </>}
-            {x.city && <button className={`civ-btn ${cities.includes(x.aid) ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => setCities((c) => c.includes(x.aid) ? c.filter((y) => y !== x.aid) : [...c, x.aid])}>{cities.includes(x.aid) ? '✗ ' : ''}city ({u.cityWorth})</button>}
+            {x.city && <button className={`civ-btn ${cities.includes(x.aid) ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => setCities((c) => c.includes(x.aid) ? c.filter((y) => y !== x.aid) : [...c, x.aid])}>{cities.includes(x.aid) ? '✗ ' : ''}city ({cities.includes(x.aid) ? cityPts(x.aid) : u.cityWorth})</button>}
+            {x.city && cities.includes(x.aid) && keepMax(x.aid) > keepMin && <>
+              <span className="civ-lbl" style={{ color: '#9a8d6a' }}>leave</span>
+              <button className="civ-btn" style={{ padding: '0 7px' }} disabled={keepOf(x.aid) <= keepMin} onClick={() => setKeep((k) => ({ ...k, [x.aid]: keepOf(x.aid) - 1 }))}>−</button>
+              <b>{keepOf(x.aid)}</b>
+              <button className="civ-btn" style={{ padding: '0 7px' }} disabled={keepOf(x.aid) >= keepMax(x.aid)} onClick={() => setKeep((k) => ({ ...k, [x.aid]: keepOf(x.aid) + 1 }))}>+</button>
+              <span className="civ-lbl" style={{ color: '#9a8d6a' }}>token{keepOf(x.aid) === 1 ? '' : 's'} behind</span>
+            </>}
           </div>
         ))}
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
-        {sugg && <button className="civ-btn" style={{ fontSize: 11 }} onClick={() => { setTok({ ...sugg.tokens }); setCities([...(sugg.cities ?? [])]); setGrain(sugg.grainCommit ?? 0); }}>Suggest</button>}
-        <button className="civ-btn" disabled={!ok} onClick={() => onApply({ type: 'chooseUnits', tokens: tok, cities, grainCommit: g })}>Lose these</button>
+        {sugg && <button className="civ-btn" style={{ fontSize: 11 }} onClick={() => { setTok({ ...sugg.tokens }); setCities([...(sugg.cities ?? [])]); setGrain(sugg.grainCommit ?? 0); setKeep({}); }}>Suggest</button>}
+        <button className="civ-btn" disabled={!ok} onClick={() => onApply({ type: 'chooseUnits', tokens: tok, cities, cityKeep: Object.fromEntries(cities.map((aid) => [aid, keepOf(aid)])), grainCommit: g })}>Lose these</button>
       </div>
     </div>
   );

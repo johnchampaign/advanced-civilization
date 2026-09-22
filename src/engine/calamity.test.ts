@@ -221,6 +221,42 @@ describe('§30.312 Pottery grain-card lock & §30.612 Epidemic minimums', () => 
   });
 });
 
+describe('§29.62 cities given up to a calamity', () => {
+  const sus2 = land.find((a) => a.sustains === 2 && a.id !== land[0]!.id)!.id;
+
+  it('a Famine city counted as 5 points is eliminated outright — no tokens left', () => {
+    let s = scenario({ tokens: { egypt: { [land[0]!.id]: 5 } }, cities: { egypt: [sus2] }, hands: { egypt: { 'calamity:famine': 1 } } });
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    expect(s.pendingUnitLoss?.calamityId).toBe('famine');
+    s = adapter.applyAction(s, { type: 'chooseUnits', tokens: { [land[0]!.id]: 5 }, cities: [sus2] }, 'egypt');
+    expect(s.areas[sus2]?.city).toBeUndefined();
+    expect(s.areas[sus2]?.tokens['egypt'] ?? 0).toBe(0);
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
+  });
+
+  it('the owner may leave tokens where the city stood; each one makes it count a point less', () => {
+    let s = scenario({ tokens: { egypt: { [land[0]!.id]: 8 } }, cities: { egypt: [sus2] }, hands: { egypt: { 'calamity:famine': 1 } } });
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    // city leaving 2 = 3 points; 3 + 5 tokens falls short of 10.
+    expect(() => adapter.applyAction(s, { type: 'chooseUnits', tokens: { [land[0]!.id]: 5 }, cities: [sus2], cityKeep: { [sus2]: 2 } }, 'egypt')).toThrow(/give up/);
+    expect(() => adapter.applyAction(s, { type: 'chooseUnits', tokens: { [land[0]!.id]: 7 }, cities: [sus2], cityKeep: { [sus2]: 3 } }, 'egypt')).toThrow(/tokens behind/);
+    s = adapter.applyAction(s, { type: 'chooseUnits', tokens: { [land[0]!.id]: 7 }, cities: [sus2], cityKeep: { [sus2]: 2 } }, 'egypt');
+    expect(s.areas[sus2]?.city).toBeUndefined();
+    expect(s.areas[sus2]?.tokens['egypt']).toBe(2);
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
+  });
+
+  it('Epidemic: a city may leave more than its one mandatory token (§30.612)', () => {
+    let s = scenario({ tokens: { egypt: { [land[0]!.id]: 16 } }, cities: { egypt: [sus2] }, hands: { egypt: { 'calamity:epidemic': 1 } } });
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    expect(s.pendingUnitLoss?.calamityId).toBe('epidemic');
+    expect(() => adapter.applyAction(s, { type: 'chooseUnits', tokens: { [land[0]!.id]: 12 }, cities: [sus2], cityKeep: { [sus2]: 0 } }, 'egypt')).toThrow(/tokens behind/);
+    s = adapter.applyAction(s, { type: 'chooseUnits', tokens: { [land[0]!.id]: 13 }, cities: [sus2], cityKeep: { [sus2]: 2 } }, 'egypt');
+    expect(s.areas[sus2]?.tokens['egypt']).toBe(2); // 13 + (4 − 1) = 16
+    expect(s.areas[land[0]!.id]?.tokens['egypt']).toBe(3);
+  });
+});
+
 describe('advance modifiers on calamities (§30/§32)', () => {
   const cityAreas = [land[1]!.id, land[2]!.id, land[3]!.id, land[4]!.id, land[5]!.id, land[6]!.id];
 
@@ -701,6 +737,20 @@ describe('§30.523 Barbarian march', () => {
     // The horde overran the start area and marched on into the neighbour.
     expect(populationCount(s, 'egypt')).toBeLessThan(4);
     expect(s.areas[nbr]!.tokens['egypt'] ?? 0).toBe(0);
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
+  });
+});
+
+describe('§30.5241 Barbarians head for the victim', () => {
+  it('march through empty areas toward the nearest victim units, then settle within the limit', () => {
+    const start = civById.get('egypt')!.start;
+    // An area exactly two land steps from the start area.
+    const one = new Set((adjacency[start] ?? []).filter((n) => !areaById.get(n)?.isWater));
+    const two = [...one].flatMap((n) => (adjacency[n] ?? []).filter((m) => !areaById.get(m)?.isWater && m !== start && !one.has(m)))[0]!;
+    let s = scenario({ tokens: { egypt: { [two]: 2 } }, hands: { egypt: { 'calamity:barbarianhordes': 1 } } });
+    s = resolve(s);
+    expect(s.areas[two]?.tokens['egypt'] ?? 0).toBe(0); // the horde reached them
+    for (const [aid, a] of Object.entries(s.areas)) expect(a.tokens['__barbarian__'] ?? 0).toBeLessThanOrEqual(areaById.get(aid)!.sustains);
     expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
   });
 });

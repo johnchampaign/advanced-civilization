@@ -530,7 +530,7 @@ function resolveTokenCombat(s: GameState, aid: string, limit: number): void {
     }
     if (stop) break;
   }
-  const losses = order.map((o) => `${o} -${before[o]! - (a.tokens[o] ?? 0)}`).filter((x) => !x.endsWith('-0'));
+  const losses = order.map((o) => `${isNeutral(o) ? pname(s, o) : o} -${before[o]! - (a.tokens[o] ?? 0)}`).filter((x) => !x.endsWith('-0'));
   if (losses.length) log(s, 'conflict.losses', null, `Conflict in ${areaName(aid)}: ${losses.join(', ')}.`, { area: aid, losses: Object.fromEntries(order.map((o) => [o, before[o]! - (a.tokens[o] ?? 0)]).filter(([, d]) => (d as number) > 0)) });
 }
 
@@ -547,12 +547,17 @@ function resolveCityAssault(s: GameState, aid: string, attacker: PlayerId, rng: 
   if (!defender) return;
   const atk = a.tokens[attacker] ?? 0;
   // Pirate city (§24.34, §30.913): a neutral city with no owning player. It is
-  // defended by 6 throwaway tokens; if the attacker brings 7+, it is destroyed
-  // and may be pillaged, but there is no card to steal (no victim hand).
+  // replaced by throwaway tokens and the resulting fight is resolved normally —
+  // so the attacker's Engineering (§24.35: 6 to attack, 5 defenders) and
+  // Metalworking both apply; pirates hold no advances. Surviving pirate tokens
+  // vanish. It may be pillaged, but there is no card to steal (no victim hand).
   if (defender === PIRATE) {
-    if (atk < 7) { setTokens(s, aid, attacker, 0); returnLostToStock(s, attacker, atk); log(s, 'city.storm.fail', attacker, `${attacker} failed to take the pirate city in ${areaName(aid)}.`, { area: aid, pirate: true, required: 7, lost: atk }); return; }
+    const req = hasEng(s, attacker) ? 6 : 7;
+    if (atk < req) { setTokens(s, aid, attacker, 0); returnLostToStock(s, attacker, atk); log(s, 'city.storm.fail', attacker, `${attacker} failed to take the pirate city in ${areaName(aid)} (needed ${req}).`, { area: aid, pirate: true, required: req, lost: atk }); return; }
     delete a.city; delete a.pirateCity;
-    setTokens(s, aid, attacker, Math.max(1, atk - 6)); returnLostToStock(s, attacker, Math.min(atk, 6));
+    a.tokens[PIRATE] = req - 1;
+    resolveTokenCombat(s, aid, 0);
+    delete a.tokens[PIRATE];
     const pa = player(s, attacker); const loot = Math.min(3, pa.stock); pa.stock -= loot; pa.treasury += loot;
     log(s, 'city.storm', attacker, `${attacker} destroyed the pirate city in ${areaName(aid)}.`, { area: aid, pirate: true });
     return;
@@ -1114,9 +1119,24 @@ function suggestUnits(s: GameState, u: PendingUnitLoss): { tokens: Record<string
   return { tokens, cities };
 }
 
+/** §29.62: a city given up to a calamity is worth up to five unit points; if the
+ *  owner leaves tokens in its place, those survivors don't count. So each city
+ *  chosen in 'remove' mode may leave `cityKeep[aid]` tokens behind (default: none,
+ *  or the one token Epidemic always leaves, §30.612), worth one point less each.
+ *  Ceded cities (Civil War) change hands whole. */
+function cityKeep(u: PendingUnitLoss, choice: { cityKeep?: Record<string, number> }, aid: string): number {
+  if (u.mode !== 'remove') return 0;
+  const min = u.calamityId === 'epidemic' ? 1 : 0;
+  return choice.cityKeep?.[aid] ?? min;
+}
+function cityLossWorth(u: PendingUnitLoss, keep: number): number {
+  if (u.mode !== 'remove') return u.cityWorth;
+  return u.cityWorth - (keep - (u.calamityId === 'epidemic' ? 1 : 0));
+}
+
 /** §29.63: the chosen sacrifice must cover the required loss with no needless
  *  excess (overshoot smaller than a city's worth) and stay within what's owned. */
-function validateUnits(s: GameState, u: PendingUnitLoss, choice: { tokens: Record<string, number>; cities: string[] }): void {
+function validateUnits(s: GameState, u: PendingUnitLoss, choice: { tokens: Record<string, number>; cities: string[]; cityKeep?: Record<string, number> }): void {
   const inv = unitInventory(s, u.holder, u.areas);
   const epi = u.calamityId === 'epidemic';
   let sum = 0;
@@ -1127,7 +1147,13 @@ function validateUnits(s: GameState, u: PendingUnitLoss, choice: { tokens: Recor
     if (epi && n > inv.tokens[aid]! - 1) throw new Error(`Epidemic must leave at least one token in ${areaName(aid)} (§30.612)`);
     sum += n;
   }
-  for (const aid of choice.cities) { if (!inv.cities.includes(aid)) throw new Error(`no city of yours in ${areaName(aid)}`); sum += u.cityWorth; }
+  for (const aid of choice.cities) {
+    if (!inv.cities.includes(aid)) throw new Error(`no city of yours in ${areaName(aid)}`);
+    const keep = cityKeep(u, choice, aid);
+    const lo = epi ? 1 : 0, hi = Math.max(lo, areaLimitFor(s, aid, u.holder));
+    if (!Number.isInteger(keep) || keep < lo || keep > hi) throw new Error(`the city in ${areaName(aid)} can leave ${lo}–${hi} tokens behind`);
+    sum += cityLossWorth(u, keep);
+  }
   const need = maxUnitLoss(s, u);
   if (sum < need) throw new Error(`give up ${need} unit points (got ${sum}) — §29.63`);
   if (sum - need >= u.cityWorth) throw new Error(`giving up more than required — §29.63`);
@@ -1136,16 +1162,16 @@ function validateUnits(s: GameState, u: PendingUnitLoss, choice: { tokens: Recor
 /** Apply the chosen sacrifice: remove (→ stock, cities reduced/substituted) or
  *  cede (→ beneficiary), then the per-calamity follow-up (Flood secondary,
  *  Military Civil-War bloodshed). */
-function applyChosenUnits(s: GameState, u: PendingUnitLoss, choice: { tokens: Record<string, number>; cities: string[] }): void {
+function applyChosenUnits(s: GameState, u: PendingUnitLoss, choice: { tokens: Record<string, number>; cities: string[]; cityKeep?: Record<string, number> }): void {
   if (u.mode === 'remove') {
     for (const [aid, n] of Object.entries(choice.tokens)) { if (n > 0) { setTokens(s, aid, u.holder, (s.areas[aid]!.tokens[u.holder] ?? 0) - n); player(s, u.holder).stock += n; } }
-    // §30.612: an Epidemic-eliminated city is replaced by exactly ONE token (so it
-    // counts as 4 points); other calamities replace it up to the area's limit.
+    // §29.62: a city given up is removed and replaced by the tokens its owner
+    // chose to leave (none by default; Epidemic always leaves at least one,
+    // §30.612) — each survivor made the city count one point less.
     for (const aid of choice.cities) {
-      if (u.calamityId === 'epidemic') {
-        delete s.areas[aid]!.city; player(s, u.holder).citiesAvailable += 1;
-        if (player(s, u.holder).stock > 0) { s.areas[aid]!.tokens[u.holder] = (s.areas[aid]!.tokens[u.holder] ?? 0) + 1; player(s, u.holder).stock -= 1; }
-      } else reduceSpecificCity(s, u.holder, aid);
+      delete s.areas[aid]!.city; player(s, u.holder).citiesAvailable += 1;
+      const place = Math.min(cityKeep(u, choice, aid), player(s, u.holder).stock);
+      if (place > 0) { s.areas[aid]!.tokens[u.holder] = (s.areas[aid]!.tokens[u.holder] ?? 0) + place; player(s, u.holder).stock -= place; }
     }
     log(s, 'calamity.units', u.holder, `${u.holder} suffers ${calamityById.get(u.calamityId)?.name ?? u.calamityId} (-${u.points} unit point${u.points === 1 ? '' : 's'}).`, { calamity: u.calamityId, points: u.points });
     // Flood's secondary loss (§30.512) is directed by the primary — set up as an
@@ -1764,16 +1790,23 @@ function marchBarbarianStep(s: GameState, here: string, next: string, surplus: n
  *  (pendingPick set + RNG serialized); false when the horde has settled. */
 function marchBarbarians(s: GameState, primary: PlayerId, start: string, visited: Set<string>, rng: Rng, before: ReturnType<typeof snapAreas>, overviewBefore: string): boolean {
   let here = start, guard = 0;
-  while (guard++ < 30) {
+  while (guard++ < 200) {
     const barbs = s.areas[here]!.tokens[BARBARIAN] ?? 0;
     const limit = areaById.get(here)?.sustains ?? 0;
     const surplus = barbs - limit;
     if (surplus <= 0 || barbs <= 0) break;
     const dests = neighbors(s, here).filter((n) => !areaById.get(n)?.isWater && !visited.has(n));
-    if (dests.length === 0) break;
-    const best = Math.max(...dests.map((d) => damageTo(s, d, primary)));
-    if (best === 0) break; // §30.5241: nowhere worth going
-    const tied = dests.filter((d) => damageTo(s, d, primary) === best);
+    const best = dests.length ? Math.max(...dests.map((d) => damageTo(s, d, primary))) : 0;
+    // §30.5241: no neighbour to hurt the victim in → head for the NEAREST area
+    // where they can (through empty or other nations' areas, or their own).
+    const tied = best > 0 ? dests.filter((d) => damageTo(s, d, primary) === best) : stepsTowardVictim(s, here, primary);
+    if (tied.length === 0) {
+      // Nowhere left to reach: the horde settles, and surplus beyond the area's
+      // population limit is removed (§30.5232).
+      s.areas[here]!.tokens[BARBARIAN] = limit;
+      if (limit <= 0) delete s.areas[here]!.tokens[BARBARIAN];
+      break;
+    }
     if (tied.length > 1) {
       s.rngState = rng.serialize();
       s.pendingPick = { chooser: barbarianChooser(s, primary), stage: 'barbarian', victim: primary, count: 1, candidates: tied, march: { here, visited: [...visited] }, before, overviewBefore };
@@ -1784,6 +1817,22 @@ function marchBarbarians(s: GameState, primary: PlayerId, start: string, visited
     visited.add(here);
   }
   return false;
+}
+
+/** §30.5241: first steps on a shortest land route (Barbarians cross water
+ *  boundaries but never open sea, §30.5233) from `here` to the nearest area where
+ *  they would damage `primary`. Empty if no such area is reachable. */
+function stepsTowardVictim(s: GameState, here: string, primary: PlayerId): string[] {
+  const dist = new Map<string, number>();
+  const queue: string[] = [];
+  for (const aid of Object.keys(s.areas)) if (aid !== here && inPlay(s, aid) && !areaById.get(aid)?.isWater && damageTo(s, aid, primary) > 0) { dist.set(aid, 0); queue.push(aid); }
+  for (let i = 0; i < queue.length; i++) {
+    const x = queue[i]!;
+    for (const n of landNeighbors(s, x)) if (!dist.has(n)) { dist.set(n, dist.get(x)! + 1); queue.push(n); }
+  }
+  const d = dist.get(here);
+  if (d === undefined) return [];
+  return landNeighbors(s, here).filter((n) => dist.get(n) === d - 1);
 }
 
 /** Barbarian Hordes (§30.52): place 15 tokens in the start area causing the most

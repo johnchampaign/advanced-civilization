@@ -589,6 +589,10 @@ export interface ChooseUnitsAction {
   type: 'chooseUnits';
   tokens: Record<string, number>;
   cities: string[];
+  /** §29.62: for a city given up (not ceded), how many tokens to leave in its
+   *  place — each one makes the city count one unit point less. Omitted → none
+   *  (Epidemic: the one token it must leave, §30.612). */
+  cityKeep?: Record<string, number>;
   /** §30.312: for Famine, how many Grain cards the Pottery holder chooses to commit
    *  (each cuts the loss by 4 and locks that Grain until next turn). */
   grainCommit?: number;

@@ -120,3 +120,26 @@ describe('combat step-through capture (lastCombats)', () => {
     expect(ev!.after.find((f) => f.id === 'egypt')?.tokens ?? 0).toBe(0); // egypt wiped
   });
 });
+
+describe('§24.34 pirate city assault', () => {
+  const storm = (n: number, adv: string[]) => {
+    let s = scenario({ egypt: { [cityArea.id]: n } }, {}, { advances: { egypt: adv } });
+    s.areas[cityArea.id]!.city = '__pirate__'; s.areas[cityArea.id]!.pirateCity = true;
+    s = runConflict(s);
+    return s;
+  };
+  it('7 attackers vs 6 pirate defenders: the pirates remove first, 2 attackers survive', () => {
+    const s = storm(7, []);
+    expect(s.areas[cityArea.id]?.city).toBeUndefined();
+    expect(s.areas[cityArea.id]?.tokens['egypt']).toBe(2);
+    expect(s.areas[cityArea.id]?.tokens['__pirate__']).toBeUndefined();
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
+  });
+  it('Engineering applies to pirate cities: 6 attack, 5 defend (§24.35)', () => {
+    const s6 = storm(6, ['engineering']);
+    expect(s6.areas[cityArea.id]?.city).toBeUndefined();
+    const s7 = storm(7, ['engineering', 'metalworking']);
+    expect(s7.areas[cityArea.id]?.tokens['egypt']).toBe(3);
+  });
+});
+

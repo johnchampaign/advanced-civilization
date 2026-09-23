@@ -1573,6 +1573,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
   const peek = useAreaPeek();
   const pass = legal.find((a) => a.type === 'pass');
   if (state.pendingDiscard?.holder === actor) return <DiscardControls state={state} onApply={onApply} />;
+  if (state.pendingPillage?.length && state.pendingPillage[0]!.attacker === actor) return <PillageControls state={state} legal={legal} onApply={onApply} />;
   if (state.pendingSupport?.holder === actor) return <SupportControls state={state} legal={legal} onApply={onApply} />;
   if (state.pendingPick?.chooser === actor) return <PickControls key={state.pendingPick.stage} state={state} legal={legal} onApply={onApply} />;
   if (phase === 'taxation') {
@@ -1592,11 +1593,11 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
     const rem = state.expansion?.remaining[actor] ?? 0;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <span className="civ-lbl">Not enough tokens in stock for full growth — place your <b>{rem}</b> remaining token{rem === 1 ? '' : 's'} (§13): <b>click a highlighted area on the map</b> to add one, or use a button below.</span>
+        <span className="civ-lbl">Not enough tokens in stock for full growth — you choose <b>where</b> your last <b>{rem}</b> token{rem === 1 ? '' : 's'} go, but growth may not be curtailed, so all of them must be placed (§20.2): <b>click a highlighted area on the map</b> to add one, or use a button below.</span>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
           {places.map((b, i) => { const aid = Object.keys(b.placements)[0]!; return <button className="civ-btn" key={i} {...peek(aid)} onClick={() => onApply(b)}>+1 {areaById.get(aid)?.name}</button>; })}
         </div>
-        {pass && <button className="civ-btn" onClick={() => onApply(pass)}>Done placing (forfeit rest)</button>}
+        {pass && <button className="civ-btn" onClick={() => onApply(pass)}>Done placing</button>}
       </div>
     );
   }
@@ -1840,6 +1841,29 @@ function CivilWarControls({ state, legal, onApply }: { state: GameState; legal: 
           {sugg && <button className="civ-btn" style={{ fontSize: 11 }} onClick={() => { setTok({ ...sugg.tokens }); setCities([...(sugg.cities ?? [])]); }}>Suggest</button>}
           <button className="civ-btn" disabled={!ok} onClick={() => onApply({ type: 'civilWarSelect', tokens: tok, cities })}>Confirm faction</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** §24.52: after storming a city the attacker may move UP TO three tokens from
+ *  stock to treasury — or fewer, or none, as they wish. */
+function PillageControls({ state, legal, onApply }: { state: GameState; legal: Action[]; onApply: (a: Action) => void }) {
+  const pl = state.pendingPillage![0]!;
+  const peek = useAreaPeek();
+  const counts = (legal.filter((a) => a.type === 'pillage') as Extract<Action, { type: 'pillage' }>[]).map((a) => a.count).sort((a, b) => b - a);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span className="civ-lbl">
+        💰 <b>Pillage</b> — you destroyed the city in <b {...peek(pl.area)}>{areaById.get(pl.area)?.name ?? pl.area}</b>. You may move
+        {' '}<b>up to {pl.taken}</b> token{pl.taken === 1 ? '' : 's'} from stock to treasury, or fewer if you'd rather keep them in stock for population growth (§24.52):
+      </span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {counts.map((n) => (
+          <button key={n} className={`civ-btn ${n === pl.taken ? 'on' : ''}`} onClick={() => onApply({ type: 'pillage', count: n })}>
+            {n === 0 ? 'Pillage nothing' : `Take ${n} token${n === 1 ? '' : 's'}`}
+          </button>
+        ))}
       </div>
     </div>
   );

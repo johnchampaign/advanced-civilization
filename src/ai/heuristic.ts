@@ -28,6 +28,13 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
     // phase — take the engine's cheapest-first suggestion.
     const discard = actions.find((a) => a.type === 'chooseDiscard');
     if (discard) return discard;
+    // §24.52: a stormed city may be pillaged for up to three tokens — take the
+    // lot (treasury pays for cities and ships; the AI is never short of stock).
+    if (state.pendingPillage?.length) {
+      const pill = (actions.filter((a) => a.type === 'pillage') as Extract<Action, { type: 'pillage' }>[])
+        .sort((a, b) => b.count - a.count)[0];
+      if (pill) return pill;
+    }
     // §26.32: a city-support reduction (can surface in the auto removeSurplus phase
     // or during Slave Revolt) — take the engine's cheapest-city suggestion.
     if (state.pendingSupport) { const c = actions.find((a) => a.type === 'chooseCities'); if (c) return c; }

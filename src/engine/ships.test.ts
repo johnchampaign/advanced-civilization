@@ -226,6 +226,23 @@ describe('§23.5 ship model: area-to-area voyages (reports 5d177c1b, 2811ba36)',
     ]] }, 'egypt')).toThrow(/23\.55/);
   });
 
+  it('the Gulf of Oman / Persia, Red, Black and Caspian Seas are open sea — no crossing without Astronomy (§4.23/§23.54, report 72da16b4)', () => {
+    for (const sea of ['gulf-of-oman', 'gulf-of-persia', 'red-sea', 'black-sea', 'caspian-sea']) {
+      expect(areaById.get(sea)?.isOpenSea).toBe(true);
+    }
+    const s = base();
+    s.areas['makkan'] = { tokens: { egypt: 1 }, ships: { egypt: 1 } };
+    fixSupply(s); movePhase(s);
+    expect(() => adapter.applyAction(s, { type: 'move', moves: [], voyages: [[
+      { area: 'makkan' }, { area: 'gulf-of-oman' }, { area: 'harmoza' },
+    ]] }, 'egypt')).toThrow(/Astronomy|23\.5/);
+    // ...but the coast is still navigable: Makkan -> Basri -> Onitas hugs the shore.
+    const out = adapter.applyAction(s, { type: 'move', moves: [], voyages: [[
+      { area: 'makkan', load: 1 }, { area: 'basri' }, { area: 'onitas', unload: 1 },
+    ]] }, 'egypt');
+    expect(out.areas['onitas']!.tokens['egypt']).toBe(1);
+  });
+
   it('anchors: a voyage may end in a non-open water area (§23.55), and the ship can sail on next phase', () => {
     const s = base();
     s.areas['phaestos'] = { tokens: {}, ships: { egypt: 1 } };

@@ -558,8 +558,8 @@ function resolveCityAssault(s: GameState, aid: string, attacker: PlayerId, rng: 
     a.tokens[PIRATE] = req - 1;
     resolveTokenCombat(s, aid, 0);
     delete a.tokens[PIRATE];
-    const pa = player(s, attacker); const loot = Math.min(3, pa.stock); pa.stock -= loot; pa.treasury += loot;
     log(s, 'city.storm', attacker, `${attacker} destroyed the pirate city in ${areaName(aid)}.`, { area: aid, pirate: true });
+    offerPillage(s, attacker, aid);
     return;
   }
   const attEng = hasEng(s, attacker), defEng = hasEng(s, defender);
@@ -582,11 +582,39 @@ function resolveCityAssault(s: GameState, aid: string, attacker: PlayerId, rng: 
   // Consequences (§24.5) apply only to a direct attack by a player — not when a
   // city is razed by Barbarians or other neutral forces (§24.53).
   if (isPlayer(s, attacker)) {
-    const p = player(s, attacker);
-    const pillage = Math.min(3, p.stock);
-    p.stock -= pillage; p.treasury += pillage;
     stealCardFromVictim(s, attacker, defender, rng);
+    offerPillage(s, attacker, aid);
   }
+}
+
+/** §24.52: a player who storms a city "may transfer UP TO three tokens from his
+ *  stock to his treasury ... may choose to transfer fewer than three if he
+ *  wishes." The maximum is taken now (so nothing else in this conflict phase
+ *  sees a different stock), and the attacker is then asked how many to keep —
+ *  the rest goes straight back to stock. Neutral attackers (Barbarians) never
+ *  pillage (§24.53). */
+function offerPillage(s: GameState, attacker: PlayerId, aid: string): void {
+  if (!isPlayer(s, attacker)) return;
+  const p = player(s, attacker);
+  const taken = Math.min(3, p.stock);
+  if (taken <= 0) return;
+  p.stock -= taken; p.treasury += taken;
+  (s.pendingPillage ??= []).push({ attacker, area: aid, taken });
+}
+
+/** Settle one §24.52 pillage: keep `count` of the tokens already moved to the
+ *  treasury and return the remainder to stock. */
+function applyPillage(s: GameState, actor: PlayerId, count: number): void {
+  const head = s.pendingPillage?.[0];
+  if (!head) throw new Error('no pillage to settle');
+  if (head.attacker !== actor) throw new Error(`the pillage in ${areaName(head.area)} is ${head.attacker}'s choice`);
+  if (!Number.isInteger(count) || count < 0 || count > head.taken) throw new Error(`pillage must be 0-${head.taken} tokens (§24.52)`);
+  const p = player(s, actor);
+  const back = head.taken - count;
+  p.treasury -= back; p.stock += back;
+  log(s, 'combat.pillage.take', actor, `${actor} pillaged ${count} token${count === 1 ? '' : 's'} from the destroyed city in ${areaName(head.area)} (§24.52).`, { area: head.area, count, max: head.taken });
+  s.pendingPillage = s.pendingPillage!.slice(1);
+  if (!s.pendingPillage.length) s.pendingPillage = undefined;
 }
 
 /** Move one random trade card from the victim's hand to the attacker (§24.51).
@@ -2077,6 +2105,7 @@ export function normalize(s: GameState): void {
       runAutoPhase(s);
       if (s.pendingDiscard) return; // §31.71: paused for a hand-limit discard choice
       if (s.pendingSupport) return; // §26.32: paused for a city-support reduction choice
+      if (s.pendingPillage?.length) return; // §24.52: paused for the attacker's pillage choice
       const np = nextPhase(s.phase);
       if (np === 'taxation') {
         // Turn rollover.
@@ -2469,6 +2498,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
     if (state.pendingDiscard) return state.pendingDiscard.holder;
     // A city-support reduction (§26.32) can arise during the auto removeSurplus
     // phase, so it must be checked before the auto-phase short-circuit too.
+    if (state.pendingPillage?.length) return state.pendingPillage[0]!.attacker;
     if (state.pendingSupport) return state.pendingSupport.holder;
     if (AUTO_PHASES.has(state.phase)) return null;
     // A pending city-choice / unit-loss / secondary allocation is the victim's.
@@ -2511,6 +2541,12 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
 
     switch (action.type) {
       case 'pass':
+        // §20.2: growth may not be voluntarily curtailed — a player with stock
+        // left and areas that can still take it must place the rest.
+        if (s.phase === 'populationExpansion' && (s.expansion?.remaining[actor] ?? 0) > 0
+          && Object.values(s.expansion?.caps[actor] ?? {}).some((c) => c > 0) && player(s, actor).stock > 0) {
+          throw new Error('population expansion is automatic and may not be voluntarily curtailed (§20.2)');
+        }
         if (s.phase === 'trade') {
           // "Done trading": don't prompt this player again; phase ends when all
           // are done. (Other players' offers no longer force you back in.)
@@ -2568,6 +2604,9 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         if (!s.actedThisPhase.includes(actor)) s.actedThisPhase.push(actor);
         break;
       }
+      case 'pillage':
+        applyPillage(s, actor, action.count);
+        break;
       case 'placeTokens':
         if (s.phase !== 'populationExpansion') throw new Error('placeTokens only in population expansion');
         applyPlaceTokens(s, actor, action.placements);
@@ -2781,6 +2820,11 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
     }
     // §26.32: a pending city-support reduction (may arise in the auto removeSurplus
     // phase) — offer the cheapest city to reduce. Not a 'pass'.
+    if (state.pendingPillage?.length && state.pendingPillage[0]!.attacker === actor) {
+      // §24.52: keep up to three of the pillaged tokens — or fewer, or none.
+      const max = state.pendingPillage[0]!.taken;
+      return Array.from({ length: max + 1 }, (_, n) => ({ type: 'pillage', count: max - n }) as Action);
+    }
     if (state.pendingSupport && state.pendingSupport.holder === actor) {
       return [{ type: 'chooseCities', areas: [suggestSupportReduce(state, state.pendingSupport)] }];
     }
@@ -2789,7 +2833,14 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
     if (state.pendingPick && state.pendingPick.chooser === actor) {
       return [{ type: 'pickAreas', areas: suggestPick(state, state.pendingPick) }];
     }
-    const out: Action[] = [{ type: 'pass' }];
+    // §20.2: population expansion "is automatic and may not be voluntarily
+    // curtailed" — a player short of stock chooses WHERE their remaining tokens
+    // go, not whether to place them. No 'pass' until they are all placed.
+    const growthOwed = state.phase === 'populationExpansion'
+      && (state.expansion?.remaining[actor] ?? 0) > 0
+      && Object.values(state.expansion?.caps[actor] ?? {}).some((c) => c > 0)
+      && p.stock > 0;
+    const out: Action[] = growthOwed ? [] : [{ type: 'pass' }];
     switch (state.phase) {
       case 'taxation': {
         // A Coinage holder (with cities) picks their rate 1-3, which collects now.

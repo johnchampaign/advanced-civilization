@@ -430,6 +430,9 @@ export interface GameState {
   pendingPick?: PendingPick;
   /** A pending city-support reduction the player must direct (§26.32 / §30.42). */
   pendingSupport?: PendingSupport;
+  /** §24.52: cities stormed this conflict phase whose attacker has not yet said
+   *  how much of the ≤3 pillage they keep. Resolved one at a time, in order. */
+  pendingPillage?: PendingPillage[];
   /** §22.3: ships owing maintenance this Ship Construction phase (count per player,
    *  snapshotted at phase entry — ships built this phase aren't maintained until
    *  next turn). Resolved when the player finishes; lets them decline maintenance
@@ -600,6 +603,20 @@ export interface ChooseUnitsAction {
 
 /** §31.71: surrender these surplus commodity cards (one entry per card; length
  *  must equal the pending discard count) to trim the hand to 8. */
+export interface PendingPillage {
+  /** The player who stormed the city and may now pillage it (§24.52). */
+  attacker: PlayerId;
+  /** The area whose city was destroyed (for the prompt / log). */
+  area: string;
+  /** Tokens already moved stock -> treasury (the ≤3 maximum). The attacker may
+   *  keep fewer; the difference goes back to stock. */
+  taken: number;
+}
+export interface PillageAction {
+  type: 'pillage';
+  /** How many tokens to keep in treasury from the stormed city (0..3, §24.52). */
+  count: number;
+}
 export interface ChooseDiscardAction {
   type: 'chooseDiscard';
   cards: string[];
@@ -647,6 +664,7 @@ export type Action =
   | ChooseCitiesAction
   | ChooseUnitsAction
   | ChooseDiscardAction
+  | PillageAction
   | CivilWarSelectAction
   | CivilWarKeepAction
   | PickAreasAction

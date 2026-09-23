@@ -95,6 +95,26 @@ describe('§24.3 city assault', () => {
     expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
   });
 
+  it('pillage is up to three tokens, and the attacker may take fewer (§24.52, report 8e136395)', () => {
+    let s = scenario({ egypt: { [cityArea.id]: 7 } }, { babylon: [cityArea.id] });
+    s = runConflict(s);
+    // The game stops and asks: it is the attacker's choice, not an automatic 3.
+    expect(adapter.currentActor(s)).toBe('egypt');
+    expect(s.pendingPillage?.[0]).toMatchObject({ attacker: 'egypt', area: cityArea.id, taken: 3 });
+    expect(adapter.legalActions(s, 'egypt').map((a) => a.type === 'pillage' ? a.count : a.type)).toEqual([3, 2, 1, 0]);
+    const stockBefore = s.players['egypt']!.stock;
+    const one = adapter.applyAction(s, { type: 'pillage', count: 1 }, 'egypt');
+    expect(one.players['egypt']!.treasury).toBe(1);
+    expect(one.players['egypt']!.stock).toBe(stockBefore + 2); // the other two stay in stock
+    expect(one.pendingPillage).toBeUndefined();
+    expect(pieceConservationProblems(one, pieceCounts)).toEqual([]);
+    // Declining entirely is legal too.
+    const none = adapter.applyAction(s, { type: 'pillage', count: 0 }, 'egypt');
+    expect(none.players['egypt']!.treasury).toBe(0);
+    expect(none.players['egypt']!.stock).toBe(stockBefore + 3);
+    expect(() => adapter.applyAction(s, { type: 'pillage', count: 4 }, 'egypt')).toThrow(/24\.52/);
+  });
+
   it('Engineering lets an attacker storm a city with only 6 tokens', () => {
     const without = runConflict(scenario({ egypt: { [cityArea.id]: 6 } }, { babylon: [cityArea.id] }));
     expect(without.areas[cityArea.id]!.city).toBe('babylon'); // 6 < 7, fails

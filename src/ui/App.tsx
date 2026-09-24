@@ -616,7 +616,7 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
                 return (
                   <g key={owner}>
                     <polygon points={tokenPoints(an.x + i * 6, an.y, an.r)} fill={barb ? '#1a1a1a' : (civById.get(owner)?.color ?? '#888')} stroke={barb ? '#c33' : '#000'} strokeWidth={2} strokeLinejoin="round" opacity={0.95} />
-                    <text x={an.x + i * 6} y={an.y + an.r * 0.4} textAnchor="middle" fontSize={an.r * 1.1} fontWeight="bold" fill={barb ? '#f55' : '#fff'}>{barb ? '⚔' : n}</text>
+                    <text x={an.x + i * 6} y={an.y + an.r * 0.4} textAnchor="middle" fontSize={an.r * 1.1} fontWeight="bold" fill={barb ? '#f55' : '#fff'}>{n}</text>
                   </g>
                 );
               })}
@@ -727,7 +727,7 @@ function AreaTooltip({ areaId, state, zoomed }: { areaId: string; state: GameSta
       {owners.length > 0 && (
         <div style={{ marginTop: 2, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {owners.map(([o, n]) => (
-            <span key={o}><span style={{ display: 'inline-block', width: 9, height: 9, background: o === BARB ? '#1a1a1a' : (civById.get(o)?.color ?? '#888'), borderRadius: 2, marginRight: 3, verticalAlign: 'middle' }} />{nameOf(o)} {o === BARB ? '⚔' : n}</span>
+            <span key={o}><span style={{ display: 'inline-block', width: 9, height: 9, background: o === BARB ? '#1a1a1a' : (civById.get(o)?.color ?? '#888'), borderRadius: 2, marginRight: 3, verticalAlign: 'middle' }} />{nameOf(o)} {o === BARB ? `⚔ ${n}` : n}</span>
           ))}
         </div>
       )}

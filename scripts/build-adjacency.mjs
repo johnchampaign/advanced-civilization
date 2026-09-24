@@ -89,6 +89,9 @@ const REMOVE_EDGES = [
   // Euripus / Gulf of Euboea is water, so it is left only by ship.
   ['chalkis', 'athens'], ['chalkis', 'delphi'], ['chalkis', 'thessaly'], ['chalkis', 'thessalonica'],
   ['eretria', 'athens'],
+  // Four-corner crossings: these pairs meet only at a single point where four
+  // borders cross, so no boundary line divides them (§4.31, §23.3). Report fe47506e.
+  ['gulashkird', 'pasagardes'], ['carmania', 'kerman'],
 ];
 for (const [a, b] of REMOVE_EDGES) {
   if (adjacency[a]) adjacency[a] = adjacency[a].filter((x) => x !== b);

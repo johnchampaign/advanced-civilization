@@ -363,3 +363,26 @@ describe('§23.3 islands are all-water — population must embark to leave (issu
     expect(dests.has('thapsus->sabrata')).toBe(true);
   });
 });
+
+describe('map geometry from the 2026-09-24 report queue', () => {
+  it('§23.57 applies only in Greece: a ship rounds the toe of Italy through Campania (report de91eafe)', () => {
+    const s = base();
+    s.areas['tarentum'] = { tokens: {}, ships: { egypt: 1 } };
+    fixSupply(s); s.phase = 'movement'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    const out = adapter.applyAction(s, { type: 'move', moves: [], voyages: [[
+      { area: 'tarentum' }, { area: 'campania' }, { area: 'neapolis' },
+    ]] }, 'egypt');
+    expect(out.areas['neapolis']!.ships!['egypt']).toBe(1);
+  });
+  it('Babylonia touches the Gulf inlet, so it is coastal and can launch ships (report c9e6e49b)', () => {
+    expect(isCoastal('babylonia')).toBe(true);
+    expect(navalDestinations(null, 'babylonia', 4, false).has('ur')).toBe(true);
+  });
+  it('areas meeting only at a four-corner point are not adjacent (report fe47506e)', () => {
+    expect(adjacency['gulashkird']).not.toContain('pasagardes');
+    expect(adjacency['pasagardes']).not.toContain('gulashkird');
+    expect(adjacency['carmania']).not.toContain('kerman');
+    expect(adjacency['gulashkird']).toContain('carmania'); // real borders stay
+    expect(adjacency['pasagardes']).toContain('kerman');
+  });
+});

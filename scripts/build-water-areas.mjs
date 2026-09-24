@@ -48,7 +48,7 @@ for (const [land, subs] of Object.entries(graph.embark)) for (const s of subs) {
 // Owner corrections: coastal lands whose shore water was traced into a
 // NEIGHBOUR's polygon, so their own polygon has no sea sub. Wire them into the
 // adjacent (gulf/sea-connected) water they physically touch. See [[ur-thyras-shiraz-coastal-corrections]].
-const MANUAL_EMBARK = { ur: ['charax#sea1', 'susa#sea2', 'chaldaea#sea1'] };
+const MANUAL_EMBARK = { ur: ['charax#sea1', 'susa#sea2', 'chaldaea#sea1'], babylonia: ['ur#sea2', 'susa#sea2'] }; // babylonia: its tip reaches the Gulf inlet (report c9e6e49b)
 for (const [land, subs] of Object.entries(MANUAL_EMBARK)) for (const s of subs) { const w = subToArea.get(s); if (baseById.has(land) && w) { const before = adj[land]?.size; add(land, w); if (adj[land] && adj[land].size !== before) embarkEdges++; } }
 
 const adjOut = {};

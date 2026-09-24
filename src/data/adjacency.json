@@ -311,7 +311,9 @@
   "niniveh",
   "parthia",
   "susa",
-  "ur"
+  "susa#sea2",
+  "ur",
+  "ur#sea2"
  ],
  "baetica": [
   "corduba",
@@ -563,7 +565,6 @@
  "carmania": [
   "banda-abbas",
   "gulashkird",
-  "kerman",
   "kurangan",
   "nurabad",
   "pasagardes",
@@ -1157,7 +1158,6 @@
   "harmoza",
   "kerman",
   "megan",
-  "pasagardes",
   "pura"
  ],
  "gulf-of-oman": [
@@ -1401,7 +1401,6 @@
  ],
  "kerman": [
   "aria",
-  "carmania",
   "gulashkird",
   "pasagardes",
   "pura"
@@ -2074,7 +2073,6 @@
  "pasagardes": [
   "aria",
   "carmania",
-  "gulashkird",
   "kerman",
   "kurangan",
   "persepolis"
@@ -2561,6 +2559,7 @@
   "ur"
  ],
  "susa#sea2": [
+  "babylonia",
   "chaldaea#sea1",
   "susa",
   "susa#sea3",
@@ -2865,6 +2864,7 @@
   "ur#sea3"
  ],
  "ur#sea2": [
+  "babylonia",
   "chaldaea#sea1",
   "susa#sea2",
   "susa#sea3",

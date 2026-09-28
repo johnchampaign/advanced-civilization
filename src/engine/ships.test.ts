@@ -350,7 +350,7 @@ describe('§23.3 islands are all-water — population must embark to leave (issu
     crete: ['knossos', 'phaestos'], cyprus: ['cyprus', 'salamis'], corsica: ['corsica-2'],
     sardinia: ['sardinia-2', 'carales-2'], baleares: ['baleares', 'ebusus'],
     rhodes: ['rhodes'], thera: ['thera'], lesbos: ['lesbos'], sicily: ['syracus', 'milazzo', 'palermo'],
-    euboea: ['chalkis', 'eretria'],
+    euboea: ['chalkis', 'eretria'], lemnos: ['lemnos'],
   };
   it('no island area has a land neighbour outside its own island', () => {
     for (const members of Object.values(ISLANDS)) {
@@ -372,6 +372,20 @@ describe('§23.3 islands are all-water — population must embark to leave (issu
     expect(dests.has('phaestos->argos')).toBe(false);
     expect(dests.has('phaestos->sparta')).toBe(false);
     expect(dests.has('syracus->campania')).toBe(false); // Messina is ship-only
+  });
+  it('does not walk onto or off Lemnos: an island with water on every border', () => {
+    let s = base();
+    s.areas['troy'] = { tokens: { egypt: 3 } };
+    s.areas['lemnos'] = { tokens: { egypt: 2 } };
+    s.phase = 'movement'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    const dests = new Set<string>();
+    for (const a of adapter.legalActions(s, 'egypt'))
+      if (a.type === 'move') for (const m of (a as { moves: { from: string; to: string; byShip?: boolean }[] }).moves)
+        if (!m.byShip) dests.add(`${m.from}->${m.to}`);
+    expect([...dests].filter((d) => d.includes('lemnos'))).toEqual([]);
+    // Every former land link is still a ship crossing.
+    for (const n of ['troy', 'thrace', 'thessalonica', 'bycantinum'])
+      expect(shipNeighbors.get('lemnos')?.some((h) => h.to === n)).toBe(true);
   });
   it('does not walk onto or off Euboea: Athens/Delphi↔Chalkis/Eretria is water (report d4cb0ffe)', () => {
     let s = base();

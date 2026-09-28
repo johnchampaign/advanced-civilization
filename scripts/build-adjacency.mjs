@@ -85,6 +85,9 @@ const REMOVE_EDGES = [
   ['rhodes', 'lycia'], ['rhodes', 'miletus'],
   ['thera', 'argos'], ['thera', 'athens'], ['thera', 'eretria'],
   ['lesbos', 'ionia'], ['lesbos', 'sardes'], ['lesbos', 'troy'],
+  // Lemnos is an island in the middle of its area: every border runs through water
+  // (checked against the board art 2026-09-28). Ship/Barbarian crossings only.
+  ['lemnos', 'bycantinum'], ['lemnos', 'thessalonica'], ['lemnos', 'thrace'], ['lemnos', 'troy'],
   ['palermo', 'carthago'],   // Sicilian channel to Africa
   ['syracus', 'campania'], ['milazzo', 'campania'], // Strait of Messina — ship-only in AC
   // Euboea{chalkis,eretria} is an island on the board (report d4cb0ffe): the

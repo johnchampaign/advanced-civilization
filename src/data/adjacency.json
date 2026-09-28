@@ -492,7 +492,6 @@
  "bycantinum": [
   "black-sea",
   "bycantinum#sea1",
-  "lemnos",
   "moesia",
   "thrace",
   "troy"
@@ -1440,11 +1439,7 @@
  ],
  "lemnos": [
   "aegean-sea",
-  "bycantinum",
-  "lemnos#sea1",
-  "thessalonica",
-  "thrace",
-  "troy"
+  "lemnos#sea1"
  ],
  "lemnos#sea1": [
   "aegean-sea",
@@ -2679,7 +2674,6 @@
  ],
  "thessalonica": [
   "aegean-sea",
-  "lemnos",
   "macedonia",
   "thessalonica#sea2",
   "thessaly",
@@ -2707,7 +2701,6 @@
  ],
  "thrace": [
   "bycantinum",
-  "lemnos",
   "macedonia",
   "moesia",
   "paeonia",
@@ -2771,7 +2764,6 @@
   "bithynia",
   "black-sea",
   "bycantinum",
-  "lemnos",
   "sardes",
   "troy#sea1",
   "troy#sea3",

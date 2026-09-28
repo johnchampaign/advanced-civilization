@@ -1840,6 +1840,19 @@ function barbarianChooser(s: GameState, primary: PlayerId): PlayerId {
   return [...s.seating].sort((a, b) => player(s, b).stock - player(s, a).stock)[0]!;
 }
 
+/** §30.5233: where Barbarians can go from `aid`. They move like land units, but may
+ *  also "move across water boundaries, but not across open sea areas" — so they
+ *  hop straight into a land area across a border drawn through water (a strait or
+ *  island crossing: the land-to-land hops of the ship graph). They never step into
+ *  a water area, so they never cross an open sea. */
+function barbarianNeighbors(s: GameState, aid: string): string[] {
+  const out = new Set(landNeighbors(s, aid));
+  for (const hop of shipNeighbors.get(aid) ?? []) {
+    if (!areaById.get(hop.to)?.isWater && inPlay(s, hop.to)) out.add(hop.to);
+  }
+  return [...out];
+}
+
 /** Move the surplus Barbarians from `here` to `next` (the rest settle), then
  *  resolve the resulting combat. */
 function marchBarbarianStep(s: GameState, here: string, next: string, surplus: number, limit: number, rng: Rng): void {
@@ -1861,7 +1874,7 @@ function marchBarbarians(s: GameState, primary: PlayerId, start: string, visited
     const limit = areaById.get(here)?.sustains ?? 0;
     const surplus = barbs - limit;
     if (surplus <= 0 || barbs <= 0) break;
-    const dests = neighbors(s, here).filter((n) => !areaById.get(n)?.isWater && !visited.has(n));
+    const dests = barbarianNeighbors(s, here).filter((n) => !visited.has(n));
     const best = dests.length ? Math.max(...dests.map((d) => damageTo(s, d, primary))) : 0;
     // §30.5241: no neighbour to hurt the victim in → head for the NEAREST area
     // where they can (through empty or other nations' areas, or their own).
@@ -1885,8 +1898,8 @@ function marchBarbarians(s: GameState, primary: PlayerId, start: string, visited
   return false;
 }
 
-/** §30.5241: first steps on a shortest land route (Barbarians cross water
- *  boundaries but never open sea, §30.5233) from `here` to the nearest area where
+/** §30.5241: first steps on a shortest route (overland, or across a water boundary
+ *  but never through open sea, §30.5233) from `here` to the nearest area where
  *  they would damage `primary`. Empty if no such area is reachable. */
 function stepsTowardVictim(s: GameState, here: string, primary: PlayerId): string[] {
   const dist = new Map<string, number>();
@@ -1894,11 +1907,11 @@ function stepsTowardVictim(s: GameState, here: string, primary: PlayerId): strin
   for (const aid of Object.keys(s.areas)) if (aid !== here && inPlay(s, aid) && !areaById.get(aid)?.isWater && damageTo(s, aid, primary) > 0) { dist.set(aid, 0); queue.push(aid); }
   for (let i = 0; i < queue.length; i++) {
     const x = queue[i]!;
-    for (const n of landNeighbors(s, x)) if (!dist.has(n)) { dist.set(n, dist.get(x)! + 1); queue.push(n); }
+    for (const n of barbarianNeighbors(s, x)) if (!dist.has(n)) { dist.set(n, dist.get(x)! + 1); queue.push(n); }
   }
   const d = dist.get(here);
   if (d === undefined) return [];
-  return landNeighbors(s, here).filter((n) => dist.get(n) === d - 1);
+  return barbarianNeighbors(s, here).filter((n) => dist.get(n) === d - 1);
 }
 
 /** Barbarian Hordes (§30.52): place 15 tokens in the start area causing the most

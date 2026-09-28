@@ -680,6 +680,26 @@ describe('§30.52 Barbarian Hordes', () => {
     expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
   });
 
+  it('cross a water boundary to reach the victim, but never enter the sea (§30.5233)', () => {
+    // Africa's only units: one token in Tunisia (a start area, so the horde lands
+    // there) and one in Palermo on Sicily, which is cut off from Africa by water —
+    // Carthago|Palermo is a border drawn through the sea. Overland Palermo is
+    // unreachable; across that water boundary it is the one place left to hurt Africa.
+    let s = scenario({
+      players: ['africa', 'babylon'],
+      tokens: { africa: { 'tunisia-2': 1, palermo: 1 } },
+      hands: { africa: { 'calamity:barbarianhordes': 1 } },
+    });
+    s = resolve(s);
+    const marches = s.log.filter((e) => e.kind === 'calamity.barbarians.march').map((e) => e.payload as { from: string; to: string });
+    expect(marches.at(-1)).toMatchObject({ from: 'carthago', to: 'palermo' });
+    expect(populationCount(s, 'africa')).toBe(0);
+    expect(s.areas['palermo']?.tokens['__barbarian__']).toBe(2); // settled at Palermo's limit
+    // Barbarians only ever stand in land areas.
+    for (const [aid, a] of Object.entries(s.areas)) if (areaById.get(aid)?.isWater) expect(a.tokens['__barbarian__'] ?? 0).toBe(0);
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
+  });
+
   it('a Hordes card the victim drew and kept is untraded — the victim does not break the tie (report 982d311f)', () => {
     // Drawing a calamity records the drawer in calamityTradedFrom, so a card that
     // was never traded names its own holder there.

@@ -65,11 +65,13 @@ const REMOVE_EDGES = [
   // to leave it. Its land areas (knossos, phaestos) were over-connected across the
   // Aegean/Mediterranean to the mainland and neighbouring islands. Internal border
   // knossos↔phaestos is kept; all off-island land edges are cut (reach by ship).
-  ['knossos', 'rhodes'],    // open sea (Karpathian)
-  ['knossos', 'thera'],     // open sea (Aegean)
-  ['phaestos', 'argos'],    // open sea (to mainland Greece)
-  ['phaestos', 'sparta'],   // open sea (to mainland Greece)
-  ['phaestos', 'thera'],    // open sea (Aegean)
+  // These borders run through water, not open sea (a ship or Barbarians, §30.5233,
+  // cross them directly; checked against the board art 2026-09-28).
+  ['knossos', 'rhodes'],    // all-water border (Karpathian strait)
+  ['knossos', 'thera'],     // all-water border (Thera's south line is Crete's north)
+  ['phaestos', 'argos'],    // all-water border (to mainland Greece)
+  ['phaestos', 'sparta'],   // all-water border (to mainland Greece)
+  ['phaestos', 'thera'],    // all-water border
   // Remaining Mediterranean islands (§23.3; owner-confirmed against the board).
   // Each keeps its internal land borders; every off-island land edge is all-water
   // (reach only by ship). Groups: Cyprus{cyprus,salamis}, Corsica{corsica-2},

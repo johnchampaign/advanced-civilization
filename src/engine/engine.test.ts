@@ -124,6 +124,33 @@ describe('advance credits', () => {
     s.players['egypt']!.hand = {}; s.players['egypt']!.treasury = 89; // 90 - the illegal 10 credit
     expect(() => adapter.applyAction(s, { type: 'buyAdvance', advances: ['pottery', 'clothmaking'], spendCommodities: {}, spendTreasury: 89 }, 'egypt')).toThrow(/insufficient/);
   });
+  it('uses Mining only once per turn (§32.261, report cc8187aa)', () => {
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 1, maxTurns: 60 });
+    s.phase = 'acquireAdvances'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    const p = s.players['egypt']!;
+    // Music and Drama are Arts: Mining's Crafts credit doesn't touch them.
+    p.advances = ['mining']; p.hand = { gems: 2, gold: 1 }; p.treasury = 30;
+    // Gems ×2 is 32, or 72 with Mining — Music (60) needs no treasury with it.
+    const after = adapter.applyAction(s, { type: 'buyAdvance', advance: 'music', spendCommodities: { gems: 2 }, spendTreasury: 30 }, 'egypt');
+    expect(after.players['egypt']!.advances).toContain('music');
+    expect(after.players['egypt']!.treasury).toBe(30); // Mining covered it
+    // Gold ×1 (9) + 30 treasury = 39 < 60. Mining would make the Gold 36 (66 in
+    // all), but it has already been used this turn.
+    expect(() => adapter.applyAction(after, { type: 'buyAdvance', advance: 'drama', spendCommodities: { gold: 1 }, spendTreasury: 30 }, 'egypt')).toThrow(/insufficient/);
+    expect(adapter.legalActions(after, 'egypt').some((a) => a.type === 'buyAdvance' && (a as { advance?: string }).advance === 'drama')).toBe(false);
+  });
+  it('keeps Mining for later when a purchase does not need it (§32.261)', () => {
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 1, maxTurns: 60 });
+    s.phase = 'acquireAdvances'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    const p = s.players['egypt']!;
+    p.advances = ['mining']; p.hand = { gems: 4, gold: 1 }; p.treasury = 24;
+    // Gems ×4 is 128 (200 with Mining) — Music is paid in full without Mining, so
+    // Mining isn't spent on it.
+    const after = adapter.applyAction(s, { type: 'buyAdvance', advance: 'music', spendCommodities: { gems: 4 }, spendTreasury: 0 }, 'egypt');
+    // Gold ×1 with Mining is 36, + 24 treasury = 60: Drama is affordable.
+    const done = adapter.applyAction(after, { type: 'buyAdvance', advance: 'drama', spendCommodities: { gold: 1 }, spendTreasury: 24 }, 'egypt');
+    expect(done.players['egypt']!.advances).toContain('drama');
+  });
   it('requires a prerequisite acquired in an earlier turn (§31.62)', () => {
     const s = createGame({ players: ['egypt', 'babylon'], seed: 1, maxTurns: 60 });
     s.phase = 'acquireAdvances'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];

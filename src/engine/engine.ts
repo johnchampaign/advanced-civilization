@@ -37,6 +37,7 @@ import {
   commoditySetValue,
   creditTowards,
   handValue,
+  miningAvailable,
   inPlay,
   landNeighbors,
   navalDestinations,
@@ -345,6 +346,15 @@ function setupShipMaintenance(s: GameState): void {
   const owed: Record<PlayerId, number> = {};
   for (const id of s.seating) owed[id] = shipCount(s, id);
   s.shipMaintOwed = owed;
+  s.shipsBuiltThisPhase = {};
+}
+
+/** §22.3: how many of `id`'s ships in `area` were already in play when this phase
+ *  began — only those may be scrapped (declined maintenance). */
+function scrappableShips(s: GameState, id: PlayerId, area: string): number {
+  const here = s.areas[area]?.ships?.[id] ?? 0;
+  const built = s.shipsBuiltThisPhase?.[id]?.[area] ?? 0;
+  return Math.max(0, Math.min(here - built, s.shipMaintOwed?.[id] ?? 0));
 }
 
 /** §22.3: pay one token per owed ship (treasury, else a levy from a ship's area);
@@ -394,6 +404,8 @@ function applyBuildShips(s: GameState, actor: PlayerId, builds: { area: string; 
       if (cost > 0) throw new Error('not enough tokens/treasury to build a ship');
       (a.ships ??= {})[actor] = (a.ships[actor] ?? 0) + 1;
       p.shipsAvailable -= 1;
+      const built = ((s.shipsBuiltThisPhase ??= {})[actor] ??= {});
+      built[b.area] = (built[b.area] ?? 0) + 1;
     }
     log(s, 'ship.build', actor, `${actor} built ${b.count} ship(s) in ${areaName(b.area)}${b.payFrom === 'treasury' ? ' (paid from treasury)' : ''}.`, { area: b.area, count: b.count, paidFrom: b.payFrom ?? 'area' });
   }
@@ -914,9 +926,30 @@ function resumeAfterChoice(s: GameState, calId: string, holder: PlayerId, before
   if (!s.calamityActive) setupCalamityConversion(s);
 }
 
+/** §29.5: no player may be the primary victim of more than two calamities in a
+ *  turn. A player holding more has them shuffled and two drawn at random; the rest
+ *  are disregarded and go back to their stacks. (Secondary effects are unlimited.) */
+function capCalamitiesPerPlayer(s: GameState, rng: Rng): void {
+  for (const id of s.seating) {
+    const hand = player(s, id).hand;
+    const held: string[] = [];
+    for (const [card, n] of Object.entries(hand)) if (card.startsWith('calamity:')) for (let i = 0; i < n; i++) held.push(card);
+    if (held.length <= 2) continue;
+    const dropped = rng.shuffle(held).slice(2);
+    for (const card of dropped) {
+      hand[card] = (hand[card] ?? 0) - 1;
+      if (hand[card]! <= 0) delete hand[card];
+      const lvl = calamityById.get(card.slice('calamity:'.length))?.level;
+      if (lvl && s.trade.stacks[lvl]) s.trade.stacks[lvl]!.unshift(card);
+    }
+    const names = dropped.map((c) => calamityById.get(c.slice('calamity:'.length))?.name ?? c);
+    log(s, 'calamity.disregarded', id, `${id} holds ${held.length} calamities; only two may strike (§29.5) — ${names.join(' and ')} ${dropped.length === 1 ? 'is' : 'are'} drawn out at random and returned to the stack.`, { calamities: dropped.map((c) => c.slice('calamity:'.length)), held: held.length, rule: '29.5' });
+  }
+}
+
 function runCalamity(s: GameState): void {
   const rng = Rng.fromState(s.rngState);
-  if (!s.calamityActive) { s.calamityActive = true; s.lastCalamities = []; }
+  if (!s.calamityActive) { s.calamityActive = true; s.lastCalamities = []; capCalamitiesPerPlayer(s, rng); }
   let next: ReturnType<typeof nextHeldCalamity>;
   while ((next = nextHeldCalamity(s))) {
     const { calamityId, holder } = next;
@@ -1799,8 +1832,10 @@ function damageTo(s: GameState, aid: string, primary: PlayerId): number {
 /** §30.5251: who breaks a Barbarian movement tie — the player who traded the card,
  *  else the player with the most units in stock. */
 function barbarianChooser(s: GameState, primary: PlayerId): PlayerId {
+  // A drawn card records its drawer here too, so a holder who KEPT it looks like
+  // its own trader — that is "not traded", not "the victim chooses".
   const t = s.calamityTradedFrom['barbarianhordes'];
-  if (t && isPlayer(s, t)) return t;
+  if (t && t !== primary && isPlayer(s, t)) return t;
   return [...s.seating].sort((a, b) => player(s, b).stock - player(s, a).stock)[0]!;
 }
 
@@ -2114,7 +2149,7 @@ export function normalize(s: GameState): void {
         s.censusOrder = s.activeOrder = censusOrder(s);
         s.actedThisPhase = [];
         log(s, 'census.order', null, `Turn ${s.turn} census: ${s.censusOrder.map((id) => `${id} ${populationCount(s, id)}`).join(', ')} (§21).`, { order: [...s.censusOrder], populations: Object.fromEntries(s.censusOrder.map((id) => [id, populationCount(s, id)])) });
-        for (const id of s.seating) { const q = player(s, id); q.convertedThisTurn = false; q.builtWithTreasuryThisTurn = false; q.grainLockedThisTurn = 0; q.citiesBuiltThisTurn = []; q.advancesThisTurn = []; } // §32.941/.631/.312/26.32/31.53 once-per-turn
+        for (const id of s.seating) { const q = player(s, id); q.convertedThisTurn = false; q.builtWithTreasuryThisTurn = false; q.grainLockedThisTurn = 0; q.miningUsedThisTurn = false; q.citiesBuiltThisTurn = []; q.advancesThisTurn = []; } // §32.941/.631/.312/.261/26.32/31.53 once-per-turn
       }
       enterPhase(s, np);
       continue;
@@ -2338,13 +2373,18 @@ function applyBuyAdvance(s: GameState, actor: PlayerId, advanceIds: string[], sp
   // Compute payment value: commodity set values of spent cards + treasury + credits.
   const spentHand: Record<string, number> = {};
   for (const [cid, n] of Object.entries(spendCommodities)) if (n > 0) spentHand[cid] = n;
-  const cardValue = handValue(spentHand, { mining: has(p, 'mining') });
   // §31.53: credits from advances acquired THIS turn (including the rest of this
   // batch) may not be used until next turn. §31.54: an older card's credit counts
   // once towards each new card.
   const creditEligible = p.advances.filter((a) => !(p.advancesThisTurn ?? []).includes(a));
   const credit = advs.reduce((t, adv) => t + creditTowards(creditEligible, adv.id), 0);
   const cost = advs.reduce((t, adv) => t + adv.cost, 0);
+  // §32.261: Mining works once per turn, so spend it only when it matters — when
+  // the cards and credits alone don't already cover the cost.
+  const plainValue = handValue(spentHand);
+  const minedValue = miningAvailable(p) ? handValue(spentHand, { mining: true }) : plainValue;
+  const useMining = minedValue > plainValue && plainValue + credit < cost;
+  const cardValue = useMining ? minedValue : plainValue;
   // Treasury is paid in single tokens, so you pay EXACTLY the remaining cost from
   // it — never overpay (§31.41). (Commodity sets are indivisible, so card value
   // may exceed the cost; §31.58 says that excess is simply lost.)
@@ -2364,6 +2404,7 @@ function applyBuyAdvance(s: GameState, actor: PlayerId, advanceIds: string[], sp
   // permanently removed from the game).
   p.treasury -= spendTreasury;
   p.stock += spendTreasury;
+  if (useMining) p.miningUsedThisTurn = true; // §32.261: once per turn
   for (const adv of advs) {
     p.advances.push(adv.id);
     (p.advancesThisTurn ??= []).push(adv.id); // §31.53: no credit from it until next turn
@@ -2625,10 +2666,13 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         if (s.phase !== 'shipConstruction') throw new Error('scrapShip only in shipConstruction phase');
         const a = s.areas[action.area];
         if (!a || (a.ships?.[actor] ?? 0) <= 0) throw new Error('no ship of yours to scrap there');
+        // §22.3 lets a player decline maintenance on ships ALREADY in play; a ship
+        // built this phase isn't one of those, so it can't be scrapped.
+        if (scrappableShips(s, actor, action.area) <= 0) throw new Error('a ship built this phase cannot be scrapped — only ships already in play may go unmaintained (§22.3)');
         a.ships![actor] = (a.ships![actor] ?? 0) - 1; if (a.ships![actor]! <= 0) delete a.ships![actor];
         player(s, actor).shipsAvailable += 1;
         // §22.3: a scrapped ship owes no maintenance.
-        if (s.shipMaintOwed) s.shipMaintOwed[actor] = Math.min(s.shipMaintOwed[actor] ?? 0, shipCount(s, actor));
+        if (s.shipMaintOwed) s.shipMaintOwed[actor] = Math.max(0, (s.shipMaintOwed[actor] ?? 0) - 1);
         log(s, 'ship.scrap', actor, `${actor} scraps a ship in ${areaName(action.area)} (§22.3).`, { area: action.area, count: 1, reason: 'voluntary' });
         break; // stays acting; may build/scrap more or pass
       }
@@ -2869,8 +2913,8 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
             }
           }
         }
-        // §22.3: a player may scrap any of their ships instead of maintaining it.
-        for (const [aid, a] of Object.entries(state.areas)) if ((a.ships?.[actor] ?? 0) > 0) out.push({ type: 'scrapShip', area: aid });
+        // §22.3: a player may scrap a ship already in play instead of maintaining it.
+        for (const aid of Object.keys(state.areas)) if (scrappableShips(state, actor, aid) > 0) out.push({ type: 'scrapShip', area: aid });
         break;
       }
       case 'movement': {
@@ -2940,10 +2984,10 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
           // §31.62: a prerequisite only counts if it was acquired in an earlier turn.
           if ((adv.prerequisites ?? []).some((pre) => !has(p, pre) || (p.advancesThisTurn ?? []).includes(pre))) continue;
           const credit = creditTowards(creditEligible, adv.id);
-          const maxPay = handValue(commHand, { mining: has(p, 'mining') }) + p.treasury + credit;
+          const maxPay = handValue(commHand, { mining: miningAvailable(p) }) + p.treasury + credit;
           if (maxPay >= adv.cost) {
             // Suggest a concrete payment: spend whole commodity hand + needed treasury.
-            out.push({ type: 'buyAdvance', advance: adv.id, spendCommodities: { ...commHand }, spendTreasury: Math.max(0, Math.min(p.treasury, adv.cost - credit - handValue(commHand, { mining: has(p, 'mining') }))) });
+            out.push({ type: 'buyAdvance', advance: adv.id, spendCommodities: { ...commHand }, spendTreasury: Math.max(0, Math.min(p.treasury, adv.cost - credit - handValue(commHand, { mining: miningAvailable(p) }))) });
           }
         }
         break;
@@ -3048,7 +3092,7 @@ export function victoryScore(state: GameState, id: PlayerId): number {
     score += advancesFaceValue(p.advances);
     // §32.261: Mining lets the holder value one mineable set as one card larger
     // "for Victory condition purposes" too (handValue treats calamity cards as 0).
-    score += handValue(p.hand, { mining: has(p, 'mining') });
+    score += handValue(p.hand, { mining: miningAvailable(p) });
     score += p.treasury;
     score += p.astSpace * victoryScoring.pointsPerAstSpace;
     score += cityCount(state, id) * victoryScoring.pointsPerCity;

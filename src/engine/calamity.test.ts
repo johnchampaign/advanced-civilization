@@ -679,6 +679,52 @@ describe('§30.52 Barbarian Hordes', () => {
     expect(populationCount(s, 'egypt')).toBeLessThan(6); // the horde landed and fought
     expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
   });
+
+  it('a Hordes card the victim drew and kept is untraded — the victim does not break the tie (report 982d311f)', () => {
+    // Drawing a calamity records the drawer in calamityTradedFrom, so a card that
+    // was never traded names its own holder there.
+    let s = scenario({
+      tokens: { egypt: { thebes: 3, 'upper-egypt': 3 } },
+      hands: { egypt: { 'calamity:barbarianhordes': 1 } },
+      tradedFrom: { barbarianhordes: 'egypt' },
+    });
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    expect(s.pendingPick?.stage).toBe('barbarian');
+    expect(adapter.currentActor(s)).toBe('babylon'); // most units in stock, not egypt
+  });
+});
+
+describe('§29.5 at most two calamities per primary victim', () => {
+  it('a player holding three has one drawn out at random and returned to its stack (report 78ce4aab)', () => {
+    const cards = ['calamity:famine', 'calamity:epidemic', 'calamity:civildisorder'];
+    let s = scenario({
+      tokens: { egypt: { [land[0]!.id]: 30 }, babylon: { [land[1]!.id]: 30 } },
+      hands: { egypt: Object.fromEntries(cards.map((c) => [c, 1])) },
+    });
+    const inStacks = (st: GameState, c: string) => Object.values(st.trade.stacks).flat().filter((x) => x === c).length;
+    const before = cards.map((c) => inStacks(s, c));
+    s = resolve(s);
+    const struck = new Set((s.lastCalamities ?? []).filter((e) => e.holder === 'egypt').map((e) => e.calamityId));
+    expect(struck.size).toBe(2);
+    const dropped = s.log.filter((e) => e.kind === 'calamity.disregarded');
+    expect(dropped).toHaveLength(1);
+    const droppedIds = (dropped[0]!.payload as { calamities: string[] }).calamities;
+    expect(droppedIds).toHaveLength(1);
+    expect(struck.has(droppedIds[0]!)).toBe(false);
+    // All three leave the hand and go back to their stacks (§29.5 / §29.7).
+    expect(Object.keys(s.players['egypt']!.hand).filter((c) => c.startsWith('calamity:'))).toEqual([]);
+    expect(cards.map((c) => inStacks(s, c))).toEqual(before.map((n) => n + 1));
+  });
+
+  it('two calamities both strike — the cap only bites above two', () => {
+    let s = scenario({
+      tokens: { egypt: { [land[0]!.id]: 30 }, babylon: { [land[1]!.id]: 30 } },
+      hands: { egypt: { 'calamity:famine': 1, 'calamity:epidemic': 1 } },
+    });
+    s = resolve(s);
+    expect((s.lastCalamities ?? []).filter((e) => e.holder === 'egypt')).toHaveLength(2);
+    expect(s.log.some((e) => e.kind === 'calamity.disregarded')).toBe(false);
+  });
 });
 
 describe('§30.61 Epidemic secondary victims', () => {

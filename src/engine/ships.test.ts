@@ -91,6 +91,38 @@ describe('§22.3 ship maintenance', () => {
     expect(s.players['egypt']!.shipsAvailable).toBe(4);
     expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
   });
+
+  it('will not scrap a ship built this phase — only ships already in play go unmaintained (§22.3, report 15b9543e)', () => {
+    let s = base();
+    const x = coastal[0]!.id;
+    s.areas[x] = { tokens: { egypt: 3 } };
+    fixSupply(s); s.players['egypt']!.stock -= 5; s.players['egypt']!.treasury = 5;
+    s.phase = 'census'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    normalize(s);
+    while (adapter.currentActor(s) !== 'egypt') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    s = adapter.applyAction(s, { type: 'buildShips', builds: [{ area: x, count: 1, payFrom: 'treasury' }] }, 'egypt');
+    expect(s.players['egypt']!.treasury).toBe(3);
+    // Build-then-scrap would turn treasury into stock tokens: refused, and not offered.
+    expect(() => adapter.applyAction(s, { type: 'scrapShip', area: x }, 'egypt')).toThrow(/§22\.3/);
+    expect(adapter.legalActions(s, 'egypt').some((a) => a.type === 'scrapShip')).toBe(false);
+  });
+
+  it('scrapping an old ship after building a new one waives exactly that ship\'s maintenance (§22.3)', () => {
+    let s = base();
+    const x = coastal[0]!.id;
+    s.areas[x] = { tokens: { egypt: 3 }, ships: { egypt: 1 } };
+    fixSupply(s); s.players['egypt']!.stock -= 5; s.players['egypt']!.treasury = 5;
+    s.phase = 'census'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    normalize(s);
+    while (adapter.currentActor(s) !== 'egypt') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    s = adapter.applyAction(s, { type: 'buildShips', builds: [{ area: x, count: 1, payFrom: 'treasury' }] }, 'egypt'); // treasury 3
+    s = adapter.applyAction(s, { type: 'scrapShip', area: x }, 'egypt'); // the OLD ship goes
+    expect(s.areas[x]!.ships?.['egypt']).toBe(1); // the new one stays
+    expect(() => adapter.applyAction(s, { type: 'scrapShip', area: x }, 'egypt')).toThrow(/§22\.3/);
+    while (s.phase === 'shipConstruction') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    expect(s.players['egypt']!.treasury).toBe(3); // nothing owed: the only maintained ship was declined
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
+  });
 });
 
 describe('§23.5 naval movement', () => {
@@ -384,5 +416,30 @@ describe('map geometry from the 2026-09-24 report queue', () => {
     expect(adjacency['carmania']).not.toContain('kerman');
     expect(adjacency['gulashkird']).toContain('carmania'); // real borders stay
     expect(adjacency['pasagardes']).toContain('kerman');
+  });
+});
+
+describe('map data from the 2026-09-27 report queue', () => {
+  it('Crimea and Kuban are split by the Kerch Strait: ship-only, no overland move (report c5f03706)', () => {
+    expect(adjacency['crimea']).not.toContain('kuban');
+    expect(adjacency['kuban']).not.toContain('crimea');
+    expect(shipNeighbors.get('crimea')?.some((h) => h.to === 'kuban')).toBe(true); // ships still cross
+    let s = base();
+    s.areas['crimea'] = { tokens: { egypt: 3 } };
+    s.phase = 'movement'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    const dests = new Set<string>();
+    for (const a of adapter.legalActions(s, 'egypt'))
+      if (a.type === 'move') for (const m of (a as { moves: { from: string; to: string; byShip?: boolean }[] }).moves)
+        if (!m.byShip) dests.add(`${m.from}->${m.to}`);
+    expect(dests.has('crimea->kuban')).toBe(false);
+    expect(dests.has('crimea->scythia')).toBe(true); // the isthmus is still land
+  });
+  it('a ship sails straight from Troy to Sardes: their border runs through water to the coast (§4.33, report 27521e2c)', () => {
+    expect(shipNeighbors.get('troy')?.some((h) => h.to === 'sardes')).toBe(true);
+    expect(navalDestinations(null, 'troy', 1, false).has('sardes')).toBe(true); // one hop, not via Lesbos
+  });
+  it('population limits match the printed board (report 68e55bcc + full audit)', () => {
+    expect(areaById.get('west-mauretania')!.sustains).toBe(2);
+    expect(areaById.get('siwa')!.sustains).toBe(1);
   });
 });

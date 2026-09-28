@@ -95,6 +95,7 @@ All carry `payload.calamity` (the calamity id) and `rule` when cited.
 |---|---|
 | `calamity.units` | `{points}` — primary/secondary unit-point loss (Famine, Epidemic, Flood…) |
 | `calamity.unmodeled` | — |
+| `calamity.disregarded` | `{calamities, held, rule:'29.5'}` — a player held more than two; these were drawn out at random and returned to their stacks (the one kind with a `calamities` list instead of a single `calamity`) |
 | `calamity.famine.grain` | `{grain, reduction, rule:'30.312'}` |
 | `calamity.volcano` | `{areas}` |
 | `calamity.earthquake` | `{area, reduced?\|destroyed?\|noEffect?}` |

@@ -125,6 +125,8 @@ export interface PlayerState {
    *  up and may not be spent on civilization cards until next turn. Count locked
    *  this turn (cleared at turn rollover). */
   grainLockedThisTurn?: number;
+  /** §32.261: set once Mining has raised a set's value this turn (once per turn). */
+  miningUsedThisTurn?: boolean;
   /** §26.32: area ids of cities built or acquired THIS turn — these must be the
    *  first reduced when short of city support. Cleared at turn rollover. */
   citiesBuiltThisTurn?: string[];
@@ -438,6 +440,10 @@ export interface GameState {
    *  next turn). Resolved when the player finishes; lets them decline maintenance
    *  (scrap a ship) instead. */
   shipMaintOwed?: Record<PlayerId, number>;
+  /** Ships built THIS Ship Construction phase, per player per area. §22.3 only
+   *  lets a player decline maintenance on ships already in play, so these can't
+   *  be scrapped (build-then-scrap would turn treasury into stock tokens). */
+  shipsBuiltThisPhase?: Record<PlayerId, Record<string, number>>;
   /** The most recent conflict phase's combats, one per area, for a step-through
    *  modal. Overwritten each conflict phase; empty if none. */
   lastCombats?: CombatEvent[];

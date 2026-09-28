@@ -97,6 +97,12 @@ for (const [a, b] of adjacencyFromPolygons(polys, 4)) {
 for (const [land, subs] of Object.entries(MANUAL)) {
   for (const s of subs) { const nb = subArea(s); if (byId.has(land) && byId.has(nb)) addEdge(land, nb, null, sideOf(nb, s)); }
 }
+// Land borders that run through water before reaching the coast (§4.33: both a
+// land and a water boundary) where the traced shore water is too thin for the
+// touching test to see it. Troy|Sardes meets Lesbos out in the water, so ships
+// cross it directly (report 27521e2c).
+const MANUAL_SHIP_EDGES = [['sardes', 'troy']];
+for (const [a, b] of MANUAL_SHIP_EDGES) if (byId.has(a) && byId.has(b)) addEdge(a, b, null, null);
 
 /** Side label: null when the area has ≤1 sea sub (no §23.57 ambiguity). */
 function sideOf(areaId, subId) {

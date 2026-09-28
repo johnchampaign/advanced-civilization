@@ -92,6 +92,9 @@ const REMOVE_EDGES = [
   // Four-corner crossings: these pairs meet only at a single point where four
   // borders cross, so no boundary line divides them (§4.31, §23.3). Report fe47506e.
   ['gulashkird', 'pasagardes'], ['carmania', 'kerman'],
+  // Kerch Strait: Crimea's land ends short of its border with Kuban, which runs
+  // entirely through water — a ship crossing, not a land route (report c5f03706).
+  ['crimea', 'kuban'],
 ];
 for (const [a, b] of REMOVE_EDGES) {
   if (adjacency[a]) adjacency[a] = adjacency[a].filter((x) => x !== b);

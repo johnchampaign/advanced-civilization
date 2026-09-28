@@ -808,7 +808,6 @@
   "black-sea",
   "crimea#sea1",
   "danube",
-  "kuban",
   "scythia"
  ],
  "crimea#sea1": [
@@ -1419,7 +1418,6 @@
  ],
  "kuban": [
   "black-sea",
-  "crimea",
   "kuban#sea1",
   "mikop",
   "scythia"

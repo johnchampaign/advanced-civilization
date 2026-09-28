@@ -26,6 +26,12 @@ export function commoditySetValue(commodityId: string, n: number): number {
   return capped * capped * c.value;
 }
 
+/** §32.261: Mining may only be used once per turn — after it has boosted one
+ *  purchase, later purchases (and the retained hand) that turn get no bonus. */
+export function miningAvailable(p: { advances: string[]; miningUsedThisTurn?: boolean }): boolean {
+  return p.advances.includes('mining') && !p.miningUsedThisTurn;
+}
+
 /** Total value of a hand of commodity cards: sum of each commodity's set value.
  *  `mining` lets the holder treat one mineable set as one card larger (§32.261);
  *  applied to the single set that gains the most. */

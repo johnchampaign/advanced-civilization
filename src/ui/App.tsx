@@ -5,7 +5,7 @@ import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent } from '..
 import { advanceById, advances as ALL_ADVANCES, adjacency, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, playAreas, shipNeighbors, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
 import { availableNations, boardPresets, unavailableReason, type BoardPreset } from '../engine/boards.js';
-import { handValue, creditTowards, commoditySetValue, advancesFaceValue, outOfPlay, citySiteIn, civilWarSelectionOk } from '../engine/helpers.js';
+import { handValue, miningAvailable, creditTowards, commoditySetValue, advancesFaceValue, outOfPlay, citySiteIn, civilWarSelectionOk } from '../engine/helpers.js';
 import { submitStandaloneReport, fetchMyReports, resolutionNote, type MyReport } from '../client/api.js';
 import { REPORT_CATEGORY } from '../report-meta.js';
 import { anchors, BOARD_VIEWBOX, MAP_PANELS, ALL_SHAPES, COAST_SUBS, mainToCombined } from './anchors.js';
@@ -1033,7 +1033,7 @@ function ToolsView({ state, focus }: { state: GameState; focus: PlayerId }) {
 
 function GoodsView({ state, focus }: { state: GameState; focus: PlayerId }) {
   const hand = state.players[focus]!.hand;
-  const mining = state.players[focus]!.advances.includes('mining');
+  const mining = miningAvailable(state.players[focus]!);
   const entries = Object.entries(hand).filter(([, n]) => n > 0).sort(([a], [b]) => byCardValue(a, b));
   const commCount = entries.filter(([c]) => !isCal(c)).reduce((a, [, n]) => a + n, 0);
   return (
@@ -2061,7 +2061,7 @@ function ConversionControls({ state, legal, onApply }: { state: GameState; legal
 
 function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: PlayerId; onApply: (a: Action) => void }) {
   const p = state.players[actor]!;
-  const mining = p.advances.includes('mining');
+  const mining = miningAvailable(p);
   const [sel, setSel] = useState<string[]>([]);
   const [tip, setTip] = useState<string>('');
   const [spend, setSpend] = useState<Record<string, number>>({});
@@ -2243,8 +2243,10 @@ function TradeControls({ state, actor, onApply }: { state: GameState; actor: Pla
           </div>
         );
       })()}
-      {/* Completed deals (Trade Details — private to you). */}
-      {(n.completed ?? []).map((d, i) => {
+      {/* Completed deals (Trade Details — private to you). Hotseat renders the
+          unredacted state, so filter to the viewer's own deals here too (viewFor
+          does this for online seats) — other players' cards are secret (§28). */}
+      {(n.completed ?? []).filter((d) => d.a === actor || d.b === actor).map((d, i) => {
         const youAreA = d.a === actor;
         const gave = youAreA ? d.aGave : d.bGave;
         const got = youAreA ? d.bGave : d.aGave;

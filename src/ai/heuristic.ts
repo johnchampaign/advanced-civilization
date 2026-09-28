@@ -14,7 +14,7 @@
 // (the trade planner proposes blind, never inspecting opponents' cards).
 
 import type { PlayerController, ControllerContext } from 'digital-boardgame-framework';
-import { advanceById, areaById, calamityById, commodityById } from '../data/index.js';
+import { advanceById, areaById, calamityById, civById, commodityById } from '../data/index.js';
 import { cardGroupsHeld, cityCount, citySiteIn, commoditySetValue, handValue, navalDestinations, neighbors, netAdvanceCost, populationCount } from '../engine/helpers.js';
 import type { Action, GameState, PlayerId, TradeBundle } from '../engine/types.js';
 
@@ -23,6 +23,12 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
     const { state, actor, adapter } = ctx;
     const actions = adapter.legalActions(state, actor);
     if (actions.length === 0) return { type: 'pass' };
+
+    // §16.3: choose where the first token goes (before turn 1).
+    if (state.pendingStart) {
+      const starts = actions.filter((a) => a.type === 'placeStart') as Extract<Action, { type: 'placeStart' }>[];
+      if (starts.length) return bestStart(state, actor, starts);
+    }
 
     // §31.71: a pending hand-limit discard can surface in the auto astAdjustment
     // phase — take the engine's cheapest-first suggestion.
@@ -382,3 +388,17 @@ function planNaval(state: GameState, actor: PlayerId): Action | null {
   }
   return null;
 }
+
+/** §16.3 start-area choice: favour a fertile area with fertile land to grow into,
+ *  steer clear of rivals who have already placed next door (early conflict only
+ *  costs tokens), and lean slightly toward the nation's customary start. */
+function bestStart(state: GameState, actor: PlayerId, starts: Extract<Action, { type: 'placeStart' }>[]): Action {
+  const rivalNear = (aid: string) => [aid, ...neighbors(state, aid)].some((n) =>
+    Object.entries(state.areas[n]?.tokens ?? {}).some(([owner, k]) => owner !== actor && k > 0));
+  const score = (aid: string) => {
+    const room = neighbors(state, aid).filter((n) => !areaById.get(n)?.isWater).reduce((t, n) => t + (areaById.get(n)?.sustains ?? 0), 0);
+    return 2 * (areaById.get(aid)?.sustains ?? 0) + 0.5 * room - (rivalNear(aid) ? 6 : 0) + (civById.get(actor)?.start === aid ? 1 : 0);
+  };
+  return starts.reduce((best, a) => (score(a.area) > score(best.area) ? a : best));
+}
+

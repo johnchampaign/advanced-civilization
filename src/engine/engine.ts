@@ -14,6 +14,7 @@
 
 import { Rng, appendGameLog, upgradeProseLog } from 'digital-boardgame-framework';
 import type { GameAdapter, GameResult } from 'digital-boardgame-framework';
+import { FULL_BOARD, startAreasFor } from './boards.js';
 import {
   advanceById,
   areaById,
@@ -1844,7 +1845,9 @@ function barbarianChooser(s: GameState, primary: PlayerId): PlayerId {
 function marchBarbarianStep(s: GameState, here: string, next: string, surplus: number, limit: number, rng: Rng): void {
   s.areas[here]!.tokens[BARBARIAN] = limit;
   (s.areas[next] ??= { tokens: {} }).tokens[BARBARIAN] = (s.areas[next]!.tokens[BARBARIAN] ?? 0) + surplus;
-  log(s, 'calamity.barbarians.march', null, `Barbarians march from ${areaName(here)} to ${areaName(next)} (${surplus}).`, { calamity: 'barbarianhordes', from: here, to: next, count: surplus });
+  // Say how many stay behind: only the surplus over the population limit marches
+  // on (§30.5231), which is easy to miss when tallying the horde (report 67df8245).
+  log(s, 'calamity.barbarians.march', null, `Barbarians march from ${areaName(here)} to ${areaName(next)} (${surplus})${limit > 0 ? `; ${limit} stay in ${areaName(here)}, its population limit (§30.5231)` : ''}.`, { calamity: 'barbarianhordes', from: here, to: next, count: surplus, stay: limit });
   resolveAreaCombat(s, next, rng);
 }
 
@@ -2135,6 +2138,7 @@ function enterPhase(s: GameState, phase: Phase): void {
 export function normalize(s: GameState): void {
   let guard = 0;
   while (guard++ < 1000) {
+    if (s.pendingStart) return; // §16.3: start areas are chosen before turn 1 runs
     if (s.finished && s.phase === 'taxation') return; // game over at turn boundary
     if (AUTO_PHASES.has(s.phase)) {
       runAutoPhase(s);
@@ -2533,6 +2537,8 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
   }
 
   currentActor(state: GameState): PlayerId | null {
+    // §16.3: before turn 1, nations place their first token in selection order.
+    if (state.pendingStart) return state.pendingStart.order[0] ?? null;
     if (state.finished && state.phase === 'taxation') return null;
     // A pending hand-limit discard can arise during the auto astAdjustment phase,
     // so it must be checked before the auto-phase short-circuit.
@@ -2580,7 +2586,18 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
     const expected = this.currentActor(s);
     if (expected !== actor) throw new Error(`not ${actor}'s turn (expected ${expected})`);
 
+    if (s.pendingStart && action.type !== 'placeStart') throw new Error('choose a start area first (§16.3)');
     switch (action.type) {
+      case 'placeStart': {
+        if (!s.pendingStart) throw new Error('start areas have already been chosen');
+        if (!startAreasFor(s.board ?? FULL_BOARD, actor).includes(action.area)) throw new Error(`${areaName(action.area)} is not one of ${actor}'s start areas (§16.3)`);
+        (s.areas[action.area] ??= { tokens: {} }).tokens[actor] = (s.areas[action.area]!.tokens[actor] ?? 0) + 1;
+        player(s, actor).stock -= 1;
+        log(s, 'setup.start', actor, `${actor} starts in ${areaName(action.area)} (§16.3).`, { area: action.area });
+        s.pendingStart.order = s.pendingStart.order.slice(1);
+        if (s.pendingStart.order.length === 0) s.pendingStart = undefined;
+        break;
+      }
       case 'pass':
         // §20.2: growth may not be voluntarily curtailed — a player with stock
         // left and areas that can still take it must place the rest.
@@ -2856,6 +2873,8 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
 
   legalActions(state: GameState, actor: PlayerId): Action[] {
     if (this.currentActor(state) !== actor) return [];
+    // §16.3: any of the nation's in-play start areas (none are shared between nations).
+    if (state.pendingStart) return startAreasFor(state.board ?? FULL_BOARD, actor).map((area) => ({ type: 'placeStart', area }) as Action);
     const p = player(state, actor);
     // §31.71: a pending hand-limit discard (during the auto astAdjustment phase)
     // is the over-limit player's; offer the cheapest-first default. Not a 'pass'.

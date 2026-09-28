@@ -119,3 +119,40 @@ describe('heuristic AI', () => {
     expect(totalAdvances).toBeGreaterThan(0);
   });
 });
+
+describe('heuristic AI: start areas (§16.3)', () => {
+  it('chooses start areas and plays on from them', async () => {
+    let s = createGame({ players: ['egypt', 'babylon', 'assyria'], seed: 5, maxTurns: 3, chooseStartAreas: true });
+    const rng = new Rng(5);
+    let guard = 0;
+    while (s.pendingStart && guard++ < 10) {
+      const actor = adapter.currentActor(s)!;
+      const action = await ai.selectAction({ state: s, actor, adapter, rng });
+      expect(action.type).toBe('placeStart');
+      s = adapter.applyAction(s, action, actor);
+    }
+    expect(s.pendingStart).toBeUndefined();
+    let steps = 0;
+    while (adapter.result(s) == null && steps++ < 3000) {
+      const actor = adapter.currentActor(s);
+      if (actor == null) break;
+      s = adapter.applyAction(s, await ai.selectAction({ state: s, actor, adapter, rng }), actor);
+      expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
+    }
+    expect(adapter.result(s)).not.toBeNull();
+  });
+  it('steers away from a rival who has already placed next door', async () => {
+    const pick = async (s: GameState) => (await ai.selectAction({ state: s, actor: 'persia', adapter, rng: new Rng(1) })) as { type: string; area?: string };
+    const s = createGame({ players: ['babylon', 'persia'], seed: 1, chooseStartAreas: true });
+    // On an empty board Persia takes fertile Nisa (population limit 5).
+    const alone: GameState = { ...s, pendingStart: { order: ['persia', 'babylon'] } };
+    expect((await pick(alone)).area).toBe('nisa');
+    // With Babylon already in Media, right next to Nisa, Persia starts elsewhere.
+    let t: GameState = { ...s, pendingStart: { order: ['babylon', 'persia'] } };
+    t = adapter.applyAction(t, { type: 'placeStart', area: 'media' }, 'babylon');
+    const choice = (await pick(t)).area;
+    expect(choice).not.toBe('nisa');
+    expect(['prophtasia', 'randamar']).toContain(choice);
+  });
+});
+

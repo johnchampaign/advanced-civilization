@@ -430,6 +430,11 @@ export interface GameState {
   pendingSecondary?: PendingSecondary;
   /** A pending city-selection by a named chooser (Treachery/Flood/Piracy). */
   pendingPick?: PendingPick;
+  /** §16.3: before turn 1, players still to place their first token, in nation-
+   *  selection order (first = placing now). Each picks any of its nation's start
+   *  areas, seeing where earlier players went. Absent once everyone has placed
+   *  (and in games created without `chooseStartAreas`). */
+  pendingStart?: { order: PlayerId[] };
   /** A pending city-support reduction the player must direct (§26.32 / §30.42). */
   pendingSupport?: PendingSupport;
   /** §24.52: cities stormed this conflict phase whose attacker has not yet said
@@ -644,6 +649,12 @@ export interface CivilWarKeepAction {
   faction: 1 | 2;
 }
 
+/** §16.3: place your nation's first token in one of its start areas. */
+export interface PlaceStartAction {
+  type: 'placeStart';
+  area: string;
+}
+
 /** A chooser selects cities for a Treachery/Flood/Piracy pending pick. */
 export interface PickAreasAction {
   type: 'pickAreas';
@@ -664,6 +675,7 @@ export interface PassAction {
 }
 
 export type Action =
+  | PlaceStartAction
   | SetTaxRateAction
   | ConvertAreaAction
   | AllocateLossAction

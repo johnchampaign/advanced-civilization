@@ -42,6 +42,22 @@ describe('async multiplayer (GameServer + filesystem store)', () => {
     await expect(s.fetch(gameId, 'not-a-real-token')).rejects.toThrow();
   });
 
+  it('POST /api/games with chooseStartAreas opens on start-area placement (§16.3)', async () => {
+    const s = makeServer();
+    const res = await handleApi(s, 'POST', '/api/games', new URLSearchParams(), { players: ['egypt', 'babylon'], seed: 2, chooseStartAreas: true });
+    expect(res.status).toBe(200);
+    const { gameId, invites } = res.body as { gameId: string; invites: Record<string, string> };
+    const tok: Record<string, string> = { egypt: tokenOf(invites.egypt!), babylon: tokenOf(invites.babylon!) };
+    const first = (await s.fetch(gameId, tok.egypt!)).view.pendingStart!.order[0]!;
+    expect((await s.fetch(gameId, tok[first]!)).yourTurn).toBe(true);
+    const legal = await s.legalActions(gameId, tok[first]!);
+    expect(legal.length).toBeGreaterThan(1);
+    expect(legal.every((a) => a.type === 'placeStart')).toBe(true);
+    await s.submit(gameId, tok[first]!, legal[legal.length - 1]!);
+    const second = first === 'egypt' ? 'babylon' : 'egypt';
+    expect((await s.fetch(gameId, tok[second]!)).yourTurn).toBe(true);
+  });
+
   it('enforces turn ownership — only the seat on the clock may submit', async () => {
     const { s, gameId, egypt, babylon } = await newGame();
     const ea = await s.fetch(gameId, egypt);

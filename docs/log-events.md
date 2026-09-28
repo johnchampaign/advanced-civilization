@@ -49,6 +49,7 @@ The engine's `state.log` is an array of the framework's `GameLogEntry<PlayerId>`
 | kind | payload | notes |
 |---|---|---|
 | `game.start` | `{players, seed}` | first entry, written in setup.ts |
+| `setup.start` | `{area, auto?}` | §16.3 start-area choice (games created with `chooseStartAreas`); `auto: true` when the nation had only one start area and was placed in setup.ts |
 
 ### Taxation (§19)
 | kind | payload |
@@ -110,7 +111,7 @@ All carry `payload.calamity` (the calamity id) and `rule` when cited.
 | `calamity.flood` | `{area?, reduced?\|destroyed?\|noEffect?}` |
 | `calamity.piracy.raze` | `{area, rule:'30.91'}` (side = null; city becomes pirate) |
 | `calamity.barbarians.land` | `{area, count:15}` (side = null) |
-| `calamity.barbarians.march` | `{from, to, count}` (side = null) |
+| `calamity.barbarians.march` | `{from, to, count, stay}` — `stay` = tokens left behind at the area's population limit (side = null) |
 | `calamity.barbarians` | `{immune?\|noEffect?}` (side = primary victim) |
 
 ### Hand limit & advances (§31)

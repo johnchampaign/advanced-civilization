@@ -1,5 +1,6 @@
 import { Rng } from 'digital-boardgame-framework';
 import {
+  areaById,
   calamities as ALL_CALAMITIES,
   civById,
   commodities as ALL_COMMODITIES,
@@ -28,6 +29,10 @@ export interface NewGameOptions {
   tokensPerPlayer?: number;
   seed?: number;
   maxTurns?: number;
+  /** §16.3: let each player choose which start area its first token goes in, in
+   *  random nation-selection order, before turn 1. Default off: programmatic
+   *  callers and tests keep the fixed default start; the setup UIs turn it on. */
+  chooseStartAreas?: boolean;
 }
 
 /** Resolve the §16 board configuration + per-player token count for a game.
@@ -80,7 +85,7 @@ export function buildTradeStacks(rng: Rng, numPlayers: number): TradeStacks {
 function newPlayer(id: PlayerId, tokens: number): PlayerState {
   return {
     id,
-    stock: tokens - 1, // one token placed at start
+    stock: tokens, // the starting token is taken from here when placed (§16.3)
     treasury: 0,
     citiesAvailable: pieceCounts.cities,
     shipsAvailable: pieceCounts.ships,
@@ -103,18 +108,32 @@ export function createInitialState(opts: NewGameOptions): GameState {
   const players: Record<PlayerId, PlayerState> = {};
   const areas: Record<string, ReturnType<typeof emptyArea>> = {};
   const seating = [...opts.players];
+  const place = (id: PlayerId, area: string) => {
+    const a = (areas[area] ??= emptyArea());
+    a.tokens[id] = (a.tokens[id] ?? 0) + 1;
+    players[id]!.stock -= 1;
+  };
+  const autoPlaced: { id: PlayerId; area: string }[] = [];
+  const toChoose: PlayerId[] = [];
 
   for (const id of seating) {
     const civ = civById.get(id);
     if (!civ) throw new Error(`unknown civilization ${id}`);
     if (!allowed.includes(id)) throw new Error(`${civ.name} is not available on this board (§16.12); available: ${allowed.join(', ')}`);
     players[id] = newPlayer(id, tokensPerPlayer);
-    // Place one starting token in the civ's start area (§16.12: the first
-    // in-play one — a cropped board can move a nation onto its alternate).
-    const start = startAreasFor(board, id).includes(civ.start) ? civ.start : startAreasFor(board, id)[0]!;
-    const a = (areas[start] ??= emptyArea());
-    a.tokens[id] = (a.tokens[id] ?? 0) + 1;
+    const starts = startAreasFor(board, id);
+    if (opts.chooseStartAreas && starts.length > 1) { toChoose.push(id); continue; }
+    // One starting token in the civ's start area (§16.12: the first in-play one
+    // — a cropped board can move a nation onto its alternate). A nation with a
+    // single start area (Thrace) has no choice to make, so it is placed now.
+    const start = starts.includes(civ.start) ? civ.start : starts[0]!;
+    place(id, start);
+    if (opts.chooseStartAreas) autoPlaced.push({ id, area: start });
   }
+  // §16.3: the shuffled place cards set the order in which nations are selected,
+  // and each places its token as it is selected — so later players see earlier
+  // choices. Shuffled only when choosing, so default games keep their RNG stream.
+  const startOrder = toChoose.length ? rng.shuffle(toChoose) : [];
 
   const trade = buildTradeStacks(rng, seating.length);
 
@@ -139,7 +158,12 @@ export function createInitialState(opts: NewGameOptions): GameState {
       seq: 0, turn: 1, phase: 'taxation', side: null, kind: 'game.start',
       msg: `Game started with ${seating.length} players (seed ${seed}).`,
       payload: { players: seating.length, seed },
-    }],
+    }, ...autoPlaced.map(({ id, area }, i) => ({
+      seq: i + 1, turn: 1, phase: 'taxation' as const, side: id, kind: 'setup.start',
+      msg: `${id} starts in ${areaById.get(area)?.name ?? area} (its only start area).`,
+      payload: { area, auto: true },
+    }))],
+    ...(startOrder.length ? { pendingStart: { order: startOrder } } : {}),
     ...(opts.maxTurns ? { maxTurns: opts.maxTurns } : {}),
   };
 }

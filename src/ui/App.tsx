@@ -167,7 +167,7 @@ export default function App() {
     rng.current = new Rng(seed);
     setConfig({ players, human });
     setSeats(Object.fromEntries(players.map((p) => [p, p === human ? 'human' : 'ai'])) as Record<PlayerId, 'human' | 'ai'>);
-    setState(createGame({ players, seed, maxTurns: 60, boardPreset }));
+    setState(createGame({ players, seed, maxTurns: 60, boardPreset, chooseStartAreas: true }));
     setView('map');
     setStarted(true);
     // Best-effort games-played counter (once per local game start). Local games
@@ -315,7 +315,7 @@ export default function App() {
           ) : (
             <>
               <div className="civ-msg" style={{ padding: '6px 10px', textAlign: 'center' }}>
-                {actor ? <><b style={{ color: civById.get(actor)?.color }}>{civById.get(actor)?.name}</b> — {messageFor(state.phase)}</> : 'Resolving…'}
+                {actor ? <><b style={{ color: civById.get(actor)?.color }}>{civById.get(actor)?.name}</b> — {state.pendingStart ? 'is choosing a start area' : messageFor(state.phase)}</> : 'Resolving…'}
               </div>
               {rejected && (
                 <div className="civ-msg" style={{ padding: '6px 10px', background: 'rgba(120,42,42,0.5)', border: '1px solid #c66', display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -334,7 +334,7 @@ export default function App() {
 
         {/* right: phase + minimap */}
         <div className="civ-panel" style={{ width: 200, padding: 6, display: 'flex', flexDirection: 'column', gap: 4, overflowY: 'auto', minHeight: 0 }}>
-          <div style={{ textAlign: 'center', fontWeight: 800, letterSpacing: 1 }}>{prettyPhase(state.phase).toUpperCase()}</div>
+          <div style={{ textAlign: 'center', fontWeight: 800, letterSpacing: 1 }}>{phaseLabel(state).toUpperCase()}</div>
           <div className="civ-lbl">Turn {state.turn}</div>
           <div style={{ flex: 1, border: '2px solid #7a4a18', background: '#0d3a4a', overflow: 'hidden', minHeight: 60 }} title="Click to jump the map here">
             <svg viewBox={`0 0 ${BOARD_VIEWBOX.w} ${BOARD_VIEWBOX.h}`} style={{ width: '100%', display: 'block', cursor: 'pointer' }}
@@ -381,7 +381,9 @@ export function nationFocusArea(state: GameState, id: PlayerId): string | null {
     const score = (a.tokens[id] ?? 0) + (a.city === id ? 6 : 0);
     if (score > bestScore && score > 0) { bestScore = score; best = aid; }
   }
-  return best;
+  // Nothing on the board yet (choosing a start area, §16.3): the nation's usual start.
+  const home = civById.get(id)?.start;
+  return best ?? (home && anchors[home] ? home : null);
 }
 
 /** Smoothly scroll the board's scroll container so `areaId` is centered. The map
@@ -402,6 +404,7 @@ export function legalAreas(legal: Action[], _phase: string): Set<string> {
   for (const a of legal) {
     if (a.type === 'move') a.moves.forEach((m) => set.add(m.to));
     if (a.type === 'buildCity') set.add(a.area);
+    if (a.type === 'placeStart') set.add(a.area);
   }
   return set;
 }
@@ -1572,6 +1575,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
 }) {
   const peek = useAreaPeek();
   const pass = legal.find((a) => a.type === 'pass');
+  if (state.pendingStart?.order[0] === actor) return <StartControls state={state} legal={legal} selectedArea={selectedArea} onApply={onApply} actor={actor} />;
   if (state.pendingDiscard?.holder === actor) return <DiscardControls state={state} onApply={onApply} />;
   if (state.pendingPillage?.length && state.pendingPillage[0]!.attacker === actor) return <PillageControls state={state} legal={legal} onApply={onApply} />;
   if (state.pendingSupport?.holder === actor) return <SupportControls state={state} legal={legal} onApply={onApply} />;
@@ -1890,6 +1894,37 @@ function SupportControls({ state, legal, onApply }: { state: GameState; legal: A
   );
 }
 
+/** §16.3: choose which of your nation's start areas takes your first token.
+ *  Nations place in a random order, so earlier choices are shown. */
+function StartControls({ state, legal, selectedArea, onApply, actor }: { state: GameState; legal: Action[]; selectedArea: string | null; onApply: (a: Action) => void; actor: PlayerId }) {
+  const peek = useAreaPeek();
+  const starts = legal.filter((a) => a.type === 'placeStart') as Extract<Action, { type: 'placeStart' }>[];
+  const after = state.pendingStart!.order.slice(1);
+  const placed = Object.entries(state.areas).flatMap(([aid, a]) =>
+    Object.entries(a.tokens).filter(([owner, k]) => owner !== actor && k > 0).map(([owner]) => ({ owner, aid })));
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span className="civ-lbl">🏁 Choose your <b>starting area</b> — your first token goes here (§16.3). Nations choose in a random order{after.length ? <>; still to choose after you: {after.map((id) => nationName(id)).join(', ')}</> : ''}.</span>
+      {placed.length > 0 && (
+        <span className="civ-lbl">Already placed: {placed.map(({ owner, aid }, i) => (
+          <span key={owner}>{i ? ', ' : ''}<b style={{ color: nationColor(owner) }}>{nationName(owner)}</b> in {areaById.get(aid)?.name ?? aid}</span>
+        ))}</span>
+      )}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {starts.map((a) => {
+          const area = areaById.get(a.area);
+          return (
+            <button key={a.area} className={`civ-btn ${selectedArea === a.area ? 'on' : ''}`} {...peek(a.area)} onClick={() => onApply(a)}
+              title={`Population limit ${area?.sustains ?? '?'}${area?.isCitySite ? ' · city site' : ''}`}>
+              Start in {area?.name ?? a.area} · supports {area?.sustains ?? '?'}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /** §30.221/.514/.91: a named chooser (trader or primary victim) selects which
  *  cities are affected by Treachery / Flood / Piracy. */
 function PickControls({ state, legal, onApply }: { state: GameState; legal: Action[]; onApply: (a: Action) => void }) {
@@ -2059,6 +2094,10 @@ function ConversionControls({ state, legal, onApply }: { state: GameState; legal
   );
 }
 
+/** Advisory notes in the purchase panel: dark rust reads on the tan panel (the
+ *  old gold #c9a227 was ~1.1:1 contrast against it — effectively invisible). */
+const NOTE: CSSProperties = { color: '#5a1e06', fontWeight: 600 };
+
 function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: PlayerId; onApply: (a: Action) => void }) {
   const p = state.players[actor]!;
   const mining = miningAvailable(p);
@@ -2097,7 +2136,10 @@ function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: Pla
   const treasuryUsed = Math.min(treasury, maxTreasury);
   const paid = cardVal + treasuryUsed + credit;
   const canBuy = basket.length > 0 && paid >= cost;
-  const addSpend = (c: string) => setSpend((s) => ((s[c] ?? 0) >= (p.hand[c] ?? 0) ? s : { ...s, [c]: (s[c] ?? 0) + 1 }));
+  // §30.312: Grain committed against Famine is face up until next turn — not spendable.
+  const grainLocked = Math.min(p.grainLockedThisTurn ?? 0, p.hand['grain'] ?? 0);
+  const spendable = (c: string) => (p.hand[c] ?? 0) - (c === 'grain' ? grainLocked : 0);
+  const addSpend = (c: string) => setSpend((s) => ((s[c] ?? 0) >= spendable(c) ? s : { ...s, [c]: (s[c] ?? 0) + 1 }));
   const rmSpend = (c: string) => setSpend((s) => { const n = (s[c] ?? 0) - 1; const o = { ...s }; if (n <= 0) delete o[c]; else o[c] = n; return o; });
   const toggle = (id: string) => setSel((l) => (l.includes(id) ? l.filter((x) => x !== id) : [...l, id]));
   const buy = () => { onApply({ type: 'buyAdvance', advances: sel, spendCommodities: spend, spendTreasury: treasuryUsed }); setSel([]); setSpend({}); setTreasury(0); };
@@ -2105,7 +2147,9 @@ function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: Pla
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <span className="civ-lbl">Acquire advances — pick <b>as many as you want</b>, then pay for the whole basket at once (cards + treasury + credits). Treasury available: {p.treasury}. <span style={{ color: '#7fd17f', fontWeight: 700 }}>Green-bordered advances are affordable</span> on their own with all your goods + treasury. Leftover value is lost (§31.58), so buying several together wastes less.</span>
-      {boughtThisTurn.length > 0 && <span className="civ-lbl" style={{ color: '#c9a227' }}>Bought this turn: {boughtThisTurn.map((id) => advanceById.get(id)?.name ?? id).join(', ')} — their credits don’t apply until next turn (§31.53).</span>}
+      {grainLocked > 0 && <span className="civ-lbl" style={NOTE}>🔒 {grainLocked} Grain card{grainLocked === 1 ? ' is' : 's are'} locked — used against Famine this turn, so {grainLocked === 1 ? 'it' : 'they'} can’t be spent until next turn (§30.312).</span>}
+      {p.advances.includes('mining') && !mining && <span className="civ-lbl" style={NOTE}>⛏ Mining has already been used this turn — it’s back next turn (§32.261).</span>}
+      {boughtThisTurn.length > 0 && <span className="civ-lbl" style={NOTE}>Bought this turn: {boughtThisTurn.map((id) => advanceById.get(id)?.name ?? id).join(', ')} — their credits don’t apply until next turn (§31.53).</span>}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
         {available.length === 0 && <span className="civ-lbl">No advance available (prerequisites unmet).</span>}
         {available.map((a) => {
@@ -2128,7 +2172,10 @@ function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: Pla
             {commHand.length === 0 && <span className="civ-lbl">(no commodity cards)</span>}
             {commHand.map(([c, n]) => (
               <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, border: '1px solid #7a4a18', borderRadius: 4, padding: '0 3px', background: (spend[c] ?? 0) ? 'rgba(90,140,106,0.35)' : undefined }}>
-                <button className="civ-btn" style={{ padding: '0 5px' }} onClick={() => addSpend(c)}>{cName(c)} {spend[c] ? `${spend[c]}/${n}` : `×${n}`}</button>
+                <button className="civ-btn" style={{ padding: '0 5px' }} disabled={spendable(c) <= 0} onClick={() => addSpend(c)}
+                  title={c === 'grain' && grainLocked ? `${grainLocked} locked against Famine until next turn (§30.312)` : undefined}>
+                  {cName(c)} {spend[c] ? `${spend[c]}/${spendable(c)}` : `×${n}`}{c === 'grain' && grainLocked ? ` 🔒${grainLocked}` : ''}
+                </button>
                 {(spend[c] ?? 0) > 0 && <button className="civ-btn" style={{ padding: '0 4px' }} onClick={() => rmSpend(c)}>−</button>}
               </span>
             ))}
@@ -2515,4 +2562,10 @@ export function CombatModal({ events }: { events: CombatEvent[]; you?: PlayerId 
 
 export function prettyPhase(p: string): string {
   return p.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
+}
+
+/** The phase as shown to players — before turn 1 that's start-area placement
+ *  (§16.3), even though the state already sits at turn 1's taxation. */
+export function phaseLabel(s: GameState): string {
+  return s.pendingStart ? 'Choosing Start Areas' : prettyPhase(s.phase);
 }

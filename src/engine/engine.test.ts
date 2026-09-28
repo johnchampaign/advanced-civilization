@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Rng } from 'digital-boardgame-framework';
-import { validateData, advanceById, commodities, calamities, pieceCounts } from '../data/index.js';
+import { validateData, advanceById, civById, commodities, calamities, pieceCounts } from '../data/index.js';
+import { FULL_BOARD, startAreasFor } from './boards.js';
 import {
   commoditySetValue,
   handValue,
@@ -179,6 +180,40 @@ describe('game setup', () => {
       for (const a of Object.values(s.areas)) pop += a.tokens[id] ?? 0;
       expect(pop).toBeGreaterThanOrEqual(1);
     }
+  });
+  it('lets each nation choose its start area, in a random selection order (§16.3, report 5e4b210c)', () => {
+    const s = createGame({ players: ['egypt', 'babylon', 'thrace'], seed: 3, chooseStartAreas: true });
+    // Thrace has a single start area, so it is placed at once; the others choose.
+    expect(s.areas['scythia']?.tokens['thrace']).toBe(1);
+    expect(new Set(s.pendingStart!.order)).toEqual(new Set(['egypt', 'babylon']));
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
+    const first = adapter.currentActor(s)!;
+    expect(first).toBe(s.pendingStart!.order[0]);
+    // Exactly its own start areas are offered, and nothing else may happen first.
+    const offered = adapter.legalActions(s, first).map((a) => (a as Extract<Action, { type: 'placeStart' }>).area);
+    expect([...offered].sort()).toEqual([...startAreasFor(FULL_BOARD, first)].sort());
+    expect(() => adapter.applyAction(s, { type: 'pass' }, first)).toThrow(/start area/);
+    expect(() => adapter.applyAction(s, { type: 'placeStart', area: first === 'egypt' ? 'susa' : 'thebes' }, first)).toThrow(/§16\.3/);
+    // Pick something other than the old fixed default, to prove the choice sticks.
+    const pick = startAreasFor(FULL_BOARD, first).find((a) => a !== civById.get(first)!.start)!;
+    let t = adapter.applyAction(s, { type: 'placeStart', area: pick }, first);
+    const second = adapter.currentActor(t)!;
+    expect(second).not.toBe(first);
+    expect(t.pendingStart!.order).toEqual([second]);
+    t = adapter.applyAction(t, { type: 'placeStart', area: startAreasFor(FULL_BOARD, second)[0]! }, second);
+    // Everyone has placed: turn 1 runs as usual, growing from the chosen area.
+    expect(t.pendingStart).toBeUndefined();
+    expect(t.turn).toBe(1);
+    expect(adapter.currentActor(t)).not.toBeNull();
+    expect(t.areas[pick]!.tokens[first]).toBeGreaterThanOrEqual(1);
+    expect(t.log.filter((e) => e.kind === 'setup.start')).toHaveLength(3);
+    expect(pieceConservationProblems(t, pieceCounts)).toEqual([]);
+  });
+  it('shuffles the selection order by seed, and is off unless asked for', () => {
+    const firsts = new Set<string>();
+    for (let seed = 1; seed <= 12; seed++) firsts.add(createGame({ players: ['egypt', 'babylon'], seed, chooseStartAreas: true }).pendingStart!.order[0]!);
+    expect(firsts).toEqual(new Set(['egypt', 'babylon']));
+    expect(createGame({ players: ['egypt', 'babylon'], seed: 1 }).pendingStart).toBeUndefined();
   });
 });
 

@@ -13,10 +13,8 @@
     { "n": 131, "name": "Gulf of Oman" },
     { "n": 273, "name": "Indian Ocean" },
     { "n": 299, "name": "Arabian Sea" },
-    { "n": 304, "name": "Red Sea" }
-  ],
-  "pending": [
-    { "name": "Adriatic Sea", "note": "fragmented by segmentation; owner to supply the constituent number(s) to merge" },
-    { "name": "Aegean Sea",   "note": "fragmented by segmentation; owner to supply the constituent number(s) to merge" }
+    { "n": 304, "name": "Red Sea" },
+    { "n": 184, "name": "Aegean Sea", "confirmed": "owner, 2026-09-28" },
+    { "n": null, "name": "Adriatic Sea", "tracedTerritory": 180, "confirmed": "owner, 2026-09-28", "note": "the white-line numbering never isolated it (its water merged into the neighbouring coastal cells); the owner-traced polygon is src/data/territories.json region 180 'adriatic-sea'" }
   ]
 }

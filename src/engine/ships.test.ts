@@ -275,15 +275,24 @@ describe('§23.5 ship model: area-to-area voyages (reports 5d177c1b, 2811ba36)',
     expect(out.areas['onitas']!.tokens['egypt']).toBe(1);
   });
 
-  it('anchors: a voyage may end in a non-open water area (§23.55), and the ship can sail on next phase', () => {
+  it('the Aegean and Adriatic are open seas: Astronomy to enter, and no voyage ends there (§23.52/.54/.55)', () => {
+    // Owner ground truth (open-seas.locked.json): all 13 named seas are open. They
+    // used to be ordinary water that ships crossed, and even anchored in, freely.
     const s = base();
     s.areas['phaestos'] = { tokens: {}, ships: { egypt: 1 } };
+    s.areas['tarentum'] = { tokens: {}, ships: { egypt: 1 } };
     fixSupply(s); movePhase(s);
-    const out = adapter.applyAction(s, { type: 'move', moves: [], voyages: [[
-      { area: 'phaestos' }, { area: 'aegean-sea' },
-    ]] }, 'egypt');
-    expect(out.areas['aegean-sea']!.ships!['egypt']).toBe(1);
+    const sail = (st: GameState, ...areas: string[]) => adapter.applyAction(st, { type: 'move', moves: [], voyages: [areas.map((area) => ({ area }))] }, 'egypt');
+    expect(() => sail(s, 'phaestos', 'aegean-sea', 'troy')).toThrow(/Astronomy/);
+    expect(() => sail(s, 'tarentum', 'adriatic-sea', 'dalmatia')).toThrow(/Astronomy/);
+    expect(navalDestinations(null, 'phaestos', 4, false).has('aegean-sea')).toBe(false);
+    // A ship anchored there before this change (older saves) can still sail out.
     expect(navalDestinations(null, 'aegean-sea', 4, false).size).toBeGreaterThan(0);
+    expect(navalDestinations(null, 'adriatic-sea', 4, false).size).toBeGreaterThan(0);
+    s.players['egypt']!.advances = ['astronomy'];
+    expect(() => sail(s, 'phaestos', 'aegean-sea')).toThrow(/§23\.55/); // may not stop on open sea
+    const out = sail(s, 'phaestos', 'aegean-sea', 'troy'); // with Astronomy: straight across
+    expect(out.areas['troy']!.ships!['egypt']).toBe(1);
     expect(pieceConservationProblems(out, pieceCounts)).toEqual([]);
   });
 

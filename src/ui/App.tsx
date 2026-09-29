@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties } from 'react';
-import { Rng, recordPlay } from 'digital-boardgame-framework';
+import { Rng, recordPlay, recordFinish } from 'digital-boardgame-framework';
 import { adapter, createGame, victoryScore } from '../engine/index.js';
 import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent } from '../engine/index.js';
 import { advanceById, advances as ALL_ADVANCES, adjacency, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, playAreas, shipNeighbors, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
@@ -177,6 +177,25 @@ export default function App() {
 
   const actor = adapter.currentActor(state);
   const result = adapter.result(state);
+
+  // Best-effort "game finished" beacon, paired with the recordPlay above (same
+  // 'ai' mode). Fires once, on the live transition into game-over — the ref
+  // starts true for an already-finished state, so re-renders, returning to the
+  // setup screen, or resuming a save never re-fire it. Outcome is from the
+  // human's seat: sole top score = win, tied top score = draw, otherwise loss.
+  const wasOver = useRef(!!result);
+  useEffect(() => {
+    const over = !!result;
+    if (started && over && !wasOver.current && result) {
+      const w = result.winners;
+      const outcome = w.length === 0 ? 'draw'
+        : !w.includes(config.human) ? 'loss'
+        : w.length === 1 ? 'win' : 'draw';
+      void recordFinish('advanced-civilization', 'ai', { outcome });
+    }
+    wasOver.current = over;
+  }, [started, result, config.human]);
+
   const legal = useMemo(() => (actor ? adapter.legalActions(state, actor) : []), [state, actor]);
 
   // Autosave the live game after every change; clear it once the game ends.

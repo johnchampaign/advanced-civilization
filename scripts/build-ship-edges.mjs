@@ -109,6 +109,13 @@ function sideOf(areaId, subId) {
   return (seaSubs.get(areaId)?.length ?? 0) > 1 ? subId : null;
 }
 
+// Polygon "touches" that are not crossings: two corners that meet at a single
+// point out at sea, and a thin traced sliver of Germania hugging the Pannonia/
+// Illyricum/Dalmatia borders (no water at all). Checked on the art 2026-09-28.
+const DROP_SHIP_EDGES = [['al-wusta', 'mazirah'], ['harmoza', 'ummannar'], ['dalmatia', 'germania-2']];
+for (const [a, b] of DROP_SHIP_EDGES) {
+  for (let i = edges.length - 1; i >= 0; i--) if ((edges[i].a === a && edges[i].b === b) || (edges[i].a === b && edges[i].b === a)) edges.splice(i, 1);
+}
 edges.sort((e, f) => e.a.localeCompare(f.a) || e.b.localeCompare(f.b));
 fs.writeFileSync('src/data/ship-edges.json', JSON.stringify({
   _meta: { note: 'RAW §23.52 ship-move graph (scripts/build-ship-edges.mjs). Edge = base-adjacent areas whose shared border includes water; a ship hop crosses one edge. aSide/bSide = coastline sub used for the crossing (§23.57), null when unambiguous.' },

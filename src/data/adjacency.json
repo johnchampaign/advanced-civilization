@@ -3,7 +3,6 @@
   "abu-dhabi#sea1",
   "al-gharbia",
   "ash-sharqija",
-  "bat",
   "gulf-of-persia",
   "rub-al-khali",
   "ummannar"
@@ -71,7 +70,6 @@
  "al-gharbia": [
   "abu-dhabi",
   "al-gharbia#sea1",
-  "ash-sharqija",
   "gulf-of-persia",
   "mana",
   "rub-al-khali"
@@ -88,7 +86,6 @@
  ],
  "al-wusta": [
   "al-wusta#sea1",
-  "ash-sharqija",
   "indian-ocean",
   "moscha",
   "wedi-samad"
@@ -195,7 +192,6 @@
   "chaldaea",
   "fav",
   "gerrha",
-  "mana",
   "midian",
   "petra",
   "riyadh",
@@ -256,20 +252,15 @@
  "artacona": [
   "herat",
   "prophtasia",
-  "randamar",
   "seistan-superior"
  ],
  "ash-sharqija": [
   "abu-dhabi",
-  "al-gharbia",
   "al-jibal",
-  "al-wusta",
   "bat",
-  "hadramaut",
   "moscha",
   "oman",
   "rub-al-khali",
-  "ummannar",
   "wedi-samad"
  ],
  "assyria": [
@@ -383,7 +374,6 @@
   "onitas#sea2"
  ],
  "bat": [
-  "abu-dhabi",
   "ash-sharqija",
   "bat#sea1",
   "gulf-of-oman",
@@ -556,9 +546,7 @@
   "banda-abbas",
   "gulashkird",
   "kurangan",
-  "nurabad",
   "pasagardes",
-  "persepolis",
   "shiraz"
  ],
  "carrhae": [
@@ -1115,8 +1103,7 @@
   "arabia",
   "gerrha#sea1",
   "gulf-of-persia",
-  "mana",
-  "rub-al-khali"
+  "mana"
  ],
  "gerrha#sea1": [
   "apolagos#sea1",
@@ -1137,7 +1124,6 @@
   "carmania",
   "harmoza",
   "kerman",
-  "megan",
   "pura"
  ],
  "gulf-of-oman": [
@@ -1207,7 +1193,6 @@
  ],
  "hadramaut": [
   "arabian-sea",
-  "ash-sharqija",
   "hadramaut#sea2",
   "moscha",
   "rub-al-khali",
@@ -1224,9 +1209,7 @@
   "gulashkird",
   "gulf-of-oman",
   "harmoza#sea2",
-  "megan",
-  "pura",
-  "ummannar"
+  "megan"
  ],
  "harmoza#sea2": [
   "banda-abbas#sea2",
@@ -1409,7 +1392,6 @@
   "carmania",
   "lyan",
   "nurabad",
-  "pasagardes",
   "persepolis",
   "portas-persas",
   "shiraz"
@@ -1540,8 +1522,7 @@
   "lyan#sea2",
   "nurabad",
   "parsian",
-  "portas-persas",
-  "shiraz"
+  "portas-persas"
  ],
  "lyan#sea2": [
   "gulf-of-persia",
@@ -1602,7 +1583,6 @@
  ],
  "mana": [
   "al-gharbia",
-  "arabia",
   "gerrha",
   "gulf-of-persia",
   "mana#sea1",
@@ -1683,7 +1663,6 @@
  ],
  "megan": [
   "barna",
-  "gulashkird",
   "gulf-of-oman",
   "harmoza",
   "megan#sea2",
@@ -1799,8 +1778,7 @@
   "ash-sharqija",
   "hadramaut",
   "indian-ocean",
-  "moscha#sea2",
-  "rub-al-khali"
+  "moscha#sea2"
  ],
  "moscha#sea2": [
   "al-wusta#sea1",
@@ -1924,10 +1902,8 @@
   "western-mediterranean-2"
  ],
  "nurabad": [
-  "carmania",
   "kurangan",
   "lyan",
-  "parsian",
   "shiraz"
  ],
  "oman": [
@@ -2011,7 +1987,6 @@
   "banda-abbas",
   "gulf-of-persia",
   "lyan",
-  "nurabad",
   "parsian#sea2",
   "shiraz"
  ],
@@ -2034,13 +2009,11 @@
   "aria",
   "carmania",
   "kerman",
-  "kurangan",
   "persepolis"
  ],
  "persepolis": [
   "ahwaz",
   "aria",
-  "carmania",
   "kurangan",
   "parthia",
   "pasagardes",
@@ -2163,7 +2136,6 @@
   "barna",
   "gedrosla",
   "gulashkird",
-  "harmoza",
   "herat",
   "kerman",
   "megan",
@@ -2185,7 +2157,6 @@
  ],
  "randamar": [
   "aracosta",
-  "artacona",
   "mochendo-daro",
   "prophtasia",
   "seistan-superior"
@@ -2257,10 +2228,8 @@
   "al-jibal",
   "arabia",
   "ash-sharqija",
-  "gerrha",
   "hadramaut",
   "mana",
-  "moscha",
   "riyadh",
   "saba"
  ],
@@ -2417,7 +2386,6 @@
   "banda-abbas",
   "carmania",
   "kurangan",
-  "lyan",
   "nurabad",
   "parsian"
  ],
@@ -2772,11 +2740,9 @@
  ],
  "ummannar": [
   "abu-dhabi",
-  "ash-sharqija",
   "bat",
   "gulf-of-oman",
   "gulf-of-persia",
-  "harmoza",
   "ummannar#sea1"
  ],
  "ummannar#sea1": [

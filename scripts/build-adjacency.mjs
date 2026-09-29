@@ -107,6 +107,15 @@ const REMOVE_EDGES = [
   ['corduba', 'west-mauretania'],  // Strait of Gibraltar
   ['bycantinum', 'troy'],          // Dardanelles / Sea of Marmara
   ['kuban', 'scythia'],            // Sea of Azov (the board edge cuts off any land route north)
+  // Corner sweep 2026-09-28: these pairs meet only at a single point where four
+  // borders cross (checked at high zoom on the art), so no boundary line divides
+  // them (§4.31, §23.3) — same as Gulashkird|Pasagardes above.
+  ['al-gharbia', 'ash-sharqija'], ['abu-dhabi', 'bat'], ['ash-sharqija', 'ummannar'],
+  ['ash-sharqija', 'hadramaut'], ['moscha', 'rub-al-khali'], ['al-wusta', 'ash-sharqija'],
+  ['arabia', 'mana'], ['gerrha', 'rub-al-khali'],
+  ['artacona', 'randamar'], ['carmania', 'nurabad'], ['carmania', 'persepolis'],
+  ['kurangan', 'pasagardes'], ['harmoza', 'pura'], ['gulashkird', 'megan'],
+  ['lyan', 'shiraz'], ['nurabad', 'parsian'], ['harmoza', 'ummannar'],
   ['palermo', 'carthago'],   // Sicilian channel to Africa
   ['syracus', 'campania'], ['milazzo', 'campania'], // Strait of Messina — ship-only in AC
   // Euboea{chalkis,eretria} is an island on the board (report d4cb0ffe): the

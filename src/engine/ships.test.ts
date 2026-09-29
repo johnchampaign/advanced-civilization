@@ -490,10 +490,31 @@ describe('whole-map land-link audit against the board art (2026-09-28)', () => {
     for (const a of ['thebes', 'babylonia', 'chanhu-daro', 'troy', 'kuban', 'west-mauretania']) expect(europe.has(a), a).toBe(false);
     // Asia and Africa remain joined overland (via Sinai).
     expect(reach('thebes').has('babylonia')).toBe(true);
-    for (const [a, b] of [['corduba', 'west-mauretania'], ['bycantinum', 'troy'], ['kuban', 'scythia']]) {
+    for (const [a, b] of [['corduba', 'west-mauretania'], ['bycantinum', 'troy'], ['kuban', 'scythia']] as [string, string][]) {
       expect(adjacency[a]).not.toContain(b);
       expect(navalDestinations(null, a, 1, false).has(b), `${a}->${b} by ship`).toBe(true);
     }
+  });
+});
+
+describe('corner sweep: areas meeting only at a point are not neighbours (§4.31, 2026-09-28)', () => {
+  const CORNERS: [string, string][] = [
+    ['al-gharbia', 'ash-sharqija'], ['abu-dhabi', 'bat'], ['ash-sharqija', 'ummannar'], ['ash-sharqija', 'hadramaut'],
+    ['moscha', 'rub-al-khali'], ['al-wusta', 'ash-sharqija'], ['arabia', 'mana'], ['gerrha', 'rub-al-khali'],
+    ['artacona', 'randamar'], ['carmania', 'nurabad'], ['carmania', 'persepolis'], ['kurangan', 'pasagardes'],
+    ['harmoza', 'pura'], ['gulashkird', 'megan'], ['lyan', 'shiraz'], ['nurabad', 'parsian'], ['harmoza', 'ummannar'],
+  ];
+  it('no overland step across a four-corner point', () => {
+    for (const [a, b] of CORNERS) { expect(adjacency[a], `${a}|${b}`).not.toContain(b); expect(adjacency[b], `${b}|${a}`).not.toContain(a); }
+  });
+  it('no ship (or Barbarian) hop through a corner at sea or a traced sliver', () => {
+    for (const [a, b] of [['al-wusta', 'mazirah'], ['harmoza', 'ummannar'], ['dalmatia', 'germania-2']] as [string, string][])
+      expect(shipNeighbors.get(a)?.some((h) => h.to === b), `${a}->${b}`).toBeFalsy();
+  });
+  it('short real borders the sweep checked are kept', () => {
+    // Two junctions joined by a short border segment — not a corner.
+    for (const [a, b] of [['athens', 'corinth'], ['aracosta', 'basri'], ['herat', 'prophtasia'], ['aria', 'herat'], ['illyricum', 'pannonia-2'], ['chaldaea', 'sumeria']] as [string, string][])
+      expect(adjacency[a], `${a}|${b}`).toContain(b);
   });
 });
 

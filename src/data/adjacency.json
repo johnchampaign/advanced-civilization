@@ -485,8 +485,7 @@
   "black-sea",
   "bycantinum#sea1",
   "moesia",
-  "thrace",
-  "troy"
+  "thrace"
  ],
  "bycantinum#sea1": [
   "black-sea",
@@ -739,7 +738,6 @@
   "corduba#sea3",
   "hispania",
   "new-carthage",
-  "west-mauretania",
   "western-mediterranean-2"
  ],
  "corduba#sea2": [
@@ -1398,8 +1396,7 @@
  "kuban": [
   "black-sea",
   "kuban#sea1",
-  "mikop",
-  "scythia"
+  "mikop"
  ],
  "kuban#sea1": [
   "black-sea",
@@ -2368,7 +2365,6 @@
   "crimea",
   "dacia",
   "danube",
-  "kuban",
   "scythia#sea2",
   "scythia#sea3",
   "scythia#sea4",
@@ -2729,7 +2725,6 @@
   "aegean-sea",
   "bithynia",
   "black-sea",
-  "bycantinum",
   "sardes",
   "troy#sea1",
   "troy#sea3",
@@ -2855,7 +2850,6 @@
   "wedi-samad"
  ],
  "west-mauretania": [
-  "corduba",
   "east-mauretania",
   "west-mauretania#sea1",
   "west-mauretania#sea2",

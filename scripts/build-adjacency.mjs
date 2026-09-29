@@ -101,6 +101,12 @@ const REMOVE_EDGES = [
   ['appolonia', 'tarentum'],       // Strait of Otranto
   ['belgica', 'lugdunensis'],      // a bay; still joined overland via other areas
   ['crimea', 'danube'], ['caucasus', 'media'], ['antiochia', 'galatia'], ['banda-abbas', 'ummannar'], // Black Sea, Caspian, Gulf of Iskenderun, Hormuz
+  // The only land links between Europe and Asia/Africa — all water on the art, so
+  // cut on the owner's decision (2026-09-28). Europe is now reached by ship: each
+  // is a single hop.
+  ['corduba', 'west-mauretania'],  // Strait of Gibraltar
+  ['bycantinum', 'troy'],          // Dardanelles / Sea of Marmara
+  ['kuban', 'scythia'],            // Sea of Azov (the board edge cuts off any land route north)
   ['palermo', 'carthago'],   // Sicilian channel to Africa
   ['syracus', 'campania'], ['milazzo', 'campania'], // Strait of Messina — ship-only in AC
   // Euboea{chalkis,eretria} is an island on the board (report d4cb0ffe): the

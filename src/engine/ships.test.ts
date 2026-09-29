@@ -479,10 +479,21 @@ describe('whole-map land-link audit against the board art (2026-09-28)', () => {
       expect(shipNeighbors.get(a)?.some((h) => h.to === b), `${a}->${b} ship crossing`).toBe(true);
     }
   });
-  it('Europe, Asia and Africa stay joined overland (the Gibraltar, Dardanelles and Azov links are held for review)', () => {
-    const seen = new Set<string>(['roma']); const queue = ['roma'];
-    while (queue.length) for (const n of adjacency[queue.shift()!] ?? []) if (!areaById.get(n)?.isWater && !seen.has(n)) { seen.add(n); queue.push(n); }
-    for (const far of ['thebes', 'babylonia', 'chanhu-daro', 'baetica', 'scythia']) expect(seen.has(far), far).toBe(true);
+  it('Europe is its own landmass: Gibraltar, the Dardanelles and the Sea of Azov are one ship hop each', () => {
+    const reach = (from: string) => {
+      const seen = new Set<string>([from]); const queue = [from];
+      while (queue.length) for (const n of adjacency[queue.shift()!] ?? []) if (!areaById.get(n)?.isWater && !seen.has(n)) { seen.add(n); queue.push(n); }
+      return seen;
+    };
+    const europe = reach('roma');
+    for (const a of ['baetica', 'scythia', 'bycantinum', 'corduba']) expect(europe.has(a), a).toBe(true);
+    for (const a of ['thebes', 'babylonia', 'chanhu-daro', 'troy', 'kuban', 'west-mauretania']) expect(europe.has(a), a).toBe(false);
+    // Asia and Africa remain joined overland (via Sinai).
+    expect(reach('thebes').has('babylonia')).toBe(true);
+    for (const [a, b] of [['corduba', 'west-mauretania'], ['bycantinum', 'troy'], ['kuban', 'scythia']]) {
+      expect(adjacency[a]).not.toContain(b);
+      expect(navalDestinations(null, a, 1, false).has(b), `${a}->${b} by ship`).toBe(true);
+    }
   });
 });
 

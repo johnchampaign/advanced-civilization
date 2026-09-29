@@ -90,7 +90,6 @@
   "al-wusta#sea1",
   "ash-sharqija",
   "indian-ocean",
-  "mazirah",
   "moscha",
   "wedi-samad"
  ],
@@ -132,7 +131,6 @@
   "aleppo",
   "antiochia#sea2",
   "cilicia",
-  "galatia",
   "phoenicia"
  ],
  "antiochia#sea2": [
@@ -160,10 +158,8 @@
   "appolonia#sea2",
   "epirus",
   "illyricum",
-  "ithaka",
   "macedonia",
-  "paeonia",
-  "tarentum"
+  "paeonia"
  ],
  "appolonia#sea2": [
   "adriatic-sea",
@@ -322,7 +318,6 @@
  ],
  "baleares": [
   "baleares#sea1",
-  "ebusus",
   "western-mediterranean-2"
  ],
  "baleares#sea1": [
@@ -340,8 +335,7 @@
   "gulf-of-persia",
   "harmoza",
   "parsian",
-  "shiraz",
-  "ummannar"
+  "shiraz"
  ],
  "banda-abbas#sea2": [
   "banda-abbas",
@@ -420,9 +414,7 @@
   "aquitania",
   "belgica#sea1",
   "gaul",
-  "londinium",
   "lower-germany",
-  "lugdunensis",
   "upper-germany"
  ],
  "belgica#sea1": [
@@ -605,7 +597,6 @@
   "caucasus#sea1",
   "caucasus#sea2",
   "lesser-armenia",
-  "media",
   "nalchik"
  ],
  "caucasus#sea1": [
@@ -806,7 +797,6 @@
  "crimea": [
   "black-sea",
   "crimea#sea1",
-  "danube",
   "scythia"
  ],
  "crimea#sea1": [
@@ -888,7 +878,6 @@
  ],
  "danube": [
   "black-sea",
-  "crimea",
   "dacia",
   "danube#sea2",
   "moesia",
@@ -911,7 +900,6 @@
   "delphi#sea5",
   "delphi#sea6",
   "epirus",
-  "ithaka",
   "thessaly"
  ],
  "delphi#sea3": [
@@ -1000,7 +988,6 @@
   "western-desert#sea1"
  ],
  "ebusus": [
-  "baleares",
   "ebusus#sea1",
   "western-mediterranean-2"
  ],
@@ -1020,7 +1007,6 @@
   "appolonia",
   "delphi",
   "epirus#sea2",
-  "ithaka",
   "macedonia",
   "thessaly"
  ],
@@ -1067,7 +1053,6 @@
   "western-desert"
  ],
  "galatia": [
-  "antiochia",
   "cilicia",
   "galatia#sea1",
   "galatia#sea3",
@@ -1133,8 +1118,7 @@
   "gerrha#sea1",
   "gulf-of-persia",
   "mana",
-  "rub-al-khali",
-  "tilmun"
+  "rub-al-khali"
  ],
  "gerrha#sea1": [
   "apolagos#sea1",
@@ -1333,12 +1317,8 @@
   "sardes#sea2"
  ],
  "ithaka": [
-  "appolonia",
   "central-mediterranean",
-  "delphi",
-  "epirus",
-  "ithaka#sea1",
-  "tarentum"
+  "ithaka#sea1"
  ],
  "ithaka#sea1": [
   "appolonia#sea2",
@@ -1500,11 +1480,9 @@
  ],
  "londinium": [
   "bay-of-biscay",
-  "belgica",
   "britannia",
   "londinium#sea2",
-  "londinium#sea3",
-  "lugdunensis"
+  "londinium#sea3"
  ],
  "londinium#sea2": [
   "bay-of-biscay",
@@ -1537,8 +1515,6 @@
  "lugdunensis": [
   "aquitania",
   "bay-of-biscay",
-  "belgica",
-  "londinium",
   "lugdunensis#sea1"
  ],
  "lugdunensis#sea1": [
@@ -1634,8 +1610,7 @@
   "gulf-of-persia",
   "mana#sea1",
   "mana#sea3",
-  "rub-al-khali",
-  "tilmun"
+  "rub-al-khali"
  ],
  "mana#sea1": [
   "al-gharbia#sea1",
@@ -1668,12 +1643,9 @@
   "western-mediterranean-2"
  ],
  "mazirah": [
-  "al-wusta",
   "gulf-of-oman",
   "indian-ocean",
-  "mazirah#sea1",
-  "mazun",
-  "wedi-samad"
+  "mazirah#sea1"
  ],
  "mazirah#sea1": [
   "al-wusta#sea1",
@@ -1685,7 +1657,6 @@
  ],
  "mazun": [
   "gulf-of-oman",
-  "mazirah",
   "mazun#sea1",
   "oman",
   "wedi-samad"
@@ -1699,7 +1670,6 @@
  ],
  "media": [
   "caspian-sea",
-  "caucasus",
   "elam",
   "lesser-armenia",
   "media#sea1",
@@ -2610,10 +2580,8 @@
  ],
  "tarentum": [
   "adriatic-sea",
-  "appolonia",
   "campania",
   "central-mediterranean",
-  "ithaka",
   "samnium",
   "tarentum#sea1"
  ],
@@ -2726,9 +2694,7 @@
   "thyras"
  ],
  "tilmun": [
-  "gerrha",
   "gulf-of-persia",
-  "mana",
   "tilmun#sea1"
  ],
  "tilmun#sea1": [
@@ -2812,7 +2778,6 @@
  "ummannar": [
   "abu-dhabi",
   "ash-sharqija",
-  "banda-abbas",
   "bat",
   "gulf-of-oman",
   "gulf-of-persia",
@@ -2878,7 +2843,6 @@
   "al-wusta",
   "ash-sharqija",
   "indian-ocean",
-  "mazirah",
   "mazun",
   "oman",
   "wedi-samad#sea2"

@@ -88,6 +88,19 @@ const REMOVE_EDGES = [
   // Lemnos is an island in the middle of its area: every border runs through water
   // (checked against the board art 2026-09-28). Ship/Barbarian crossings only.
   ['lemnos', 'bycantinum'], ['lemnos', 'thessalonica'], ['lemnos', 'thrace'], ['lemnos', 'troy'],
+  // Whole-map audit 2026-09-28: every land link was tested against the board art
+  // (land on both sides along the shared border, rivers/floodplains counted as
+  // land) and each hit confirmed by eye. These borders run only through water.
+  // Islands:
+  ['ithaka', 'appolonia'], ['ithaka', 'delphi'], ['ithaka', 'epirus'], ['ithaka', 'tarentum'],
+  ['londinium', 'lugdunensis'], ['londinium', 'belgica'],            // Britain (English Channel)
+  ['baleares', 'ebusus'],                                           // Mallorca and Ibiza are separate islands
+  ['mazirah', 'mazun'], ['mazirah', 'wedi-samad'], ['mazirah', 'al-wusta'], // Masirah (al-wusta: a corner out at sea)
+  ['tilmun', 'mana'], ['tilmun', 'gerrha'],                         // Bahrain (Gerrha's border hugs the coast offshore)
+  // Straits and gulfs:
+  ['appolonia', 'tarentum'],       // Strait of Otranto
+  ['belgica', 'lugdunensis'],      // a bay; still joined overland via other areas
+  ['crimea', 'danube'], ['caucasus', 'media'], ['antiochia', 'galatia'], ['banda-abbas', 'ummannar'], // Black Sea, Caspian, Gulf of Iskenderun, Hormuz
   ['palermo', 'carthago'],   // Sicilian channel to Africa
   ['syracus', 'campania'], ['milazzo', 'campania'], // Strait of Messina — ship-only in AC
   // Euboea{chalkis,eretria} is an island on the board (report d4cb0ffe): the

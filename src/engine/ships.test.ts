@@ -348,7 +348,8 @@ describe('§23.3 islands are all-water — population must embark to leave (issu
   // tokens can only leave by ship. (Owner-confirmed against the board.)
   const ISLANDS: Record<string, string[]> = {
     crete: ['knossos', 'phaestos'], cyprus: ['cyprus', 'salamis'], corsica: ['corsica-2'],
-    sardinia: ['sardinia-2', 'carales-2'], baleares: ['baleares', 'ebusus'],
+    sardinia: ['sardinia-2', 'carales-2'], mallorca: ['baleares'], ibiza: ['ebusus'],
+    britain: ['britannia', 'londinium'], ithaka: ['ithaka'], masirah: ['mazirah'], bahrain: ['tilmun'],
     rhodes: ['rhodes'], thera: ['thera'], lesbos: ['lesbos'], sicily: ['syracus', 'milazzo', 'palermo'],
     euboea: ['chalkis', 'eretria'], lemnos: ['lemnos'],
   };
@@ -466,3 +467,22 @@ describe('map data from the 2026-09-27 report queue', () => {
     expect(areaById.get('siwa')!.sustains).toBe(1);
   });
 });
+
+describe('whole-map land-link audit against the board art (2026-09-28)', () => {
+  const STRAITS: [string, string][] = [
+    ['appolonia', 'tarentum'], ['belgica', 'lugdunensis'], ['crimea', 'danube'],
+    ['caucasus', 'media'], ['antiochia', 'galatia'], ['banda-abbas', 'ummannar'],
+  ];
+  it('straits and gulfs are water: no overland step across, but ships still cross', () => {
+    for (const [a, b] of STRAITS) {
+      expect(adjacency[a], `${a} walks to ${b}`).not.toContain(b);
+      expect(shipNeighbors.get(a)?.some((h) => h.to === b), `${a}->${b} ship crossing`).toBe(true);
+    }
+  });
+  it('Europe, Asia and Africa stay joined overland (the Gibraltar, Dardanelles and Azov links are held for review)', () => {
+    const seen = new Set<string>(['roma']); const queue = ['roma'];
+    while (queue.length) for (const n of adjacency[queue.shift()!] ?? []) if (!areaById.get(n)?.isWater && !seen.has(n)) { seen.add(n); queue.push(n); }
+    for (const far of ['thebes', 'babylonia', 'chanhu-daro', 'baetica', 'scythia']) expect(seen.has(far), far).toBe(true);
+  });
+});
+

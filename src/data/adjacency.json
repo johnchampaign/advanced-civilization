@@ -1432,8 +1432,7 @@
   "elam",
   "lesser-armenia#sea1",
   "lesser-armenia#sea3",
-  "media",
-  "niniveh"
+  "media"
  ],
  "lesser-armenia#sea1": [
   "caucasus#sea2",
@@ -1441,7 +1440,8 @@
   "media#sea1"
  ],
  "lesser-armenia#sea3": [
-  "lesser-armenia"
+  "lesser-armenia",
+  "niniveh#sea2"
  ],
  "libya": [
   "central-mediterranean",
@@ -1859,9 +1859,13 @@
   "babylonia",
   "carrhae",
   "elam",
-  "lesser-armenia",
   "mesopotamia",
+  "niniveh#sea2",
   "van"
+ ],
+ "niniveh#sea2": [
+  "lesser-armenia#sea3",
+  "niniveh"
  ],
  "nisa": [
   "aria",

@@ -107,6 +107,17 @@ for (const r of terr.regions) {
     sub: subs.map((s, i) => ({ subId: `${r.name || r.id}#${s.kind}${i + 1}`, kind: s.kind, area_px: Math.round(polyArea(s.exterior)), centroid: centroidOf(s.exterior).map((v) => +v.toFixed(1)), exterior: s.exterior })) });
 }
 
+// Manual shores the splitter missed (traced from the art by hand-checked script).
+// Niniveh holds the main body of the lake it shares with Lesser Armenia (the
+// border between them runs entirely through the lake), 2026-09-28.
+const MANUAL_SEA_SUBS = { niniveh: [[2352.4, 288.1], [2354.8, 287.9], [2381.6, 315.5], [2389.1, 333.7], [2388.9, 334.8], [2382.7, 333.0], [2377.8, 329.9], [2370.3, 329.0], [2361.7, 312.9], [2360.8, 308.5], [2357.7, 303.6], [2349.1, 297.6], [2346.0, 294.1], [2342.4, 292.7], [2338.7, 289.9]] };
+for (const [name, exterior] of Object.entries(MANUAL_SEA_SUBS)) {
+  const t = result.find((x) => x.name === name);
+  if (!t || t.sub.some((s) => s.kind === 'sea')) continue;
+  t.category = 'coastal';
+  t.sub.push({ subId: `${name}#sea${t.sub.length + 1}`, kind: 'sea', area_px: Math.round(polyArea(exterior)), centroid: centroidOf(exterior).map((v) => +v.toFixed(1)), exterior });
+}
+
 fs.writeFileSync('src/data/coastlines.json', JSON.stringify({ image: { width: IW, height: IH }, count: result.length, territories: result }, null, 0));
 
 // verification render

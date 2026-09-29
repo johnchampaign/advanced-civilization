@@ -479,6 +479,22 @@ describe('whole-map land-link audit against the board art (2026-09-28)', () => {
       expect(shipNeighbors.get(a)?.some((h) => h.to === b), `${a}->${b} ship crossing`).toBe(true);
     }
   });
+  it('Lesser Armenia|Niniveh is a lake crossing: ship-only, and Niniveh now has a shore to build on', () => {
+    expect(adjacency['lesser-armenia']).not.toContain('niniveh');
+    expect(adjacency['niniveh']).not.toContain('lesser-armenia');
+    expect(adjacency['niniveh']).toContain('niniveh#sea2'); // its traced lake shore
+    expect(navalDestinations(null, 'lesser-armenia', 1, false).has('niniveh')).toBe(true);
+    expect(navalDestinations(null, 'niniveh', 1, false).has('lesser-armenia')).toBe(true);
+    let s = base();
+    s.areas['niniveh'] = { tokens: { egypt: 3 } };
+    fixSupply(s); s.players['egypt']!.stock -= 5; s.players['egypt']!.treasury = 5;
+    s.phase = 'census'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    normalize(s);
+    while (adapter.currentActor(s) !== 'egypt') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    s = adapter.applyAction(s, { type: 'buildShips', builds: [{ area: 'niniveh', count: 1, payFrom: 'treasury' }] }, 'egypt');
+    expect(s.areas['niniveh']!.ships?.['egypt']).toBe(1);
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
+  });
   it('Europe is its own landmass: Gibraltar, the Dardanelles and the Sea of Azov are one ship hop each', () => {
     const reach = (from: string) => {
       const seen = new Set<string>([from]); const queue = [from];

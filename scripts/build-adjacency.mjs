@@ -116,6 +116,9 @@ const REMOVE_EDGES = [
   ['artacona', 'randamar'], ['carmania', 'nurabad'], ['carmania', 'persepolis'],
   ['kurangan', 'pasagardes'], ['harmoza', 'pura'], ['gulashkird', 'megan'],
   ['lyan', 'shiraz'], ['nurabad', 'parsian'], ['harmoza', 'ummannar'],
+  // Lake crossing: the Lesser Armenia|Niniveh border runs entirely through a lake;
+  // Niniveh's shore is traced (build-coasts MANUAL_SEA_SUBS), so it is ship-only.
+  ['lesser-armenia', 'niniveh'],
   // NOT removed, by the owner's ruling (2026-09-28): Chaldaea|Susa, Susa|Ur and
   // Chaldaea|Ur run along the Mesopotamian delta channels, which are RIVERS, so
   // these are land borders even though the art draws the channels blue.

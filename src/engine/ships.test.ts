@@ -495,6 +495,19 @@ describe('whole-map land-link audit against the board art (2026-09-28)', () => {
     expect(s.areas['niniveh']!.ships?.['egypt']).toBe(1);
     expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
   });
+  it('the whole lake is navigable: Armenia and Elam have shores on it too', () => {
+    // Their borders with Lesser Armenia and Niniveh continue overland, so they stay
+    // land neighbours — and are now also one hop apart by ship across the lake.
+    for (const [a, b] of [['armenia', 'lesser-armenia'], ['armenia', 'niniveh'], ['elam', 'lesser-armenia'], ['elam', 'niniveh']] as [string, string][]) {
+      expect(adjacency[a], `${a}|${b} land`).toContain(b);
+      expect(navalDestinations(null, a, 1, false).has(b), `${a}->${b} by ship`).toBe(true);
+    }
+    expect(adjacency['armenia']).toContain('armenia#sea2');
+    expect(adjacency['elam']).toContain('elam#sea2');
+    // Armenia and Elam sit at opposite ends: two lake hops, not one.
+    expect(navalDestinations(null, 'armenia', 1, false).has('elam')).toBe(false);
+    expect(navalDestinations(null, 'armenia', 2, false).has('elam')).toBe(true);
+  });
   it('Europe is its own landmass: Gibraltar, the Dardanelles and the Sea of Azov are one ship hop each', () => {
     const reach = (from: string) => {
       const seen = new Set<string>([from]); const queue = [from];

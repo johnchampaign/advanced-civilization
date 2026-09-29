@@ -109,8 +109,9 @@ for (const r of terr.regions) {
 
 // Manual shores the splitter missed (traced from the art by hand-checked script).
 // Niniveh holds the main body of the lake it shares with Lesser Armenia (the
-// border between them runs entirely through the lake), 2026-09-28.
-const MANUAL_SEA_SUBS = { niniveh: [[2352.4, 288.1], [2354.8, 287.9], [2381.6, 315.5], [2389.1, 333.7], [2388.9, 334.8], [2382.7, 333.0], [2377.8, 329.9], [2370.3, 329.0], [2361.7, 312.9], [2360.8, 308.5], [2357.7, 303.6], [2349.1, 297.6], [2346.0, 294.1], [2342.4, 292.7], [2338.7, 289.9]] };
+// border between them runs entirely through the lake), 2026-09-28; Armenia and
+// Elam hold its two small end lobes (2026-09-29).
+const MANUAL_SEA_SUBS = { armenia: [[2355.9, 279.7], [2356.4, 280.6], [2355.5, 283.7], [2353.9, 286.5], [2341.1, 288.3], [2339.8, 288.3], [2339.1, 287.2], [2339.1, 284.1], [2342.0, 282.1], [2350.4, 282.1], [2353.9, 281.2]], elam: [[2394.9, 308.9], [2398.2, 309.6], [2401.1, 311.6], [2401.5, 317.3], [2396.6, 326.2], [2394.9, 334.6], [2393.3, 335.7], [2391.1, 335.7], [2382.9, 315.1]], niniveh: [[2352.4, 288.1], [2354.8, 287.9], [2381.6, 315.5], [2389.1, 333.7], [2388.9, 334.8], [2382.7, 333.0], [2377.8, 329.9], [2370.3, 329.0], [2361.7, 312.9], [2360.8, 308.5], [2357.7, 303.6], [2349.1, 297.6], [2346.0, 294.1], [2342.4, 292.7], [2338.7, 289.9]] };
 for (const [name, exterior] of Object.entries(MANUAL_SEA_SUBS)) {
   const t = result.find((x) => x.name === name);
   if (!t || t.sub.some((s) => s.kind === 'sea')) continue;

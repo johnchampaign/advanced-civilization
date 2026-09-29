@@ -242,12 +242,18 @@
   "rhages"
  ],
  "armenia": [
+  "armenia#sea2",
   "cappadocia",
   "caucasus",
   "lesser-armenia",
   "nalchik",
   "niniveh",
   "van"
+ ],
+ "armenia#sea2": [
+  "armenia",
+  "lesser-armenia#sea3",
+  "niniveh#sea2"
  ],
  "artacona": [
   "herat",
@@ -984,10 +990,16 @@
  ],
  "elam": [
   "babylonia",
+  "elam#sea2",
   "lesser-armenia",
   "media",
   "niniveh",
   "parthia"
+ ],
+ "elam#sea2": [
+  "elam",
+  "lesser-armenia#sea3",
+  "niniveh#sea2"
  ],
  "epirus": [
   "appolonia",
@@ -1440,6 +1452,8 @@
   "media#sea1"
  ],
  "lesser-armenia#sea3": [
+  "armenia#sea2",
+  "elam#sea2",
   "lesser-armenia",
   "niniveh#sea2"
  ],
@@ -1864,6 +1878,8 @@
   "van"
  ],
  "niniveh#sea2": [
+  "armenia#sea2",
+  "elam#sea2",
   "lesser-armenia#sea3",
   "niniveh"
  ],

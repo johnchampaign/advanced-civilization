@@ -54,3 +54,6 @@ _c_*.png
 # so do not source rules from it -- it contradicts the rulebook. The
 # authoritative reference is civ_rules_and_guide_ocr.pdf.
 ADV_CIV.FAQ.txt
+
+# scripts/audit-land-links.py output (rendered panels, report, contact sheets)
+/_land-link-audit/

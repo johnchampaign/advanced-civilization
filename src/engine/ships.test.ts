@@ -515,6 +515,10 @@ describe('corner sweep: areas meeting only at a point are not neighbours (§4.31
     for (const [a, b] of [['chaldaea', 'susa'], ['susa', 'ur'], ['chaldaea', 'ur']] as [string, string][])
       expect(adjacency[a], `${a}|${b}`).toContain(b);
   });
+  it('...but they stay navigable to the Gulf: Ur and Babylonia remain ports (owner ruling)', () => {
+    for (const port of ['ur', 'babylonia']) expect(navalDestinations(null, port, 4, false).size, port).toBeGreaterThan(0);
+    expect(shipNeighbors.get('ur')?.some((h) => h.to === 'susa')).toBe(true); // up the channel to the Gulf coast
+  });
   it('short real borders the sweep checked are kept', () => {
     // Two junctions joined by a short border segment — not a corner.
     for (const [a, b] of [['athens', 'corinth'], ['aracosta', 'basri'], ['herat', 'prophtasia'], ['aria', 'herat'], ['illyricum', 'pannonia-2'], ['chaldaea', 'sumeria']] as [string, string][])

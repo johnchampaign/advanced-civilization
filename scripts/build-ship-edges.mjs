@@ -44,6 +44,9 @@ const subsTouch = (sa, sb) => subAdj.get(sa)?.has(sb) ?? false;
 // Owner corrections (see ur-thyras-shiraz memory): coasts whose shore water was
 // traced into a NEIGHBOUR's polygon. Same list as build-water-areas MANUAL_EMBARK:
 // the crossing uses the neighbour's sub on the neighbour side, none on ours.
+// These subs are the delta channels at the Gulf head. Owner ruling 2026-09-28: the
+// channels are rivers for land borders (Chaldaea|Susa|Ur stay land-adjacent) but
+// stay navigable, so Ur and Babylonia keep their ports. Don't "fix" either way.
 const MANUAL = { ur: ['charax#sea1', 'susa#sea2', 'chaldaea#sea1'], babylonia: ['ur#sea2', 'susa#sea2'] };
 
 const edges = [];

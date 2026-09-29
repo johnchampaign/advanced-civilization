@@ -116,6 +116,9 @@ const REMOVE_EDGES = [
   ['artacona', 'randamar'], ['carmania', 'nurabad'], ['carmania', 'persepolis'],
   ['kurangan', 'pasagardes'], ['harmoza', 'pura'], ['gulashkird', 'megan'],
   ['lyan', 'shiraz'], ['nurabad', 'parsian'], ['harmoza', 'ummannar'],
+  // NOT removed, by the owner's ruling (2026-09-28): Chaldaea|Susa, Susa|Ur and
+  // Chaldaea|Ur run along the Mesopotamian delta channels, which are RIVERS, so
+  // these are land borders even though the art draws the channels blue.
   ['palermo', 'carthago'],   // Sicilian channel to Africa
   ['syracus', 'campania'], ['milazzo', 'campania'], // Strait of Messina — ship-only in AC
   // Euboea{chalkis,eretria} is an island on the board (report d4cb0ffe): the

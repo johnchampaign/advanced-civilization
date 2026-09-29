@@ -511,6 +511,10 @@ describe('corner sweep: areas meeting only at a point are not neighbours (§4.31
     for (const [a, b] of [['al-wusta', 'mazirah'], ['harmoza', 'ummannar'], ['dalmatia', 'germania-2']] as [string, string][])
       expect(shipNeighbors.get(a)?.some((h) => h.to === b), `${a}->${b}`).toBeFalsy();
   });
+  it('the Mesopotamian delta channels are rivers: borders along them stay land borders (owner ruling)', () => {
+    for (const [a, b] of [['chaldaea', 'susa'], ['susa', 'ur'], ['chaldaea', 'ur']] as [string, string][])
+      expect(adjacency[a], `${a}|${b}`).toContain(b);
+  });
   it('short real borders the sweep checked are kept', () => {
     // Two junctions joined by a short border segment — not a corner.
     for (const [a, b] of [['athens', 'corinth'], ['aracosta', 'basri'], ['herat', 'prophtasia'], ['aria', 'herat'], ['illyricum', 'pannonia-2'], ['chaldaea', 'sumeria']] as [string, string][])

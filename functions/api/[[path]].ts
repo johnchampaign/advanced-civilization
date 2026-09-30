@@ -62,6 +62,11 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     codec,
     store,
     aiControllers: { standard: new HeuristicAI() },   // server-driven, rated AI seats
+    // Split long AI runs across requests by action count, not per seat: AI seats
+    // interleave (each phase, and every trade-phase step, rotates the actor —
+    // the median same-seat run is 1 action), so perSeat would split nearly every
+    // move. ~1 ms/action early, ~10 ms/action late game → 10 is the floor.
+    aiSlice: { maxSteps: 10 },
 
     broadcaster: new SupabaseBroadcaster({ supabaseUrl: env.SUPABASE_URL, serviceKey: env.SUPABASE_SERVICE_KEY }),
     notifier,

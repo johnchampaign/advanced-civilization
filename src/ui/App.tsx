@@ -2162,6 +2162,16 @@ function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: Pla
   const rmSpend = (c: string) => setSpend((s) => { const n = (s[c] ?? 0) - 1; const o = { ...s }; if (n <= 0) delete o[c]; else o[c] = n; return o; });
   const toggle = (id: string) => setSel((l) => (l.includes(id) ? l.filter((x) => x !== id) : [...l, id]));
   const buy = () => { onApply({ type: 'buyAdvance', advances: sel, spendCommodities: spend, spendTreasury: treasuryUsed }); setSel([]); setSpend({}); setTreasury(0); };
+  // §31.71: anything over 8 commodity cards is surrendered once buying ends, so
+  // warn before a "Done" that would force a discard (or abandon a picked basket).
+  const handCount = commHand.reduce((t, [, n]) => t + n, 0);
+  const done = () => {
+    const warn = [
+      basket.length > 0 ? `You picked ${basket.map((a) => a.name).join(' + ')} but haven't clicked Buy yet.` : '',
+      handCount > 8 ? `You hold ${handCount} commodity cards — only 8 can be kept, so you'll have to discard ${handCount - 8} (§31.71).` : '',
+    ].filter(Boolean);
+    if (!warn.length || confirm(`${warn.join('\n\n')}\n\nFinish buying anyway?`)) onApply({ type: 'pass' });
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -2211,7 +2221,7 @@ function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: Pla
           </div>
         </div>
       )}
-      <button className="civ-btn" onClick={() => onApply({ type: 'pass' })}>Done buying (pass)</button>
+      <button className="civ-btn" onClick={done}>Done buying (pass)</button>
     </div>
   );
 }

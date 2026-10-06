@@ -3,6 +3,7 @@ import { Rng } from 'digital-boardgame-framework';
 import { adapter, createGame } from '../engine/index.js';
 import { pieceConservationProblems } from '../engine/helpers.js';
 import { pieceCounts } from '../data/index.js';
+import { availableNations, boardPresets } from '../engine/boards.js';
 import { HeuristicAI } from './heuristic.js';
 import type { GameState, PlayerId } from '../engine/types.js';
 
@@ -103,6 +104,21 @@ describe('heuristic AI', () => {
     const res = adapter.result(s);
     expect(res).not.toBeNull();
     expect(res!.winners.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('drives an eight-player §16.2 game (raw-8p board, 47 tokens)', async () => {
+    const nations = availableNations(boardPresets(8)[0]!.config);
+    expect(nations.length).toBeGreaterThanOrEqual(8);
+    let s = createGame({ players: nations.slice(0, 8), seed: 8, maxTurns: 10, boardPreset: 'raw-8p' });
+    const rng = new Rng(8);
+    let steps = 0;
+    while (adapter.result(s) == null && steps++ < 20000) {
+      const actor = adapter.currentActor(s);
+      if (actor == null) break;
+      s = adapter.applyAction(s, await ai.selectAction({ state: s, actor, adapter, rng }), actor);
+      expect(pieceConservationProblems(s, { ...pieceCounts, tokens: 47 })).toEqual([]);
+    }
+    expect(adapter.result(s)).not.toBeNull();
   });
 
   it('builds cities and buys advances over a game (makes real progress)', async () => {

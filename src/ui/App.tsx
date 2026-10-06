@@ -88,9 +88,10 @@ function CivSetup({ onStart, initial }: { onStart: (human: PlayerId, opponents: 
   // §16.6-16.8/§16.12: only these nations may be seated on the chosen board.
   const avail = useMemo(() => new Set(availableNations(preset.config)), [preset]);
   const pickHuman = (id: PlayerId) => { setHuman(id); setOpps((o) => o.filter((x) => x !== id)); };
-  const toggleOpp = (id: PlayerId) => setOpps((o) => (o.includes(id) ? o.filter((x) => x !== id) : o.length < 6 ? [...o, id] : o));
+  // §16.1: two to eight players, so up to seven AI opponents.
+  const toggleOpp = (id: PlayerId) => setOpps((o) => (o.includes(id) ? o.filter((x) => x !== id) : o.length < 7 ? [...o, id] : o));
   const invalid = [human, ...opps].filter((id) => !avail.has(id));
-  const ok = opps.length >= 1 && opps.length <= 6 && invalid.length === 0;
+  const ok = opps.length >= 1 && opps.length <= 7 && invalid.length === 0;
   const swatch = (color: string, on: boolean, allowed: boolean) => ({
     borderLeft: `6px solid ${color}`,
     opacity: allowed ? (on ? 1 : 0.6) : 0.3,
@@ -124,7 +125,7 @@ function CivSetup({ onStart, initial }: { onStart: (human: PlayerId, opponents: 
       <button className="civ-btn" disabled={!ok} style={{ fontSize: 16, padding: '10px 22px', fontWeight: 700 }} onClick={() => onStart(human, opps, preset.id)}>Begin as {civById.get(human)?.name} →</button>
       {invalid.length > 0
         ? <p className="civ-lbl" style={{ color: '#f2a0a0', maxWidth: 560, textAlign: 'center' }}>{invalid.map((id) => civById.get(id)?.name ?? id).join(', ')} {invalid.length === 1 ? 'is' : 'are'} not available on this board (rules {preset.rule}) — unselect {invalid.length === 1 ? 'it' : 'them'}, or pick another board.</p>
-        : <p className="civ-lbl" style={{ color: '#aaa', maxWidth: 560, textAlign: 'center' }}>You play {civById.get(human)?.name}; the others are run by the AI. Choose 1–6 opponents. {preset.rule !== 'house' ? `Rules ${preset.rule}: ${preset.tokensPerPlayer} tokens per player.` : 'Full map: every nation, 55 tokens.'}</p>}
+        : <p className="civ-lbl" style={{ color: '#aaa', maxWidth: 560, textAlign: 'center' }}>You play {civById.get(human)?.name}; the others are run by the AI. Choose 1–7 opponents. {preset.rule !== 'house' ? `Rules ${preset.rule}: ${preset.tokensPerPlayer} tokens per player.` : 'Full map: every nation, 55 tokens.'}</p>}
       <PlayCount />
     </div>
   );

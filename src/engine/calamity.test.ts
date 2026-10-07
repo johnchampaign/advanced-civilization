@@ -714,6 +714,26 @@ describe('§30.52 Barbarian Hordes', () => {
   });
 });
 
+describe('§29.3 upcoming calamities are public while resolving (report dcd11871)', () => {
+  it('shows what is still to come, to every player, and clears when done', () => {
+    let s = scenario({
+      tokens: { egypt: { [land[0]!.id]: 30 }, babylon: { [land[1]!.id]: 30 } },
+      hands: { egypt: { 'calamity:famine': 1 }, babylon: { 'calamity:epidemic': 1 } },
+    });
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    // Famine (level 3) resolves first and pauses for a choice; Epidemic (6) waits.
+    expect(s.phase).toBe('calamity');
+    expect(adapter.currentActor(s)).not.toBeNull();
+    expect(s.calamityQueue).toEqual([{ calamity: 'epidemic', holder: 'babylon' }]);
+    // Public: egypt's view carries it even though babylon's hand is hidden from egypt.
+    const egyptView = adapter.viewFor(s, 'egypt');
+    expect(egyptView.calamityQueue).toEqual([{ calamity: 'epidemic', holder: 'babylon' }]);
+    expect(egyptView.players['babylon']!.hand).toEqual({});
+    s = resolve(s);
+    expect(s.calamityQueue).toBeUndefined();
+  });
+});
+
 describe('§29.5 at most two calamities per primary victim', () => {
   it('a player holding three has one drawn out at random and returned to its stack (report 78ce4aab)', () => {
     const cards = ['calamity:famine', 'calamity:epidemic', 'calamity:civildisorder'];

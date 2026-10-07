@@ -309,3 +309,18 @@ export function civilWarSelectionOk(points: number, target: number, tokens: numb
   for (let k = 0; k <= cities; k++) { const t = target - 5 * k; if (t >= 0 && t <= tokens) return false; }
   return points > target && points - target < 5;
 }
+
+/** The public face of a trade bundle (§28.3): the honest card count, the named
+ *  cards that are guaranteed true, the non-binding claims about the rest, and
+ *  how many cards were left unspecified. `legacy` bundles (made before the
+ *  §28.3 model, no `count`) named every card with only "at least two" true, so
+ *  none of their names is individually guaranteed. */
+export function bundleFace(b: { declared: Record<string, number>; count?: number; claimed?: Record<string, number> }): {
+  count: number; guaranteed: Record<string, number>; claimed: Record<string, number>; unspecified: number; legacy: boolean;
+} {
+  const size = (m: Record<string, number>) => Object.values(m).reduce((t, n) => t + Math.max(0, n), 0);
+  if (b.count == null) return { count: size(b.declared), guaranteed: {}, claimed: { ...b.declared }, unspecified: 0, legacy: true };
+  const claimed = { ...(b.claimed ?? {}) };
+  return { count: b.count, guaranteed: { ...b.declared }, claimed, unspecified: Math.max(0, b.count - size(b.declared) - size(claimed)), legacy: false };
+}
+

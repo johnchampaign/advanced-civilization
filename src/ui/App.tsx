@@ -1,11 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties } from 'react';
 import { Rng, recordPlay, recordFinish } from 'digital-boardgame-framework';
 import { adapter, createGame, victoryScore } from '../engine/index.js';
-import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent } from '../engine/index.js';
+import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent, TradeBundle } from '../engine/index.js';
 import { advanceById, advances as ALL_ADVANCES, adjacency, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, playAreas, shipNeighbors, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
 import { availableNations, boardPresets, unavailableReason, type BoardPreset } from '../engine/boards.js';
-import { handValue, miningAvailable, creditTowards, commoditySetValue, advancesFaceValue, outOfPlay, citySiteIn, civilWarSelectionOk } from '../engine/helpers.js';
+import { bundleFace, handValue, miningAvailable, creditTowards, commoditySetValue, advancesFaceValue, outOfPlay, citySiteIn, civilWarSelectionOk } from '../engine/helpers.js';
 import { submitStandaloneReport, fetchMyReports, resolutionNote, type MyReport } from '../client/api.js';
 import { REPORT_CATEGORY } from '../report-meta.js';
 import { anchors, BOARD_VIEWBOX, MAP_PANELS, ALL_SHAPES, COAST_SUBS, mainToCombined } from './anchors.js';
@@ -168,7 +168,7 @@ export default function App() {
     rng.current = new Rng(seed);
     setConfig({ players, human });
     setSeats(Object.fromEntries(players.map((p) => [p, p === human ? 'human' : 'ai'])) as Record<PlayerId, 'human' | 'ai'>);
-    setState(createGame({ players, seed, maxTurns: 60, boardPreset, chooseStartAreas: true }));
+    setState(createGame({ players, seed, maxTurns: 60, boardPreset, chooseStartAreas: true, autoSkip: true }));
     setView('map');
     setStarted(true);
     // Best-effort games-played counter (once per local game start). Local games
@@ -335,7 +335,7 @@ export default function App() {
           ) : (
             <>
               <div className="civ-msg" style={{ padding: '6px 10px', textAlign: 'center' }}>
-                {actor ? <><b style={{ color: civById.get(actor)?.color }}>{civById.get(actor)?.name}</b> — {state.pendingStart ? 'is choosing a start area' : messageFor(state.phase)}</> : 'Resolving…'}
+                {actor ? <><b style={{ color: civById.get(actor)?.color }}>{civById.get(actor)?.name}</b> — {state.pendingStart ? 'is choosing a start area' : state.ninthStack?.awaiting ? 'may buy Gold/Ivory' : messageFor(state.phase)}</> : 'Resolving…'}
               </div>
               {rejected && (
                 <div className="civ-msg" style={{ padding: '6px 10px', background: 'rgba(120,42,42,0.5)', border: '1px solid #c66', display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -343,6 +343,7 @@ export default function App() {
                   <button className="civ-btn" style={{ padding: '0 8px' }} onClick={() => setRejected(null)}>✕</button>
                 </div>
               )}
+              <UpcomingCalamities state={state} />
               {actor && seats[actor] === 'human'
                 ? (inMovement
                     ? <MovementControls planner={planner} />
@@ -1596,6 +1597,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
   const peek = useAreaPeek();
   const pass = legal.find((a) => a.type === 'pass');
   if (state.pendingStart?.order[0] === actor) return <StartControls state={state} legal={legal} selectedArea={selectedArea} onApply={onApply} actor={actor} />;
+  if (state.ninthStack?.awaiting) return <NinthStackControls state={state} legal={legal} onApply={onApply} actor={actor} />;
   if (state.pendingDiscard?.holder === actor) return <DiscardControls state={state} onApply={onApply} />;
   if (state.pendingPillage?.length && state.pendingPillage[0]!.attacker === actor) return <PillageControls state={state} legal={legal} onApply={onApply} />;
   if (state.pendingSupport?.holder === actor) return <SupportControls state={state} legal={legal} onApply={onApply} />;
@@ -1628,8 +1630,25 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
   if (phase === 'shipConstruction') {
     const builds = legal.filter((a) => a.type === 'buildShips') as Extract<Action, { type: 'buildShips' }>[];
     const scraps = legal.filter((a) => a.type === 'scrapShip') as Extract<Action, { type: 'scrapShip' }>[];
+    const undo = legal.find((a) => a.type === 'undoShip');
+    const steps = state.shipSteps?.[actor] ?? [];
+    const built = state.shipsBuiltThisPhase?.[actor] ?? {};
+    // Every ship you have now, marking the ones built this phase (they can't be
+    // scrapped, so they'd otherwise vanish from the panel — report 87b486cd).
+    const fleet = Object.entries(state.areas).filter(([, a]) => (a.ships?.[actor] ?? 0) > 0)
+      .map(([aid, a]) => { const n = a.ships![actor]!; const nb = Math.min(n, built[aid] ?? 0); return `${areaById.get(aid)?.name ?? aid}${n > 1 ? ` ×${n}` : ''}${nb ? ` (${nb === n ? '' : `${nb} `}new)` : ''}`; });
+    const stepText = (st: (typeof steps)[number]) => st.kind === 'build'
+      ? `built a ship in ${areaById.get(st.area)?.name} (paid ${[st.fromArea && `${st.fromArea} from population`, st.fromTreasury && `${st.fromTreasury} from treasury`].filter(Boolean).join(' + ')})`
+      : `scrapped the ship in ${areaById.get(st.area)?.name}`;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span className="civ-lbl">⛵ Your ships: {fleet.length ? fleet.join(', ') : 'none'}</span>
+        {steps.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span className="civ-lbl">This phase you {steps.map(stepText).join('; then ')}.</span>
+            {undo && <button className="civ-btn" style={{ fontSize: 11 }} onClick={() => onApply(undo)}>↶ Undo last ({steps[steps.length - 1]!.kind === 'build' ? 'refunds the 2 tokens' : 'keeps the ship'})</button>}
+          </div>
+        )}
         {builds.length === 0 && <span className="civ-lbl">No ship can be built (need a coastal area + 2 tokens, max 4 ships).</span>}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
           {builds.map((b, i) => { const bd = b.builds[0]!; return <button className="civ-btn" key={i} onClick={() => onApply(b)}>⛵ Build in {areaById.get(bd.area)?.name} — pay from {bd.payFrom === 'treasury' ? 'treasury' : 'population'} (2)</button>; })}
@@ -1909,6 +1928,38 @@ function SupportControls({ state, legal, onApply }: { state: GameState; legal: A
             {areaById.get(aid)?.name ?? aid}{areaById.get(aid)?.isCitySite ? ' (site)' : ''}
           </button>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/** While calamities resolve, the ones still to come (§29.6 order). They're all
+ *  revealed once trading ends (§29.3), so showing them lets a player plan for
+ *  being named a secondary victim of one (report dcd11871). */
+export function UpcomingCalamities({ state }: { state: GameState }) {
+  const q = state.calamityQueue ?? [];
+  if (!q.length) return null;
+  return (
+    <div className="civ-msg" style={{ padding: '4px 8px', fontSize: 12, background: 'rgba(120,42,42,0.35)' }}>
+      ⚠ Still to resolve this turn: {q.map((c, i) => (
+        <span key={i}>{i ? ' · ' : ''}<b>{calamityById.get(c.calamity)?.name ?? c.calamity}</b> → <span style={{ color: civById.get(c.holder)?.color }}>{civById.get(c.holder)?.name ?? c.holder}</span></span>
+      ))} <span className="civ-lbl">(all calamities are revealed once trading ends, §29.3)</span>
+    </div>
+  );
+}
+
+/** §27.51: right after collecting your trade cards, buy Gold/Ivory from the
+ *  ninth stack (18 treasury each) — before the next player draws — or skip. */
+function NinthStackControls({ state, legal, onApply, actor }: { state: GameState; legal: Action[]; onApply: (a: Action) => void; actor: PlayerId }) {
+  const buys = legal.filter((a) => a.type === 'buyTradeCard') as Extract<Action, { type: 'buyTradeCard' }>[];
+  const p = state.players[actor]!;
+  const left = state.trade.stacks[9]?.length ?? 0;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span className="civ-lbl">💰 You've collected your trade cards. You may now <b>buy from the Gold/Ivory stack</b> at 18 treasury a card — only now, before the next player draws (§27.51). Treasury: <b>{p.treasury}</b> · cards left in the stack: <b>{left}</b>. (The stack can also hold a Piracy calamity.)</span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {buys.map((b) => <button key={b.count} className="civ-btn" onClick={() => onApply(b)}>Buy {b.count} card{b.count === 1 ? '' : 's'} ({18 * b.count})</button>)}
+        <button className="civ-btn" onClick={() => onApply({ type: 'pass' })}>Don't buy</button>
       </div>
     </div>
   );
@@ -2227,31 +2278,49 @@ function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: Pla
   );
 }
 
-/** Build a give bundle: pick cards from your hand (the real `actual`), choose an
- *  announced name for each (truthful or a bluff), and submit. Used both to post
- *  an offer and to respond to one. */
+/** Build a give bundle the §28.3 way: pick cards from your hand (the real
+ *  `actual`), NAME at least two of them — named cards are guaranteed, so they
+ *  must be ones you're really giving — and for the rest either say nothing or
+ *  make a non-binding claim (true or a bluff). Used both to post an offer and
+ *  to respond to one. */
 function OfferBuilder({ me, submitLabel, onSubmit, wantPicker }: {
   me: { hand: Record<string, number> };
   submitLabel: string;
-  onSubmit: (give: { actual: Record<string, number>; declared: Record<string, number> }, wants: string[]) => void;
+  onSubmit: (give: TradeBundle, wants: string[]) => void;
   wantPicker: boolean;
 }) {
   const [give, setGive] = useState<Record<string, number>>({});
-  const [announce, setAnnounce] = useState<Record<string, string>>({}); // card type -> announced commodity (bluff)
+  const [guar, setGuar] = useState<Record<string, number>>({}); // card -> how many of it are named (guaranteed)
+  const [claim, setClaim] = useState<Record<string, string>>({}); // card -> name claimed for its unnamed copies ('' = say nothing)
   const [wants, setWants] = useState<string[]>([]);
   const cName = (c: string) => (isCal(c) ? `⚠ ${c.slice(9)}` : commodityById.get(c)?.name ?? c);
-  const announcedFor = (c: string) => announce[c] ?? (isCal(c) ? 'ochre' : c);
-  const declared: Record<string, number> = {};
-  for (const [c, n] of Object.entries(give)) { const a = announcedFor(c); declared[a] = (declared[a] ?? 0) + n; }
   const total = Object.values(give).reduce((a, b) => a + b, 0);
-  let truthful = 0; for (const [c, n] of Object.entries(give)) if (!isCal(c) && announcedFor(c) === c) truthful += n;
+  const named = Object.values(guar).reduce((a, b) => a + b, 0);
+  const declared: Record<string, number> = {};
+  const claimed: Record<string, number> = {};
+  for (const [c, n] of Object.entries(give)) {
+    const g = Math.min(n, guar[c] ?? 0);
+    if (g > 0) declared[c] = g;
+    const said = claim[c] ?? '';
+    if (n - g > 0 && said) claimed[said] = (claimed[said] ?? 0) + (n - g);
+  }
   const wantsOk = !wantPicker || (wants.length >= 1 && wants.length <= 5);
-  const ok = total >= 3 && truthful >= 2 && wantsOk;
-  const add = (c: string) => setGive((g) => ((g[c] ?? 0) >= (me.hand[c] ?? 0) ? g : { ...g, [c]: (g[c] ?? 0) + 1 }));
-  const rm = (c: string) => setGive((g) => { const n = (g[c] ?? 0) - 1; const o = { ...g }; if (n <= 0) delete o[c]; else o[c] = n; return o; });
+  const ok = total >= 3 && named >= 2 && wantsOk;
+  // Adding a commodity names it automatically until two are named (the usual case).
+  const add = (c: string) => {
+    if ((give[c] ?? 0) >= (me.hand[c] ?? 0)) return;
+    setGive((g) => ({ ...g, [c]: (g[c] ?? 0) + 1 }));
+    if (!isCal(c) && named < 2) setGuar((g) => ({ ...g, [c]: (g[c] ?? 0) + 1 }));
+  };
+  const rm = (c: string) => {
+    const n = (give[c] ?? 0) - 1;
+    setGive((g) => { const o = { ...g }; if (n <= 0) delete o[c]; else o[c] = n; return o; });
+    setGuar((g) => { const o = { ...g }; if (n <= 0) delete o[c]; else if ((o[c] ?? 0) > n) o[c] = n; return o; });
+  };
+  const bumpGuar = (c: string, d: number) => setGuar((g) => ({ ...g, [c]: Math.max(0, Math.min(give[c] ?? 0, (g[c] ?? 0) + d)) }));
   const toggleWant = (c: string) => setWants((w) => (w.includes(c) ? w.filter((x) => x !== c) : w.length < 5 ? [...w, c] : w));
-  const submit = () => { onSubmit({ actual: give, declared }, wants); setGive({}); setAnnounce({}); setWants([]); };
-  const hint = total < 3 ? 'Pick at least 3 cards to give.' : truthful < 2 ? 'At least 2 announced cards must be truthful.' : !wantsOk ? 'Pick 1–5 commodities you want.' : '';
+  const submit = () => { onSubmit({ actual: give, declared, count: total, claimed }, wants); setGive({}); setGuar({}); setClaim({}); setWants([]); };
+  const hint = total < 3 ? 'Pick at least 3 cards to give.' : named < 2 ? 'Name at least 2 of the cards you give — named cards are guaranteed (§28.3).' : !wantsOk ? 'Pick 1–5 commodities you want.' : '';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, border: '1px solid #7a4a18', borderRadius: 4, padding: 6 }}>
       <span className="civ-lbl">Your hand — click to add to the offer:</span>
@@ -2263,18 +2332,31 @@ function OfferBuilder({ me, submitLabel, onSubmit, wantPicker }: {
       </div>
       {total > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span className="civ-lbl">You give ({total}) · {truthful} truthful{truthful < 2 ? ' (need ≥2)' : ''} — announce each (pick a bluff to lie):</span>
-          {Object.entries(give).map(([c, n]) => (
-            <div key={c} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
-              <span style={{ minWidth: 70 }}>{cName(c)} ×{n}</span>
-              <span className="civ-lbl">announce as</span>
-              <select value={announcedFor(c)} onChange={(e) => setAnnounce((a) => ({ ...a, [c]: e.target.value }))}>
-                {!isCal(c) && <option value={c}>{commodityById.get(c)?.name ?? c} (true)</option>}
-                {COMMODITY_ORDER.filter((x) => x !== c).map((x) => <option key={x} value={x}>{commodityById.get(x)?.name} (bluff)</option>)}
-              </select>
-              <button className="civ-btn" style={{ padding: '0 6px' }} onClick={() => rm(c)}>✕</button>
-            </div>
-          ))}
+          <span className="civ-lbl">You give {total} card{total === 1 ? '' : 's'}. The other player is told the number, plus the cards you <b>name</b> — at least 2, and named cards are guaranteed. About the rest you can say nothing, or make a claim (it may be a bluff) — §28.3.</span>
+          {Object.entries(give).map(([c, n]) => {
+            const g = Math.min(n, guar[c] ?? 0);
+            return (
+              <div key={c} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, flexWrap: 'wrap' }}>
+                <span style={{ minWidth: 70 }}>{cName(c)} ×{n}</span>
+                <span className="civ-lbl">named:</span>
+                <button className="civ-btn" style={{ padding: '0 6px' }} disabled={g <= 0} onClick={() => bumpGuar(c, -1)}>−</button>
+                <b>{g}</b>
+                <button className="civ-btn" style={{ padding: '0 6px' }} disabled={g >= n} onClick={() => bumpGuar(c, 1)}>+</button>
+                {n - g > 0 && (
+                  <>
+                    <span className="civ-lbl">{g > 0 ? 'the other' : 'these'} {n - g}:</span>
+                    <select value={claim[c] ?? ''} onChange={(e) => setClaim((m) => ({ ...m, [c]: e.target.value }))}>
+                      <option value="">say nothing</option>
+                      {!isCal(c) && <option value={c}>claim {commodityById.get(c)?.name ?? c} (true)</option>}
+                      {COMMODITY_ORDER.filter((x) => x !== c).map((x) => <option key={x} value={x}>claim {commodityById.get(x)?.name} (bluff)</option>)}
+                    </select>
+                  </>
+                )}
+                <button className="civ-btn" style={{ padding: '0 6px' }} onClick={() => rm(c)}>✕</button>
+              </div>
+            );
+          })}
+          <span className="civ-lbl">Named: <b>{named}</b>{named < 2 ? ' (need at least 2)' : ''}</span>
         </div>
       )}
       {wantPicker && (
@@ -2304,6 +2386,18 @@ function TradeControls({ state, actor, onApply }: { state: GameState; actor: Pla
   const [respondTo, setRespondTo] = useState<number | null>(null);
   const cName = (c: string) => (isCal(c) ? `⚠ ${c.slice(9)}` : commodityById.get(c)?.name ?? c);
   const chips = (m: Record<string, number>) => Object.entries(m).map(([c, k]) => `${k}× ${cName(c)}`).join(', ') || '—';
+  // What the other side is told about a bundle (§28.3): the count, the named
+  // (guaranteed) cards, and any unverified claims. Pre-§28.3 offers named every
+  // card with only "at least two" true, so none of their names is guaranteed.
+  const describe = (b: TradeBundle) => {
+    const f = bundleFace(b);
+    if (f.legacy) return <>{f.count} cards (announced {chips(f.claimed)}; at least two true)</>;
+    return (
+      <>{f.count} cards: <b>{chips(f.guaranteed)}</b> guaranteed
+        {Object.keys(f.claimed).length > 0 && <>; claims {chips(f.claimed)} <i>(unverified)</i></>}
+        {f.unspecified > 0 && <>; {f.unspecified} unspecified</>}</>
+    );
+  };
 
   const handCards = Object.entries(me.hand).filter(([c, k]) => !isCal(c) && k > 0);
   const handTotal = handCards.reduce((a, [, k]) => a + k, 0);
@@ -2328,13 +2422,19 @@ function TradeControls({ state, actor, onApply }: { state: GameState; actor: Pla
         const gave = youAreA ? d.aGave : d.bGave;
         const got = youAreA ? d.bGave : d.aGave;
         const partner = youAreA ? d.b : d.a;
-        // What the partner really gave vs what they announced = their bluff.
+        // What the partner really gave vs what they said: cards beyond their
+        // named + claimed ones were either a bluff (if they claimed something
+        // else) or simply unspecified (§28.3).
+        const face = bundleFace(got);
+        const said: Record<string, number> = { ...face.guaranteed };
+        for (const [c, k] of Object.entries(face.claimed)) said[c] = (said[c] ?? 0) + k;
         const bluff: Record<string, number> = {};
-        for (const [c, k] of Object.entries(got.actual)) { const declaredK = got.declared[c] ?? 0; if (k > declaredK) bluff[c] = k - declaredK; }
+        for (const [c, k] of Object.entries(got.actual)) { if (k > (said[c] ?? 0)) bluff[c] = k - (said[c] ?? 0); }
+        const claimedSomething = Object.keys(face.claimed).length > 0;
         return (
           <div key={i} className="civ-msg" style={{ padding: 6, fontSize: 12 }}>
             ✅ Trade with <b style={{ color: civById.get(partner)?.color }}>{civById.get(partner)?.name}</b>: you gave {chips(gave.actual)}; you received <b>{chips(got.actual)}</b>.
-            {Object.keys(bluff).length > 0 && <> <span style={{ color: '#8a3b12' }}>({civById.get(partner)?.name} bluffed with {chips(bluff)}!)</span></>}
+            {Object.keys(bluff).length > 0 && <> <span style={{ color: '#8a3b12' }}>({civById.get(partner)?.name} {claimedSomething ? 'bluffed — the unnamed cards included' : 'left unnamed'} {chips(bluff)}{claimedSomething ? '!' : ''})</span></>}
           </div>
         );
       })}
@@ -2342,19 +2442,21 @@ function TradeControls({ state, actor, onApply }: { state: GameState; actor: Pla
       {/* Your standing offer, with responses to accept. */}
       {myOffer ? (
         <div style={{ border: '2px solid #ffd23f', borderRadius: 4, padding: 6 }}>
-          <div className="civ-lbl">Your offer — gives {Object.values(myOffer.give.actual).reduce((a, b) => a + b, 0)} (announced {chips(myOffer.give.declared)}); wants {myOffer.wants.map(cName).join(' or ')}.</div>
+          <div className="civ-lbl">Your offer — you give {chips(myOffer.give.actual)}; others see {describe(myOffer.give)}; wants {myOffer.wants.map(cName).join(' or ')}.</div>
           {myOffer.responses.length === 0 ? <div className="civ-lbl">Waiting for responses…</div> : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 3 }}>
-              <span className="civ-lbl">Responses — value is your hand-value gain <i>if they're not lying</i>:</span>
+              <span className="civ-lbl">Responses — value is your hand-value gain <i>if their claims are true</i> (named cards are guaranteed):</span>
               {myOffer.responses.map((r) => {
-                // If not lying: receive their declared cards, give away your offered cards.
+                // If their claims are true: receive their named + claimed cards,
+                // give away your offered cards.
+                const rf = bundleFace(r.give);
                 const after = { ...me.hand };
                 for (const [c, k] of Object.entries(myOffer.give.actual)) { after[c] = (after[c] ?? 0) - k; if (after[c]! <= 0) delete after[c]; }
-                for (const [c, k] of Object.entries(r.give.declared)) after[c] = (after[c] ?? 0) + k;
+                for (const m of [rf.guaranteed, rf.claimed]) for (const [c, k] of Object.entries(m)) after[c] = (after[c] ?? 0) + k;
                 const gain = handValue(after) - handValue(me.hand);
                 return (
                   <div key={r.from} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                    <span style={{ flex: 1 }}><b style={{ color: civById.get(r.from)?.color }}>{civById.get(r.from)?.name}</b> offers {chips(r.give.declared)}</span>
+                    <span style={{ flex: 1 }}><b style={{ color: civById.get(r.from)?.color }}>{civById.get(r.from)?.name}</b> offers {describe(r.give)}</span>
                     <b style={{ color: gain >= 0 ? '#2e6b3a' : '#8a3b12', minWidth: 38, textAlign: 'right' }}>{gain >= 0 ? '+' : ''}{gain}</b>
                     <button className="civ-btn" onClick={() => onApply({ type: 'acceptResponse', offerId: myOffer.id, responder: r.from })}>Accept</button>
                   </div>
@@ -2377,7 +2479,7 @@ function TradeControls({ state, actor, onApply }: { state: GameState; actor: Pla
         {otherOffers.length === 0 && <div className="civ-lbl">(none yet)</div>}
         {otherOffers.map((o) => (
           <div key={o.id} style={{ border: '1px solid #7a4a18', borderRadius: 4, padding: 6, marginTop: 3 }}>
-            <div style={{ fontSize: 12 }}><b style={{ color: civById.get(o.from)?.color }}>{civById.get(o.from)?.name}</b> gives {Object.values(o.give.actual).reduce((a, b) => a + b, 0) || Object.values(o.give.declared).reduce((a, b) => a + b, 0)} (announced {chips(o.give.declared)}) · wants <b>{o.wants.map(cName).join(' or ')}</b></div>
+            <div style={{ fontSize: 12 }}><b style={{ color: civById.get(o.from)?.color }}>{civById.get(o.from)?.name}</b> gives {describe(o.give)} · wants <b>{o.wants.map(cName).join(' or ')}</b></div>
             {o.responses.some((r) => r.from === actor) ? <span className="civ-lbl">You've responded.</span>
               : respondTo === o.id
                 ? <OfferBuilder me={me} wantPicker={false} submitLabel={`Respond to ${civById.get(o.from)?.name}`} onSubmit={(give) => { onApply({ type: 'respondOffer', offerId: o.id, give }); setRespondTo(null); }} />
@@ -2387,9 +2489,6 @@ function TradeControls({ state, actor, onApply }: { state: GameState; actor: Pla
       </div>
 
       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-        {me.treasury >= 18 && (state.trade.stacks[9]?.length ?? 0) > 0 && (
-          <button className="civ-btn" onClick={() => onApply({ type: 'buyTradeCard', count: 1 })}>Buy Gold/Ivory (18)</button>
-        )}
         <button className="civ-btn" onClick={() => onApply({ type: 'pass' })}>Done trading (pass)</button>
       </div>
     </div>
@@ -2597,5 +2696,7 @@ export function prettyPhase(p: string): string {
 /** The phase as shown to players — before turn 1 that's start-area placement
  *  (§16.3), even though the state already sits at turn 1's taxation. */
 export function phaseLabel(s: GameState): string {
-  return s.pendingStart ? 'Choosing Start Areas' : prettyPhase(s.phase);
+  if (s.pendingStart) return 'Choosing Start Areas';
+  if (s.ninthStack?.awaiting) return 'Buying Gold/Ivory';
+  return prettyPhase(s.phase);
 }

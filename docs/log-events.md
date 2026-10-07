@@ -39,6 +39,7 @@ The engine's `state.log` is an array of the framework's `GameLogEntry<PlayerId>`
 | `move.land` | `{from, to, count, via?}` — one entry per land move (`via` = Roadbuilding §32.251) |
 | `move.voyage` | `{steps: {area, load?, unload?}[]}` — one entry per ship voyage (§23.5); byShip single-destination sailings log as a voyage too |
 | `phase.pass` | `{}` — deliberate "did nothing" in movement / cityConstruction / acquireAdvances |
+| `phase.skip` | `{phase, reason}` — the engine skipped a turn where passing was the player's only option (games created with `autoSkip`; report dcd9894a) |
 
 ### Surplus removal (§26.1)
 | kind | payload |
@@ -62,6 +63,7 @@ The engine's `state.log` is an array of the framework's `GameLogEntry<PlayerId>`
 ### Ship construction (§22)
 | kind | payload |
 |---|---|
+| `ship.undo` | `{area, undid: 'build'\|'scrap', fromArea?, fromTreasury?}` — the player took back their latest build/scrap this phase |
 | `ship.build` | `{area, count, paidFrom: 'area'\|'treasury'}` |
 | `ship.scrap` | `{area, count, reason: 'maintenance'\|'voluntary', rule:'22.3'}` |
 
@@ -87,7 +89,8 @@ The engine's `state.log` is an array of the framework's `GameLogEntry<PlayerId>`
 | `trade.respond` | `{to, offerId}` |
 | `trade.offer.expire` / `trade.response.expire` | — |
 | `trade.complete` | `{with, gave, got}` (counts only — §28 keeps contents private) |
-| `trade.buyNinth` | `{count, cost}` (§27.5) |
+| `trade.buyNinth` | `{count, cost}` (§27.51 — bought right after the buyer collects their trade cards) |
+| `trade.buyNinth.skip` | `{}` — the player declined their ninth-stack window (§27.51) |
 
 ### Calamities (§29–30)
 All carry `payload.calamity` (the calamity id) and `rule` when cited.

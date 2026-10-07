@@ -62,6 +62,7 @@ import {
   type PendingCityChoice,
   type PendingCivilWar,
   type PendingPick,
+  type TradeBundle,
   type PendingSecondary,
   type PendingSupport,
   type PendingUnitLoss,
@@ -135,31 +136,29 @@ function isSubMultiset(sub: Record<string, number>, set: Record<string, number>)
   return Object.entries(sub).every(([k, n]) => n <= 0 || (set[k] ?? 0) >= n);
 }
 
-/** How many announced cards are truthful (present in actual), counting multiplicity. */
-function truthfulCount(declared: Record<string, number>, actual: Record<string, number>): number {
-  let t = 0;
-  for (const [c, n] of Object.entries(declared)) t += Math.min(n, actual[c] ?? 0);
-  return t;
-}
-
-/** Validate one side's bundle against the §28.3 truth rules. `owner` must hold
- *  the actual cards; the bundle must have >=`minCards`, announce a name for every
- *  card (honest count), name >=2 of them truthfully, and never give (or announce)
- *  a non-tradable calamity. Bluffs — announced names not actually given — are
- *  legal for the remaining cards. Returns an error string or null. */
-function validateBundle(s: GameState, owner: PlayerId, b: { actual: Record<string, number>; declared: Record<string, number> }, minCards: number): string | null {
+/** Validate one side's bundle against §28.3. `owner` must hold the actual cards;
+ *  the bundle must have >=`minCards`, state its honest `count`, NAME at least two
+ *  cards that really are in it (binding), and never give (or name) a
+ *  non-tradable calamity. Anything said about the unnamed cards goes in the
+ *  non-binding `claimed` — bluffs are legal there ("regardless of what was
+ *  said"), but you can't claim more cards than you left unnamed. Returns an
+ *  error string or null. */
+function validateBundle(s: GameState, owner: PlayerId, b: { actual: Record<string, number>; declared: Record<string, number>; count?: number; claimed?: Record<string, number> }, minCards: number): string | null {
   const hand = player(s, owner).hand;
   if (bundleSize(b.actual) < minCards) return `bundle must have at least ${minCards} cards`;
   if (!isSubMultiset(b.actual, hand)) return `${owner} does not hold the offered cards`;
   for (const card of Object.keys(b.actual)) {
     if ((b.actual[card] ?? 0) > 0 && !isGivable(card)) return `${card} is a non-tradable calamity and may not be traded`;
   }
-  // Announced names must be real tradable card ids (commodities or tradable calamities).
-  for (const card of Object.keys(b.declared)) {
-    if ((b.declared[card] ?? 0) > 0 && !commodityById.get(card) && !isGivable(card)) return `cannot announce ${card}`;
+  // Named and claimed cards must be real tradable card ids (commodities or tradable calamities).
+  const claimed = b.claimed ?? {};
+  for (const card of [...Object.keys(b.declared), ...Object.keys(claimed)]) {
+    if (!commodityById.get(card) && !isGivable(card)) return `cannot name ${card}`;
   }
-  if (bundleSize(b.declared) !== bundleSize(b.actual)) return 'must announce a name for every card you give (honest count, §28.3)';
-  if (truthfulCount(b.declared, b.actual) < 2) return 'at least two announced cards must be truthful (§28.3)';
+  if (b.count !== bundleSize(b.actual)) return 'state the honest number of cards you are trading (§28.3)';
+  if (bundleSize(b.declared) < 2) return 'name at least two of the cards you are trading (§28.3)';
+  if (!isSubMultiset(b.declared, b.actual)) return 'the cards you name must really be in the trade (§28.3) — say anything else as a claim';
+  if (bundleSize(claimed) > b.count - bundleSize(b.declared)) return 'you can only make claims about the cards you have not named';
   return null;
 }
 
@@ -348,6 +347,7 @@ function setupShipMaintenance(s: GameState): void {
   for (const id of s.seating) owed[id] = shipCount(s, id);
   s.shipMaintOwed = owed;
   s.shipsBuiltThisPhase = {};
+  s.shipSteps = {};
 }
 
 /** §22.3: how many of `id`'s ships in `area` were already in play when this phase
@@ -398,15 +398,16 @@ function applyBuildShips(s: GameState, actor: PlayerId, builds: { area: string; 
       if (p.shipsAvailable <= 0) throw new Error('no ships left in stock');
       // §22.1/.2: 2 tokens, from the area and/or treasury (the player's choice of
       // which to draw first); spent tokens return to stock.
-      let cost = 2;
-      const takeArea = () => { const n = Math.min(cost, a.tokens[actor] ?? 0); setTokens(s, b.area, actor, (a.tokens[actor] ?? 0) - n); p.stock += n; cost -= n; };
-      const takeTreasury = () => { const n = Math.min(cost, p.treasury); p.treasury -= n; p.stock += n; cost -= n; };
+      let cost = 2, fromArea = 0, fromTreasury = 0;
+      const takeArea = () => { const n = Math.min(cost, a.tokens[actor] ?? 0); setTokens(s, b.area, actor, (a.tokens[actor] ?? 0) - n); p.stock += n; cost -= n; fromArea += n; };
+      const takeTreasury = () => { const n = Math.min(cost, p.treasury); p.treasury -= n; p.stock += n; cost -= n; fromTreasury += n; };
       if (b.payFrom === 'treasury') { takeTreasury(); takeArea(); } else { takeArea(); takeTreasury(); }
       if (cost > 0) throw new Error('not enough tokens/treasury to build a ship');
       (a.ships ??= {})[actor] = (a.ships[actor] ?? 0) + 1;
       p.shipsAvailable -= 1;
       const built = ((s.shipsBuiltThisPhase ??= {})[actor] ??= {});
       built[b.area] = (built[b.area] ?? 0) + 1;
+      ((s.shipSteps ??= {})[actor] ??= []).push({ kind: 'build', area: b.area, fromArea, fromTreasury });
     }
     log(s, 'ship.build', actor, `${actor} built ${b.count} ship(s) in ${areaName(b.area)}${b.payFrom === 'treasury' ? ' (paid from treasury)' : ''}.`, { area: b.area, count: b.count, paidFrom: b.payFrom ?? 'area' });
   }
@@ -749,40 +750,68 @@ function suggestSupportReduce(s: GameState, sup: PendingSupport): string {
   return [...sup.candidates].sort((x, y) => (areaById.get(x)?.isCitySite ? 0 : 1) - (areaById.get(y)?.isCitySite ? 0 : 1))[0]!;
 }
 
+/** §27.51: can `id` buy from the ninth stack right now (18 treasury a card)? */
+function canBuyNinth(s: GameState, id: PlayerId): boolean {
+  return player(s, id).treasury >= 18 && (s.trade.stacks[9]?.length ?? 0) > 0;
+}
+
+/** Trade-card collection (§27). Resumable: it pauses after a player draws if
+ *  they may buy from the ninth stack (§27.51 — "immediately after the purchasing
+ *  player collects his trade cards, before any other players collect theirs"),
+ *  and picks up with the next drawer once they buy or skip. */
 function runTradeAcquisition(s: GameState): void {
-  s.pendingCalamities = [];
-  const rng = Rng.fromState(s.rngState);
-  // §27.1: a player draws one card from each of stacks 1..N, where N is the
-  // number of cities on the board. A city-less player draws nothing — building
-  // your first city is what starts the flow of trade cards. The player with the
-  // FEWEST cities draws first (it matters once a stack runs dry), ties by the
-  // turn's census order.
-  const drawOrder = [...s.activeOrder].sort((a, b) => cityCount(s, a) - cityCount(s, b));
-  for (const id of drawOrder) {
-    const p = player(s, id);
-    const cities = Math.min(9, cityCount(s, id));
-    let drawn = 0;
-    for (let stack = 1; stack <= cities; stack++) {
-      const pile = s.trade.stacks[stack];
-      if (!pile || pile.length === 0) continue;
-      const card = pile.pop()!;
-      // Both commodity and calamity cards go into the hand; calamities as
-      // `calamity:<id>` so tradable ones can be passed during the trade phase
-      // and non-tradable ones are simply retained (§27.3).
-      p.hand[card] = (p.hand[card] ?? 0) + 1;
-      drawn += 1;
-      if (card.startsWith('calamity:')) {
-        const calId = card.slice('calamity:'.length);
-        s.calamityTradedFrom[calId] = id; // drawer is the original holder
-        // Do NOT log the specific calamity here: a drawn card is secret until
-        // trading ends (§27.3/§27.4) — naming it publicly would leak which player
-        // holds it. Its effect is logged at resolution instead.
-      }
-    }
-    // Safe public summary: the count equals city count, which is already visible.
-    if (drawn > 0) log(s, 'trade.cards.draw', id, `${id} collected ${drawn} trade card${drawn === 1 ? '' : 's'} (1 per city, from stacks 1–${cities}).`, { count: drawn, cities });
+  if (!s.ninthStack) {
+    s.pendingCalamities = [];
+    // §27.1: the player with the FEWEST cities draws first (it matters once a
+    // stack runs dry), ties by the turn's census order.
+    s.ninthStack = { order: [...s.activeOrder].sort((a, b) => cityCount(s, a) - cityCount(s, b)), at: 0, awaiting: false };
   }
-  s.rngState = rng.serialize();
+  const ns = s.ninthStack;
+  while (ns.at < ns.order.length) {
+    if (ns.awaiting) return; // paused for this player's ninth-stack choice
+    const id = ns.order[ns.at]!;
+    drawTradeCards(s, id);
+    // §27.51 applies "regardless of the number of cities", so a city-less player
+    // who drew nothing may still buy.
+    if (canBuyNinth(s, id)) { ns.awaiting = true; return; }
+    ns.at += 1;
+  }
+  s.ninthStack = undefined;
+}
+
+/** End the current player's ninth-stack window and move to the next drawer. */
+function closeNinthWindow(s: GameState): void {
+  if (!s.ninthStack) return;
+  s.ninthStack.awaiting = false;
+  s.ninthStack.at += 1;
+}
+
+/** §27.1: a player draws one card from each of stacks 1..N, where N is the
+ *  number of cities on the board. A city-less player draws nothing — building
+ *  your first city is what starts the flow of trade cards. */
+function drawTradeCards(s: GameState, id: PlayerId): void {
+  const p = player(s, id);
+  const cities = Math.min(9, cityCount(s, id));
+  let drawn = 0;
+  for (let stack = 1; stack <= cities; stack++) {
+    const pile = s.trade.stacks[stack];
+    if (!pile || pile.length === 0) continue;
+    const card = pile.pop()!;
+    // Both commodity and calamity cards go into the hand; calamities as
+    // `calamity:<id>` so tradable ones can be passed during the trade phase
+    // and non-tradable ones are simply retained (§27.3).
+    p.hand[card] = (p.hand[card] ?? 0) + 1;
+    drawn += 1;
+    if (card.startsWith('calamity:')) {
+      const calId = card.slice('calamity:'.length);
+      s.calamityTradedFrom[calId] = id; // drawer is the original holder
+      // Do NOT log the specific calamity here: a drawn card is secret until
+      // trading ends (§27.3/§27.4) — naming it publicly would leak which player
+      // holds it. Its effect is logged at resolution instead.
+    }
+  }
+  // Safe public summary: the count equals city count, which is already visible.
+  if (drawn > 0) log(s, 'trade.cards.draw', id, `${id} collected ${drawn} trade card${drawn === 1 ? '' : 's'} (1 per city, from stacks 1–${cities}).`, { count: drawn, cities });
 }
 
 /** Resolve all held calamities after trading (§29). Whoever holds a
@@ -843,6 +872,20 @@ function nextHeldCalamity(s: GameState): { calamityId: string; holder: PlayerId 
     }
   }
   return best ? { calamityId: best.calamityId, holder: best.holder } : null;
+}
+
+/** Every calamity card still held, in resolution order (§29.6) — the upcoming
+ *  part of this calamity phase. */
+function heldCalamities(s: GameState): { calamity: string; holder: PlayerId }[] {
+  const out: { calamity: string; holder: PlayerId; sev: number; seat: number }[] = [];
+  s.seating.forEach((id, seat) => {
+    for (const [card, n] of Object.entries(player(s, id).hand)) {
+      if (!card.startsWith('calamity:') || n <= 0) continue;
+      const calamity = card.slice('calamity:'.length);
+      for (let i = 0; i < n; i++) out.push({ calamity, holder: id, sev: calamityById.get(calamity)?.severity ?? 0, seat });
+    }
+  });
+  return out.sort((a, b) => a.sev - b.sev || a.seat - b.seat).map(({ calamity, holder }) => ({ calamity, holder }));
 }
 
 /** Record one calamity's outcome (before→now diff) for the step-through modal. */
@@ -958,6 +1001,7 @@ function runCalamity(s: GameState): void {
     const overviewBefore = boardOverview(s);
     // §29.7: the card leaves the hand and returns to the bottom of its stack.
     delete player(s, holder).hand[`calamity:${calamityId}`];
+    s.calamityQueue = heldCalamities(s); // what's still to come after this one (§29.3: all revealed)
     const lvl = calamityById.get(calamityId)?.level;
     if (lvl && s.trade.stacks[lvl]) s.trade.stacks[lvl]!.unshift(`calamity:${calamityId}`);
     if (startPrimary(s, calamityId, holder, before, overviewBefore, rng)) { s.rngState = rng.serialize(); return; }
@@ -965,6 +1009,7 @@ function runCalamity(s: GameState): void {
   }
   // All calamities resolved.
   s.calamityActive = false;
+  s.calamityQueue = undefined;
   s.pendingCalamities = [];
   s.calamityTradedFrom = {};
   s.rngState = rng.serialize();
@@ -2158,6 +2203,7 @@ export function normalize(s: GameState): void {
       if (s.pendingDiscard) return; // §31.71: paused for a hand-limit discard choice
       if (s.pendingSupport) return; // §26.32: paused for a city-support reduction choice
       if (s.pendingPillage?.length) return; // §24.52: paused for the attacker's pillage choice
+      if (s.ninthStack?.awaiting) return; // §27.51: paused for a ninth-stack buy-or-skip choice
       const np = nextPhase(s.phase);
       if (np === 'taxation') {
         // Turn rollover.
@@ -2175,6 +2221,8 @@ export function normalize(s: GameState): void {
     // no offer outstanding (§28), or the per-phase proposal cap is reached.
     if (s.phase === 'trade') {
       if (tradePhaseEnded(s)) { enterPhase(s, nextPhase(s.phase)); continue; }
+      const skip = forcedSkip(s);
+      if (skip) { applyPass(s, skip.actor, skip.reason); continue; }
       return; // waiting on a proposer or a responder
     }
     // Other interactive phases.
@@ -2183,9 +2231,107 @@ export function normalize(s: GameState): void {
       enterPhase(s, nextPhase(s.phase));
       continue;
     }
+    const skip = forcedSkip(s);
+    if (skip) { applyPass(s, skip.actor, skip.reason); continue; }
     return; // waiting on a real player decision
   }
   throw new Error('normalize: phase loop did not converge');
+}
+
+// ---- Passing, and skipping phases with nothing to do ----------------------
+
+/** Pass (finish this phase). With `skipped`, it was the engine skipping a phase
+ *  where passing was the player's only option (report dcd9894a) — logged as a
+ *  skip with the reason instead of a deliberate pass. */
+function applyPass(s: GameState, actor: PlayerId, skipped?: string): void {
+  if (s.ninthStack?.awaiting) { // §27.51: skip buying from the ninth stack
+    log(s, 'trade.buyNinth.skip', actor, `${actor} buys nothing from the ninth stack.`, {});
+    closeNinthWindow(s);
+    return;
+  }
+  // §20.2: growth may not be voluntarily curtailed — a player with stock
+  // left and areas that can still take it must place the rest.
+  if (s.phase === 'populationExpansion' && (s.expansion?.remaining[actor] ?? 0) > 0
+    && Object.values(s.expansion?.caps[actor] ?? {}).some((c) => c > 0) && player(s, actor).stock > 0) {
+    throw new Error('population expansion is automatic and may not be voluntarily curtailed (§20.2)');
+  }
+  if (skipped) log(s, 'phase.skip', actor, `${actor} skips ${PHASE_NAME[s.phase] ?? s.phase} — ${skipped}.`, { phase: s.phase, reason: skipped });
+  if (s.phase === 'trade') {
+    // "Done trading": don't prompt this player again; phase ends when all
+    // are done. (Other players' offers no longer force you back in.)
+    s.negotiation.done = [...(s.negotiation.done ?? []), actor].filter((p, i, a) => a.indexOf(p) === i);
+    s.negotiation.passStreak += 1;
+    s.negotiation.turnPointer += 1;
+  } else if (!s.actedThisPhase.includes(actor)) {
+    // Passing taxation = accept the default rate 2 (still collect the tax).
+    if (s.phase === 'taxation') collectTax(s, actor, 2);
+    // §22.3: finishing Ship Construction pays maintenance on the ships kept.
+    if (s.phase === 'shipConstruction') payShipMaintenance(s, actor);
+    // Record deliberate "did nothing" decisions in the phases where that
+    // is a real choice (report 283a6cda: every decision on the record).
+    if (!skipped && (s.phase === 'movement' || s.phase === 'cityConstruction' || s.phase === 'acquireAdvances')) {
+      const bought = (player(s, actor).advancesThisTurn ?? []).length;
+      const what = s.phase === 'movement' ? 'no moves made this phase' : s.phase === 'cityConstruction' ? 'no city built this phase'
+        : bought > 0 ? `done buying advances (${bought} bought this turn)` : 'no advances bought this phase';
+      log(s, 'phase.pass', actor, `${actor} passed — ${what}.`, {});
+    }
+    s.actedThisPhase.push(actor);
+  }
+}
+
+const PHASE_NAME: Partial<Record<Phase, string>> = {
+  cityConstruction: 'city building', acquireAdvances: 'buying advances', shipConstruction: 'ship building', trade: 'trading',
+};
+
+/** Whose turn it is in the trade phase: round-robin from the pointer, skipping
+ *  players who are done trading. */
+function tradeActor(s: GameState): PlayerId | null {
+  if (tradePhaseEnded(s)) return null;
+  const n = s.negotiation;
+  const done = n.done ?? [];
+  const order = s.activeOrder;
+  for (let i = 0; i < order.length; i++) {
+    const cand = order[(n.turnPointer + i) % order.length];
+    if (cand && !done.includes(cand)) return cand;
+  }
+  return null;
+}
+
+/** Commodities plus tradable calamities: the cards that count towards §28.3's
+ *  three-card minimum. */
+function tradableCards(s: GameState, id: PlayerId): number {
+  return Object.entries(player(s, id).hand).reduce((t, [c, n]) => t + (n > 0 && isGivable(c) ? n : 0), 0);
+}
+
+let _probe: CivAdapter | undefined;
+
+/** If the player on the clock has nothing to do but pass, the reason why — the
+ *  engine then skips them (report dcd9894a). Only where "nothing to do" is
+ *  certain: city building, buying advances and ship building when pass is the
+ *  only legal action, and trading when §28.3 rules it out. (Not movement:
+ *  ship voyages aren't enumerated, so an empty-looking turn may not be.) */
+function forcedSkip(s: GameState): { actor: PlayerId; reason: string } | null {
+  if (!s.autoSkip) return null;
+  if (s.pendingStart || s.ninthStack?.awaiting || s.pendingDiscard || s.pendingPillage?.length || s.pendingSupport
+    || s.pendingCityChoice || s.pendingUnitLoss || s.pendingAllocation || s.pendingCivilWar || s.pendingPick || s.pendingSecondary) return null;
+  if (s.phase === 'trade') {
+    const actor = tradeActor(s);
+    if (!actor) return null;
+    if (tradableCards(s, actor) < 3) return { actor, reason: 'fewer than three tradable cards (§28.3)' };
+    const done = s.negotiation.done ?? [];
+    const partners = s.activeOrder.filter((id) => id !== actor && !done.includes(id) && tradableCards(s, id) >= 3);
+    if (partners.length === 0) return { actor, reason: 'no one else still trading has three cards' };
+    return null;
+  }
+  if (s.phase !== 'cityConstruction' && s.phase !== 'acquireAdvances' && s.phase !== 'shipConstruction') return null;
+  const actor = actingPlayer(s);
+  if (!actor) return null;
+  const legal = (_probe ??= new CivAdapter()).legalActions(s, actor);
+  if (!legal.length || legal.some((a) => a.type !== 'pass')) return null;
+  const reason = s.phase === 'cityConstruction' ? 'no city can be built'
+    : s.phase === 'acquireAdvances' ? ((player(s, actor).advancesThisTurn ?? []).length ? 'nothing more is affordable' : 'no advance is affordable')
+    : 'no ship can be built';
+  return { actor, reason };
 }
 
 // ---- Action application for interactive phases ----------------------------
@@ -2446,7 +2592,7 @@ const commodityName = (c: string) => (isCalamityCard(c) ? calamityById.get(calam
 
 /** Post or replace the actor's standing open offer (§28). Bluffs allowed; the
  *  announced count and ≥2 announced cards must be truthful. */
-function applyPostOffer(s: GameState, actor: PlayerId, a: { give: { actual: Record<string, number>; declared: Record<string, number> }; wants: string[] }): void {
+function applyPostOffer(s: GameState, actor: PlayerId, a: { give: TradeBundle; wants: string[] }): void {
   const err = validateBundle(s, actor, a.give, 3);
   if (err) throw new Error(`postOffer: ${err}`);
   const wants = [...new Set((a.wants ?? []).filter((w) => commodityById.get(w)))];
@@ -2461,7 +2607,7 @@ function applyPostOffer(s: GameState, actor: PlayerId, a: { give: { actual: Reco
 }
 
 /** Attach or replace the actor's counter-give to another player's open offer. */
-function applyRespondOffer(s: GameState, actor: PlayerId, a: { offerId: number; give: { actual: Record<string, number>; declared: Record<string, number> } }): void {
+function applyRespondOffer(s: GameState, actor: PlayerId, a: { offerId: number; give: TradeBundle }): void {
   const o = s.negotiation.offers.find((x) => x.id === a.offerId);
   if (!o) throw new Error('that offer is no longer on the board');
   if (o.from === actor) throw new Error('cannot respond to your own offer');
@@ -2552,6 +2698,8 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
   currentActor(state: GameState): PlayerId | null {
     // §16.3: before turn 1, nations place their first token in selection order.
     if (state.pendingStart) return state.pendingStart.order[0] ?? null;
+    // §27.51: a ninth-stack purchase window (inside the auto trade-card phase).
+    if (state.ninthStack?.awaiting) return state.ninthStack.order[state.ninthStack.at] ?? null;
     if (state.finished && state.phase === 'taxation') return null;
     // A pending hand-limit discard can arise during the auto astAdjustment phase,
     // so it must be checked before the auto-phase short-circuit.
@@ -2569,17 +2717,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
     if (state.pendingCivilWar) return civilWarActor(state.pendingCivilWar);
     // A Treachery/Flood/Piracy city pick is its named chooser's (§30.221/.514/.91).
     if (state.pendingPick) return state.pendingPick.chooser;
-    if (state.phase === 'trade') {
-      const n = state.negotiation;
-      if (tradePhaseEnded(state)) return null;
-      const done = n.done ?? [];
-      const order = state.activeOrder;
-      for (let i = 0; i < order.length; i++) {
-        const cand = order[(n.turnPointer + i) % order.length];
-        if (cand && !done.includes(cand)) return cand; // skip players who are done trading
-      }
-      return null;
-    }
+    if (state.phase === 'trade') return tradeActor(state);
     return actingPlayer(state);
   }
 
@@ -2612,33 +2750,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         break;
       }
       case 'pass':
-        // §20.2: growth may not be voluntarily curtailed — a player with stock
-        // left and areas that can still take it must place the rest.
-        if (s.phase === 'populationExpansion' && (s.expansion?.remaining[actor] ?? 0) > 0
-          && Object.values(s.expansion?.caps[actor] ?? {}).some((c) => c > 0) && player(s, actor).stock > 0) {
-          throw new Error('population expansion is automatic and may not be voluntarily curtailed (§20.2)');
-        }
-        if (s.phase === 'trade') {
-          // "Done trading": don't prompt this player again; phase ends when all
-          // are done. (Other players' offers no longer force you back in.)
-          s.negotiation.done = [...(s.negotiation.done ?? []), actor].filter((p, i, a) => a.indexOf(p) === i);
-          s.negotiation.passStreak += 1;
-          s.negotiation.turnPointer += 1;
-        } else if (!s.actedThisPhase.includes(actor)) {
-          // Passing taxation = accept the default rate 2 (still collect the tax).
-          if (s.phase === 'taxation') collectTax(s, actor, 2);
-          // §22.3: finishing Ship Construction pays maintenance on the ships kept.
-          if (s.phase === 'shipConstruction') payShipMaintenance(s, actor);
-          // Record deliberate "did nothing" decisions in the phases where that
-          // is a real choice (report 283a6cda: every decision on the record).
-          if (s.phase === 'movement' || s.phase === 'cityConstruction' || s.phase === 'acquireAdvances') {
-            const bought = (player(s, actor).advancesThisTurn ?? []).length;
-            const what = s.phase === 'movement' ? 'no moves made this phase' : s.phase === 'cityConstruction' ? 'no city built this phase'
-              : bought > 0 ? `done buying advances (${bought} bought this turn)` : 'no advances bought this phase';
-            log(s, 'phase.pass', actor, `${actor} passed — ${what}.`, {});
-          }
-          s.actedThisPhase.push(actor);
-        }
+        applyPass(s, actor);
         break;
       // Trade actions are round-robin: each advances the turn to the next player
       // who isn't done. Players accumulate offers/responses across rounds and
@@ -2664,9 +2776,10 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         s.negotiation.turnPointer += 1;
         break;
       case 'buyTradeCard':
-        if (s.phase !== 'trade') throw new Error('buyTradeCard only in trade phase');
+        // §27.51: only right after you collect your own trade cards.
+        if (!s.ninthStack?.awaiting) throw new Error('Gold/Ivory can only be bought right after you collect your trade cards (§27.51)');
         applyBuyTradeCard(s, actor, action.count);
-        s.negotiation.turnPointer += 1;
+        closeNinthWindow(s);
         break;
       case 'setTaxRate': {
         if (s.phase !== 'taxation') throw new Error('the tax rate is chosen during taxation');
@@ -2703,8 +2816,34 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         player(s, actor).shipsAvailable += 1;
         // §22.3: a scrapped ship owes no maintenance.
         if (s.shipMaintOwed) s.shipMaintOwed[actor] = Math.max(0, (s.shipMaintOwed[actor] ?? 0) - 1);
+        ((s.shipSteps ??= {})[actor] ??= []).push({ kind: 'scrap', area: action.area });
         log(s, 'ship.scrap', actor, `${actor} scraps a ship in ${areaName(action.area)} (§22.3).`, { area: action.area, count: 1, reason: 'voluntary' });
         break; // stays acting; may build/scrap more or pass
+      }
+      case 'undoShip': {
+        if (s.phase !== 'shipConstruction') throw new Error('undoShip only in shipConstruction phase');
+        const step = s.shipSteps?.[actor]?.pop();
+        if (!step) throw new Error('no ship build or scrap to undo this phase');
+        const p = player(s, actor);
+        const a = (s.areas[step.area] ??= { tokens: {} });
+        if (step.kind === 'build') {
+          // Remove the ship and refund its 2 tokens to where they came from.
+          a.ships![actor] = (a.ships![actor] ?? 0) - 1; if (a.ships![actor]! <= 0) delete a.ships![actor];
+          p.shipsAvailable += 1;
+          const built = s.shipsBuiltThisPhase?.[actor];
+          if (built) { built[step.area] = (built[step.area] ?? 0) - 1; if (built[step.area]! <= 0) delete built[step.area]; }
+          setTokens(s, step.area, actor, (a.tokens[actor] ?? 0) + step.fromArea);
+          p.stock -= step.fromArea + step.fromTreasury;
+          p.treasury += step.fromTreasury;
+          log(s, 'ship.undo', actor, `${actor} takes back the ship built in ${areaName(step.area)}.`, { area: step.area, undid: 'build', fromArea: step.fromArea, fromTreasury: step.fromTreasury });
+        } else {
+          // Put the scrapped ship back; it owes maintenance again.
+          (a.ships ??= {})[actor] = (a.ships[actor] ?? 0) + 1;
+          p.shipsAvailable -= 1;
+          if (s.shipMaintOwed) s.shipMaintOwed[actor] = (s.shipMaintOwed[actor] ?? 0) + 1;
+          log(s, 'ship.undo', actor, `${actor} keeps the ship in ${areaName(step.area)} after all.`, { area: step.area, undid: 'scrap' });
+        }
+        break; // stays acting
       }
       case 'buildCity':
         if (s.phase !== 'cityConstruction') throw new Error('buildCity only in cityConstruction phase');
@@ -2888,6 +3027,11 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
     if (this.currentActor(state) !== actor) return [];
     // §16.3: any of the nation's in-play start areas (none are shared between nations).
     if (state.pendingStart) return startAreasFor(state.board ?? FULL_BOARD, actor).map((area) => ({ type: 'placeStart', area }) as Action);
+    if (state.ninthStack?.awaiting) {
+      const p9 = player(state, actor);
+      const max = Math.min(Math.floor(p9.treasury / 18), state.trade.stacks[9]?.length ?? 0);
+      return [{ type: 'pass' } as Action, ...Array.from({ length: max }, (_, i) => ({ type: 'buyTradeCard', count: i + 1 }) as Action)];
+    }
     const p = player(state, actor);
     // §31.71: a pending hand-limit discard (during the auto astAdjustment phase)
     // is the over-limit player's; offer the cheapest-first default. Not a 'pass'.
@@ -2947,6 +3091,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         }
         // §22.3: a player may scrap a ship already in play instead of maintaining it.
         for (const aid of Object.keys(state.areas)) if (scrappableShips(state, actor, aid) > 0) out.push({ type: 'scrapShip', area: aid });
+        if (state.shipSteps?.[actor]?.length) out.push({ type: 'undoShip' });
         break;
       }
       case 'movement': {
@@ -3064,12 +3209,9 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
       }
       case 'trade': {
         // Trade actions are parameterized (postOffer / respondOffer /
-        // acceptResponse) and are constructed by the UI/AI, not enumerated. We
-        // expose the safe exits so legalActions consumers (and random play) can
-        // always progress: pass (already added) and buying a ninth-stack card.
-        if (p.treasury >= 18 && (state.trade.stacks[9]?.length ?? 0) > 0) {
-          out.push({ type: 'buyTradeCard', count: 1 });
-        }
+        // acceptResponse) and are constructed by the UI/AI, not enumerated; the
+        // safe exit is pass (already added). Gold/Ivory is bought during trade-
+        // card collection, not here (§27.51).
         break;
       }
     }
@@ -3093,8 +3235,9 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
     // the announced `declared` (incl. bluffs) but not the real cards until a deal
     // executes. Completed deals are private to the two traders (§28).
     for (const o of v.negotiation.offers) {
-      if (o.from !== _viewer) o.give = { actual: {}, declared: o.give.declared };
-      for (const r of o.responses) if (r.from !== _viewer) r.give = { actual: {}, declared: r.give.declared };
+      // Keep the public face (count, named cards, claims); hide only the real cards.
+      if (o.from !== _viewer) o.give = { ...o.give, actual: {} };
+      for (const r of o.responses) if (r.from !== _viewer) r.give = { ...r.give, actual: {} };
     }
     v.negotiation.completed = (v.negotiation.completed ?? []).filter((d) => d.a === _viewer || d.b === _viewer);
     return v;

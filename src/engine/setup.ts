@@ -33,6 +33,10 @@ export interface NewGameOptions {
    *  random nation-selection order, before turn 1. Default off: programmatic
    *  callers and tests keep the fixed default start; the setup UIs turn it on. */
   chooseStartAreas?: boolean;
+  /** Skip a player's turn in a phase where passing is their only option (no
+   *  city to build, nothing affordable, can't trade under §28.3). Default off,
+   *  like chooseStartAreas: the setup UIs turn it on. */
+  autoSkip?: boolean;
 }
 
 /** Resolve the §16 board configuration + per-player token count for a game.
@@ -164,6 +168,7 @@ export function createInitialState(opts: NewGameOptions): GameState {
       payload: { area, auto: true },
     }))],
     ...(startOrder.length ? { pendingStart: { order: startOrder } } : {}),
+    ...(opts.autoSkip ? { autoSkip: true } : {}),
     ...(opts.maxTurns ? { maxTurns: opts.maxTurns } : {}),
   };
 }

@@ -125,6 +125,61 @@ describe('§22.3 ship maintenance', () => {
   });
 });
 
+describe('undoing a ship build or scrap this phase (report 87b486cd)', () => {
+  const atShipBuilding = (setup: (s: GameState, x: string) => void) => {
+    let s = base();
+    const x = coastal[0]!.id;
+    setup(s, x);
+    fixSupply(s); s.players['egypt']!.stock -= 5; s.players['egypt']!.treasury = 5;
+    s.phase = 'census'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    normalize(s);
+    while (adapter.currentActor(s) !== 'egypt') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    return { s, x };
+  };
+  it('nothing to undo until you build or scrap', () => {
+    const { s } = atShipBuilding((st, x) => { st.areas[x] = { tokens: { egypt: 3 } }; });
+    expect(adapter.legalActions(s, 'egypt').some((a) => a.type === 'undoShip')).toBe(false);
+    expect(() => adapter.applyAction(s, { type: 'undoShip' }, 'egypt')).toThrow(/nothing|no ship/);
+  });
+  it('undoing a build refunds its 2 tokens to where they came from', () => {
+    let { s, x } = atShipBuilding((st, x) => { st.areas[x] = { tokens: { egypt: 3 } }; });
+    const before = structuredClone(s.players['egypt']!);
+    s = adapter.applyAction(s, { type: 'buildShips', builds: [{ area: x, count: 1, payFrom: 'treasury' }] }, 'egypt');
+    s = adapter.applyAction(s, { type: 'buildShips', builds: [{ area: x, count: 1, payFrom: 'area' }] }, 'egypt');
+    expect(s.areas[x]!.tokens['egypt']).toBe(1);
+    s = adapter.applyAction(s, { type: 'undoShip' }, 'egypt'); // the population-paid one
+    expect(s.areas[x]!.tokens['egypt']).toBe(3);
+    expect(s.areas[x]!.ships?.['egypt']).toBe(1);
+    s = adapter.applyAction(s, { type: 'undoShip' }, 'egypt'); // the treasury-paid one
+    expect(s.areas[x]!.ships?.['egypt'] ?? 0).toBe(0);
+    expect(s.players['egypt']!.treasury).toBe(before.treasury);
+    expect(s.players['egypt']!.stock).toBe(before.stock);
+    expect(s.players['egypt']!.shipsAvailable).toBe(before.shipsAvailable);
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
+  });
+  it('undoing a scrap keeps the ship — and it owes maintenance again', () => {
+    let { s, x } = atShipBuilding((st, x) => { st.areas[x] = { tokens: { egypt: 1 }, ships: { egypt: 1 } }; });
+    s = adapter.applyAction(s, { type: 'scrapShip', area: x }, 'egypt');
+    s = adapter.applyAction(s, { type: 'undoShip' }, 'egypt');
+    expect(s.areas[x]!.ships?.['egypt']).toBe(1);
+    while (s.phase === 'shipConstruction') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    expect(s.players['egypt']!.treasury).toBe(4); // paid 1 maintenance after all
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
+  });
+  it('undoes last-first, so scrap-then-rebuild unwinds cleanly', () => {
+    let { s, x } = atShipBuilding((st, x) => { st.areas[x] = { tokens: { egypt: 3 }, ships: { egypt: 1 } }; });
+    s = adapter.applyAction(s, { type: 'scrapShip', area: x }, 'egypt');
+    s = adapter.applyAction(s, { type: 'buildShips', builds: [{ area: x, count: 1, payFrom: 'treasury' }] }, 'egypt');
+    s = adapter.applyAction(s, { type: 'undoShip' }, 'egypt'); // removes the new build
+    expect(s.players['egypt']!.treasury).toBe(5);
+    expect(s.areas[x]!.ships?.['egypt'] ?? 0).toBe(0);
+    s = adapter.applyAction(s, { type: 'undoShip' }, 'egypt'); // restores the old ship
+    expect(s.areas[x]!.ships?.['egypt']).toBe(1);
+    expect(adapter.legalActions(s, 'egypt').some((a) => a.type === 'scrapShip')).toBe(true); // still an old, scrappable ship
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
+  });
+});
+
 describe('§23.5 naval movement', () => {
   it('ferries tokens across water and relocates the ship', () => {
     // Find a coastal area with a reachable coastal destination.

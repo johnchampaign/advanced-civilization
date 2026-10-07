@@ -44,15 +44,25 @@ export const PHASE_ORDER: Phase[] = [
   'astAdjustment',
 ];
 
-/** A card bundle in a trade: the cards actually handed over (`actual`, secret),
- *  plus the names the player publicly *announces* (`declared`). Per §28.3 the
- *  announced count must be honest (so `declared` has the same total as `actual`)
- *  and at least two announced cards must be truthful; the rest may be bluffs —
- *  any commodity or *tradable* calamity, "regardless of what was said". Card ids
- *  are commodity ids or `calamity:<id>`. */
+/** A card bundle in a trade (§28.3): the cards actually handed over (`actual`,
+ *  secret) and what the player publicly says about them. §28.3 requires an honest
+ *  `count` and at least two named cards that are TRUE (`declared` — binding, so
+ *  every named card really is in the bundle); "the remaining card or cards need
+ *  not be specified and may consist of any commodity or tradable calamity card(s),
+ *  regardless of what was said". So anything said about the rest is a
+ *  non-binding `claimed` (true or a bluff), or nothing at all. Card ids are
+ *  commodity ids or `calamity:<id>`.
+ *  Bundles made before this model (report eb3d4cdf) have no `count`: their
+ *  `declared` named every card, with at least two true but not which — see
+ *  bundleFace(). */
 export interface TradeBundle {
   actual: Record<string, number>;
+  /** Binding: at least two named cards, all of them really in the bundle. */
   declared: Record<string, number>;
+  /** The honest number of cards (public). Absent on pre-§28.3-model bundles. */
+  count?: number;
+  /** Non-binding talk about the unnamed cards — may be bluffs. */
+  claimed?: Record<string, number>;
 }
 
 /** One player's response to a standing open offer (their counter-give). */
@@ -435,6 +445,19 @@ export interface GameState {
    *  areas, seeing where earlier players went. Absent once everyone has placed
    *  (and in games created without `chooseStartAreas`). */
   pendingStart?: { order: PlayerId[] };
+  /** §27.51: progress through trade-card collection. Players draw in `order`
+   *  (fewest cities first); right after a player draws, they may buy Gold/Ivory
+   *  from the ninth stack before the next player draws. `awaiting` = paused for
+   *  order[at]'s buy-or-skip choice. Absent outside trade-card collection. */
+  ninthStack?: { order: PlayerId[]; at: number; awaiting: boolean };
+  /** Skip a player's turn in a phase where passing is their only option
+   *  (report dcd9894a). Set by the setup UIs; absent = always stop and ask. */
+  autoSkip?: boolean;
+  /** Calamities still to resolve this calamity phase, in resolution order
+   *  (§29.6). Public: all calamity cards are revealed once trading ends
+   *  (§29.3), so players can plan around what's coming (report dcd11871).
+   *  Refreshed as each calamity starts; absent outside calamity resolution. */
+  calamityQueue?: { calamity: string; holder: PlayerId }[];
   /** A pending city-support reduction the player must direct (§26.32 / §30.42). */
   pendingSupport?: PendingSupport;
   /** §24.52: cities stormed this conflict phase whose attacker has not yet said
@@ -449,6 +472,9 @@ export interface GameState {
    *  lets a player decline maintenance on ships already in play, so these can't
    *  be scrapped (build-then-scrap would turn treasury into stock tokens). */
   shipsBuiltThisPhase?: Record<PlayerId, Record<string, number>>;
+  /** This Ship Construction phase's builds and scraps per player, in order, so
+   *  the latest can be undone (UndoShipAction). Reset at phase entry. */
+  shipSteps?: Record<PlayerId, ShipPhaseStep[]>;
   /** The most recent conflict phase's combats, one per area, for a step-through
    *  modal. Overwritten each conflict phase; empty if none. */
   lastCombats?: CombatEvent[];
@@ -517,6 +543,19 @@ export interface ScrapShipAction {
   type: 'scrapShip';
   area: string;
 }
+
+/** Take back your most recent ship build or scrap this Ship Construction phase
+ *  (before you finish it). Undo is last-first, so the board always returns to a
+ *  state it really passed through (report 87b486cd). */
+export interface UndoShipAction {
+  type: 'undoShip';
+}
+
+/** One ship build or scrap this phase, recorded so it can be taken back. A build
+ *  remembers where its 2 tokens came from, so undoing it refunds them there. */
+export type ShipPhaseStep =
+  | { kind: 'build'; area: string; fromArea: number; fromTreasury: number }
+  | { kind: 'scrap'; area: string };
 
 export interface TradeAcquisitionAction {
   type: 'drawTradeCards';
@@ -690,6 +729,7 @@ export type Action =
   | MoveAction
   | BuildShipsAction
   | ScrapShipAction
+  | UndoShipAction
   | ResolveConflictAction
   | BuildCityAction
   | TradeAcquisitionAction

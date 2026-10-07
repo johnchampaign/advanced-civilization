@@ -15,7 +15,7 @@
 
 import type { PlayerController, ControllerContext } from 'digital-boardgame-framework';
 import { advanceById, areaById, calamityById, civById, commodityById } from '../data/index.js';
-import { cardGroupsHeld, cityCount, citySiteIn, commoditySetValue, handValue, navalDestinations, neighbors, netAdvanceCost, populationCount } from '../engine/helpers.js';
+import { bundleFace, cardGroupsHeld, cityCount, citySiteIn, commoditySetValue, handValue, navalDestinations, neighbors, netAdvanceCost, populationCount } from '../engine/helpers.js';
 import type { Action, GameState, PlayerId, TradeBundle } from '../engine/types.js';
 
 export class HeuristicAI implements PlayerController<GameState, Action, PlayerId> {
@@ -23,6 +23,10 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
     const { state, actor, adapter } = ctx;
     const actions = adapter.legalActions(state, actor);
     if (actions.length === 0) return { type: 'pass' };
+
+    // §27.51: a ninth-stack (Gold/Ivory) window right after drawing. The AI has
+    // never bought from it; keep that behaviour explicit.
+    if (state.ninthStack?.awaiting) return { type: 'pass' };
 
     // §16.3: choose where the first token goes (before turn 1).
     if (state.pendingStart) {
@@ -289,19 +293,26 @@ function cheapCommodities(hand: Record<string, number>, except: Set<string>): st
   return out.sort((a, b) => commValue(a) - commValue(b));
 }
 
-/** Build a {actual, declared} bundle from a list of card ids. Calamities are
- *  bluffed as 'ochre' so opponents don't see them; commodities are announced
- *  truthfully. Honest count is preserved (declared total == actual total). */
+/** Build a §28.3 bundle from a list of card ids: an honest count, two real
+ *  commodities NAMED (binding), and claims about the rest — truthful for
+ *  commodities, while a slipped-in calamity is claimed as 'ochre' so opponents
+ *  don't see it (claims are non-binding, so that bluff is legal). */
 function buildBundle(cards: string[]): TradeBundle {
   const actual: Record<string, number> = {};
   const declared: Record<string, number> = {};
+  const claimed: Record<string, number> = {};
+  let named = 0;
   for (const c of cards) {
     actual[c] = (actual[c] ?? 0) + 1;
+    if (!isCal(c) && named < 2) { declared[c] = (declared[c] ?? 0) + 1; named += 1; continue; }
     const name = isCal(c) ? 'ochre' : c;
-    declared[name] = (declared[name] ?? 0) + 1;
+    claimed[name] = (claimed[name] ?? 0) + 1;
   }
-  return { actual, declared };
+  return { actual, declared, count: cards.length, claimed };
 }
+
+/** Every card name a bundle mentions — guaranteed or merely claimed. */
+const mentioned = (b: TradeBundle) => Object.keys({ ...bundleFace(b).guaranteed, ...bundleFace(b).claimed });
 
 /** Three+ cards to give away: a tradable calamity to offload (if held) plus the
  *  cheapest spares we aren't collecting, and optionally a wanted commodity. */
@@ -332,7 +343,7 @@ function planTradeTurn(state: GameState, actor: PlayerId, _rng: { pick<T>(a: rea
   // (a) Accept a response to our own offer (judged on its declared cards).
   const mine = n.offers.find((o) => o.from === actor);
   if (mine && mine.responses.length) {
-    const good = mine.responses.find((r) => Object.keys(r.give.declared).some((c) => !isCal(c) && (myWant === c || (me.hand[c] ?? 0) >= 1))) ?? mine.responses[0];
+    const good = mine.responses.find((r) => mentioned(r.give).some((c) => !isCal(c) && (myWant === c || (me.hand[c] ?? 0) >= 1))) ?? mine.responses[0];
     if (good) return { type: 'acceptResponse', offerId: mine.id, responder: good.from };
   }
 
@@ -345,7 +356,7 @@ function planTradeTurn(state: GameState, actor: PlayerId, _rng: { pick<T>(a: rea
   // (c) Respond to another player's offer that benefits us and we haven't answered.
   for (const o of n.offers) {
     if (o.from === actor || o.responses.some((r) => r.from === actor)) continue;
-    const grows = Object.keys(o.give.declared).some((c) => !isCal(c) && (me.hand[c] ?? 0) >= 1);
+    const grows = mentioned(o.give).some((c) => !isCal(c) && (me.hand[c] ?? 0) >= 1);
     const haveCal = givable(me.hand).some(([c]) => isTradableCal(c));
     if (!grows && !haveCal) continue;
     const give = buildGive(me, myWant ?? '', o.wants.find((w) => (me.hand[w] ?? 0) >= 1));

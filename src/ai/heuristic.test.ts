@@ -69,6 +69,8 @@ describe('AI trade negotiation (open-offer board)', () => {
     const s = tradeState({ egypt: { iron: 5, ochre: 1 }, babylon: { wine: 3 } });
     s.negotiation.offers = [{
       id: 1, from: 'egypt', wants: ['salt'], responses: [],
+      // An offer in the pre-§28.3 shape (no count) — also exercises the AI's
+      // reading of offers posted before the trade-declaration change.
       give: { actual: { iron: 2, ochre: 1 }, declared: { iron: 2, ochre: 1 } },
     }];
     s.negotiation.turnPointer = 1; // babylon's turn

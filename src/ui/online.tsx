@@ -8,7 +8,7 @@ import { civilizations, civById } from '../data/index.js';
 import { availableNations, unavailableReason } from '../engine/boards.js';
 import { claimSeat, createCivClient, createNetworkGame, fetchMyReports, realtimeSubscribe, resolutionNote, tokenFromInvite, type MyReport } from '../client/api.js';
 import { REPORT_CATEGORY } from '../report-meta.js';
-import { ActionList, AreaPeekProvider, Board, BoardPicker, CalamityModal, CombatModal, InfoView, MovementControls, ReportModal, StatusPanel, effectiveBoardPreset, legalAreas, nationFocusArea, phaseLabel, scrollBoardTo, useMovementPlanner, type View } from './App.js';
+import { ActionList, AreaPeekProvider, Board, BoardPicker, CalamityModal, CombatModal, InfoView, MovementControls, ReportModal, StatusPanel, UpcomingCalamities, effectiveBoardPreset, legalAreas, nationFocusArea, phaseLabel, scrollBoardTo, useMovementPlanner, type View } from './App.js';
 
 const API = ''; // same-origin; Vite proxies /api -> the GameServer host
 // Placeholder so the movement-planner hook can run before the game view loads.
@@ -33,7 +33,7 @@ export function Lobby() {
     setError(null);
     try {
       const seed = Math.floor(Math.random() * 0xffff);
-      setCreated(await createNetworkGame(API, { players: picked, seed, maxTurns: 60, boardPreset: preset.id, chooseStartAreas: true }));
+      setCreated(await createNetworkGame(API, { players: picked, seed, maxTurns: 60, boardPreset: preset.id, chooseStartAreas: true, autoSkip: true }));
     } catch (e) { setError((e as Error).message); }
   }
 
@@ -43,7 +43,7 @@ export function Lobby() {
     try {
       const seed = Math.floor(Math.random() * 0xffff);
       const ai = Object.fromEntries(picked.slice(1).map((n) => [n, 'standard']));
-      const g = await createNetworkGame(API, { players: picked, seed, maxTurns: 60, ai, boardPreset: preset.id, chooseStartAreas: true });
+      const g = await createNetworkGame(API, { players: picked, seed, maxTurns: 60, ai, boardPreset: preset.id, chooseStartAreas: true, autoSkip: true });
       const myUrl = g.invites[picked[0]!] ?? '';
       location.search = `?game=${encodeURIComponent(g.gameId)}&token=${encodeURIComponent(tokenFromInvite(myUrl))}`;
     } catch (e) { setError((e as Error).message); }
@@ -184,14 +184,18 @@ export function OnlineGame({ gameId, token }: { gameId: string; token: string })
           ) : game.yourTurn ? (
             <>
               <div className="civ-msg" style={{ padding: '6px 10px', textAlign: 'center' }}>Your turn — {phaseLabel(s)}</div>
+              <UpcomingCalamities state={s} />
               {inMovement
                 ? <MovementControls planner={planner} />
                 : <ActionList legal={game.legalActions} selectedArea={selected} phase={s.phase} onApply={submitAction} state={s} actor={you} />}
             </>
           ) : (
-            <div className="civ-lbl" style={{ textAlign: 'center', padding: 8 }}>
-              Waiting for <b style={{ color: onClock ? civById.get(onClock)?.color : '#fff' }}>{onClock ? civById.get(onClock)?.name : '…'}</b> ({phaseLabel(s)})
-            </div>
+            <>
+              <UpcomingCalamities state={s} />
+              <div className="civ-lbl" style={{ textAlign: 'center', padding: 8 }}>
+                Waiting for <b style={{ color: onClock ? civById.get(onClock)?.color : '#fff' }}>{onClock ? civById.get(onClock)?.name : '…'}</b> ({phaseLabel(s)})
+              </div>
+            </>
           )}
         </div>
         <div className="civ-panel" style={{ width: 210, padding: 6, display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto', minHeight: 0 }}>

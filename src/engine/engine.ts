@@ -1360,8 +1360,25 @@ const VOLCANO_GROUPS: readonly (readonly string[])[] = [
   ['thera'],                // Aegean (§4.41)
 ];
 
-/** Contiguous flood-plain regions (§4.42): connected components of floodplain
- *  areas. Computed once — the map is static. */
+/** The board's flood plains (§4.42: "dark green coloring"), one entry per
+ *  separate patch of dark green on the art. Fixed here because land adjacency
+ *  can't tell them apart: Etruria borders Gaul, and Herat borders Seistan
+ *  Superior, but no dark green crosses either border, so a flood in one never
+ *  reaches the other (report 132ad04e). */
+const FLOOD_PLAINS: readonly (readonly string[])[] = [
+  ['alexandria', 'tanis', 'memphis', 'fayum', 'upper-egypt'],                    // Nile
+  ['mesopotamia', 'babylon', 'babylonia', 'sumeria', 'ur', 'charax', 'susa'],    // Tigris-Euphrates
+  ['karachi', 'pala', 'port-dialx', 'mochendo-daro', 'shahi-tumo', 'chanhu-daro'], // Indus
+  ['danube', 'moesia', 'thyras'],
+  ['etruria-2', 'rubicon'],
+  ['gaul', 'narbo'],
+  ['herat', 'pura', 'artacona'],
+  ['seistan-superior'],
+];
+export const floodPlainOf: ReadonlyMap<string, number> = new Map(FLOOD_PLAINS.flatMap((plain, i) => plain.map((a) => [a, i] as const)));
+
+/** Flood-plain regions in play: each plain of FLOOD_PLAINS, split further
+ *  where the board crop cuts it. Cached per state. */
 const _floodRegions = new WeakMap<GameState, string[][]>();
 function floodRegions(s: GameState): string[][] {
   const cached = _floodRegions.get(s);
@@ -1373,7 +1390,7 @@ function floodRegions(s: GameState): string[][] {
   for (const id of fp) {
     if (seen.has(id)) continue;
     const stack = [id], comp: string[] = []; seen.add(id);
-    while (stack.length) { const x = stack.pop()!; comp.push(x); for (const n of neighbors(s, x)) if (set.has(n) && !seen.has(n)) { seen.add(n); stack.push(n); } }
+    while (stack.length) { const x = stack.pop()!; comp.push(x); for (const n of neighbors(s, x)) if (set.has(n) && !seen.has(n) && floodPlainOf.get(n) === floodPlainOf.get(x)) { seen.add(n); stack.push(n); } }
     out.push(comp);
   }
   _floodRegions.set(s, out);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adapter, createGame } from './index.js';
+import { adapter, createGame, floodPlainOf } from './index.js';
 import { areas, adjacency, areaById, civById, pieceCounts } from '../data/index.js';
 import { cityCount, pieceConservationProblems, populationCount } from './helpers.js';
 import type { Action, GameState, PlayerId } from './types.js';
@@ -586,6 +586,21 @@ describe('Flood & Volcano geography (§30.51 / §30.21)', () => {
     s.players['babylon']!.advances = ['engineering'];
     s = resolve(s);
     expect(populationCount(s, 'babylon')).toBe(5); // capped at 7 → 12 − 7
+  });
+
+  it('every flood-plain area belongs to exactly one listed flood plain (§4.42)', () => {
+    const fp = areas.filter((a) => a.isFloodplain && !a.isWater).map((a) => a.id).sort();
+    expect([...floodPlainOf.keys()].sort()).toEqual(fp);
+  });
+
+  it('Flood stays on its own plain: Etruria borders Gaul but they are separate plains (report 132ad04e)', () => {
+    let s = scenario({
+      tokens: { egypt: { 'etruria-2': 4 }, babylon: { rubicon: 3, gaul: 5 } },
+      hands: { egypt: { 'calamity:flood': 1 } },
+    });
+    s = resolve(s);
+    expect(s.areas['rubicon']?.tokens['babylon'] ?? 0).toBe(0); // same plain: hit
+    expect(s.areas['gaul']?.tokens['babylon']).toBe(5);        // different plain: untouched
   });
 
   it('Flood with no flood-plain units eliminates a coastal city (§30.514)', () => {

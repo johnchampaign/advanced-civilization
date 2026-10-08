@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties } from 'react';
 import { Rng, recordPlay, recordFinish } from 'digital-boardgame-framework';
-import { adapter, createGame, victoryScore } from '../engine/index.js';
+import { adapter, createGame, victoryScore, astRank } from '../engine/index.js';
 import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent, TradeBundle } from '../engine/index.js';
 import { advanceById, advances as ALL_ADVANCES, adjacency, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, playAreas, shipNeighbors, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
@@ -457,24 +457,24 @@ const cityPoints = (cx: number, cy: number, r: number) => polyPoints(cx, cy, r *
 /** Hover-to-locate (report d0217cc6). Panels that list areas — cities to build,
  *  cities to reduce, units to give up — flag the area under the pointer here, and
  *  the board outlines it so you can see WHERE the name on the button is. */
-const PeekCtx = createContext<{ peek: string | null; setPeek: (a: string | null) => void }>({ peek: null, setPeek: () => {} });
+const PeekCtx = createContext<{ peek: ReadonlySet<string>; setPeek: (a: ReadonlySet<string>) => void }>({ peek: new Set(), setPeek: () => {} });
+const NO_PEEK: ReadonlySet<string> = new Set();
 
 export function AreaPeekProvider({ children }: { children: ReactNode }) {
-  const [peek, setPeek] = useState<string | null>(null);
+  const [peek, setPeek] = useState<ReadonlySet<string>>(NO_PEEK);
   const value = useMemo(() => ({ peek, setPeek }), [peek]);
   return <PeekCtx.Provider value={value}>{children}</PeekCtx.Provider>;
 }
 
-/** Returns a factory for the hover/focus handlers that light an area up on the
- *  board — spread it onto a button: `{...peek(areaId)}`. */
+/** Returns a factory for the hover/focus handlers that light an area (or a
+ *  group of areas) up on the board — spread it onto a button: `{...peek(areaId)}`. */
 export function useAreaPeek() {
   const { setPeek } = useContext(PeekCtx);
-  return useCallback((area: string) => ({
-    onMouseEnter: () => setPeek(area),
-    onMouseLeave: () => setPeek(null),
-    onFocus: () => setPeek(area),
-    onBlur: () => setPeek(null),
-  }), [setPeek]);
+  return useCallback((area: string | readonly string[]) => {
+    const on = () => setPeek(new Set(typeof area === 'string' ? [area] : area));
+    const off = () => setPeek(NO_PEEK);
+    return { onMouseEnter: on, onMouseLeave: off, onFocus: on, onBlur: off };
+  }, [setPeek]);
 }
 
 export function Board({ state, selected, onSelect, highlight, zoomTo, origin, moved, art }: {
@@ -614,7 +614,7 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
           const showCap = !!meta && !meta.isWater && (owners.length > 0 || !!a.city) && meta.sustains > 0;
           const isHi = highlight.has(aid);
           const isSel = selected === aid;
-          const isPeek = peek === aid;
+          const isPeek = peek.has(aid);
           const isOrigin = origin === aid;
           const isMoved = !!moved?.has(aid);
           const isPirate = a.city === PIRATE;
@@ -935,7 +935,7 @@ function CensusView({ state }: { state: GameState }) {
     // visible hand (hotseat / one's own seat) where the cards aren't hidden.
     const cards = p.handCount ?? Object.values(p.hand).reduce((s, n) => s + n, 0);
     return { id, tokens, cities, cards, advances: p.advances, stock: p.stock, treasury: p.treasury };
-  }).sort((a, b) => b.tokens - a.tokens);
+  }).sort((a, b) => b.tokens - a.tokens || astRank(a.id) - astRank(b.id)); // §21.2: ties in A.S.T. order, as movement order uses
   const cell: CSSProperties = { padding: '3px 12px 3px 0', textAlign: 'right' };
   const head: CSSProperties = { ...cell, fontWeight: 700, color: '#cdc4ad' };
   return (
@@ -1775,27 +1775,28 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
           <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setGrain((v) => Math.max(0, v - 1))} disabled={g <= 0}>−</button>
           <b>{g}</b><span className="civ-lbl">/ {maxGrain}</span>
           <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setGrain((v) => Math.min(maxGrain, v + 1))} disabled={g >= maxGrain}>+</button>
-          <span className="civ-lbl" style={{ color: '#9a8d6a' }}>loss {u.points} → <b>{reducedPoints}</b></span>
+          <span className="civ-lbl" style={{ color: '#5a3410' }}>loss {u.points} → <b>{reducedPoints}</b></span>
         </div>
       )}
-      {CALAMITY_DESC[u.calamityId] && <span className="civ-lbl" style={{ color: '#cfc7b4' }}>{CALAMITY_DESC[u.calamityId]}</span>}
+      {CALAMITY_DESC[u.calamityId] && <span className="civ-lbl" style={{ color: '#5a3410' }}>{CALAMITY_DESC[u.calamityId]}</span>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: '30vh', overflowY: 'auto' }}>
         {inv.map((x) => (
           <div key={x.aid} style={{ display: 'flex', alignItems: 'center', gap: 6 }} {...peek(x.aid)}>
-            <span style={{ width: 110, color: nationColor(u.holder) }}>{areaById.get(x.aid)?.name ?? x.aid}</span>
+            {/* Panel-brown text with a nation-colour stripe: nation colours like Thrace's orange vanish as text on this panel. */}
+            <span style={{ width: 110, color: '#3a2207', fontWeight: 700, borderLeft: `5px solid ${nationColor(u.holder)}`, paddingLeft: 6 }}>{areaById.get(x.aid)?.name ?? x.aid}</span>
             {x.removable > 0 && <>
               <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setT(x.aid, x.removable, -1)}>−</button>
               <b style={{ width: 36, textAlign: 'center' }}>{tok[x.aid] ?? 0}/{x.removable}</b>
               <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setT(x.aid, x.removable, +1)}>+</button>
-              <span className="civ-lbl" style={{ color: '#9a8d6a' }}>tokens{epidemic ? ' (1 stays)' : ''}</span>
+              <span className="civ-lbl" style={{ color: '#5a3410' }}>tokens{epidemic ? ' (1 stays)' : ''}</span>
             </>}
             {x.city && <button className={`civ-btn ${cities.includes(x.aid) ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => setCities((c) => c.includes(x.aid) ? c.filter((y) => y !== x.aid) : [...c, x.aid])}>{cities.includes(x.aid) ? '✗ ' : ''}city ({cities.includes(x.aid) ? cityPts(x.aid) : u.cityWorth})</button>}
             {x.city && cities.includes(x.aid) && keepMax(x.aid) > keepMin && <>
-              <span className="civ-lbl" style={{ color: '#9a8d6a' }}>leave</span>
+              <span className="civ-lbl" style={{ color: '#5a3410' }}>leave</span>
               <button className="civ-btn" style={{ padding: '0 7px' }} disabled={keepOf(x.aid) <= keepMin} onClick={() => setKeep((k) => ({ ...k, [x.aid]: keepOf(x.aid) - 1 }))}>−</button>
               <b>{keepOf(x.aid)}</b>
               <button className="civ-btn" style={{ padding: '0 7px' }} disabled={keepOf(x.aid) >= keepMax(x.aid)} onClick={() => setKeep((k) => ({ ...k, [x.aid]: keepOf(x.aid) + 1 }))}>+</button>
-              <span className="civ-lbl" style={{ color: '#9a8d6a' }}>token{keepOf(x.aid) === 1 ? '' : 's'} behind</span>
+              <span className="civ-lbl" style={{ color: '#5a3410' }}>token{keepOf(x.aid) === 1 ? '' : 's'} behind</span>
             </>}
           </div>
         ))}
@@ -1824,6 +1825,9 @@ function CivilWarControls({ state, legal, onApply }: { state: GameState; legal: 
     return parts.join(' + ') || 'nothing';
   };
   const fpts = (f: { tokens: Record<string, number>; cities: string[] }) => Object.values(f.tokens).reduce((t, n) => t + n, 0) + f.cities.length * 5;
+  // Hovering a "keep" choice lights up every area of that faction (report 34dea7fa).
+  const factionAreas = (f: { tokens: Record<string, number>; cities: string[] }) => [...Object.keys(f.tokens).filter((a) => (f.tokens[a] ?? 0) > 0), ...f.cities];
+  const peek = useAreaPeek();
   // Hooks must run unconditionally — declared before the victimKeep early return
   // (unused there). Selection state for the two faction-selection steps.
   const [tok, setTok] = useState<Record<string, number>>({});
@@ -1835,8 +1839,8 @@ function CivilWarControls({ state, legal, onApply }: { state: GameState; legal: 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <span className="civ-lbl">Your nation has split in two (§30.415). Choose which faction to <b>keep playing</b>; <b style={{ color: nationColor(cw.beneficiary) }}>{nationName(cw.beneficiary)}</b> annexes the other:</span>
-        <button className="civ-btn" onClick={() => onApply({ type: 'civilWarKeep', faction: 1 })}>Keep the first faction — <b>{f1} pts</b> ({factionDesc(cw.faction1)})</button>
-        <button className="civ-btn" onClick={() => onApply({ type: 'civilWarKeep', faction: 2 })}>Keep the second faction — <b>{f2} pts</b> ({factionDesc(cw.faction2!)})</button>
+        <button className="civ-btn" {...peek(factionAreas(cw.faction1))} onClick={() => onApply({ type: 'civilWarKeep', faction: 1 })}>Keep the first faction — <b>{f1} pts</b> ({factionDesc(cw.faction1)})</button>
+        <button className="civ-btn" {...peek(factionAreas(cw.faction2!))} onClick={() => onApply({ type: 'civilWarKeep', faction: 2 })}>Keep the second faction — <b>{f2} pts</b> ({factionDesc(cw.faction2!)})</button>
       </div>
     );
   }

@@ -533,14 +533,22 @@ export interface ResolveConflictAction {
 export interface BuildShipsAction {
   type: 'buildShips';
   /** §22.1/.2: the 2-token cost is drawn from the area's tokens or treasury (or a
-   *  mix). `payFrom` says which source to draw first ('area' default). */
-  builds: { area: string; count: number; payFrom?: 'area' | 'treasury' }[];
+   *  mix). `payFrom` says which source to draw first ('area' default); 'split'
+   *  pays exactly one token from each. */
+  builds: { area: string; count: number; payFrom?: 'area' | 'treasury' | 'split' }[];
 }
 
 /** §22.3: scrap one of your ships in an area (return it to stock) instead of
  *  maintaining it — e.g. to relocate it by rebuilding elsewhere this phase. */
 export interface ScrapShipAction {
   type: 'scrapShip';
+  area: string;
+}
+
+/** §22.3: pay one ship's maintenance now by levying a token from the area it
+ *  occupies, instead of from treasury (the default when the player finishes). */
+export interface MaintainShipAction {
+  type: 'maintainShip';
   area: string;
 }
 
@@ -555,7 +563,8 @@ export interface UndoShipAction {
  *  remembers where its 2 tokens came from, so undoing it refunds them there. */
 export type ShipPhaseStep =
   | { kind: 'build'; area: string; fromArea: number; fromTreasury: number }
-  | { kind: 'scrap'; area: string };
+  | { kind: 'scrap'; area: string }
+  | { kind: 'maintain'; area: string };
 
 export interface TradeAcquisitionAction {
   type: 'drawTradeCards';
@@ -729,6 +738,7 @@ export type Action =
   | MoveAction
   | BuildShipsAction
   | ScrapShipAction
+  | MaintainShipAction
   | UndoShipAction
   | ResolveConflictAction
   | BuildCityAction

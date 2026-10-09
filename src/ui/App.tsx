@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties } from 'react';
 import { Rng, recordPlay, recordFinish } from 'digital-boardgame-framework';
-import { adapter, createGame, victoryScore, astRank } from '../engine/index.js';
+import { adapter, createGame, victoryScore, astRank, areaLimitFor } from '../engine/index.js';
 import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent, TradeBundle } from '../engine/index.js';
 import { advanceById, advances as ALL_ADVANCES, adjacency, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, playAreas, shipNeighbors, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
@@ -1630,6 +1630,20 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
   if (phase === 'shipConstruction') {
     const builds = legal.filter((a) => a.type === 'buildShips') as Extract<Action, { type: 'buildShips' }>[];
     const scraps = legal.filter((a) => a.type === 'scrapShip') as Extract<Action, { type: 'scrapShip' }>[];
+    const levies = legal.filter((a) => a.type === 'maintainShip') as Extract<Action, { type: 'maintainShip' }>[];
+    const owed = state.shipMaintOwed?.[actor] ?? 0;
+    // One row per coastal area, its payment choices side by side (§22.1).
+    const buildRows = new Map<string, typeof builds>();
+    const payLabel = (b: (typeof builds)[number]) => {
+      const bd = b.builds[0]!, here = state.areas[bd.area]?.tokens[actor] ?? 0, tr = state.players[actor]!.treasury;
+      if (bd.payFrom === 'split') return '1 pop + 1 treasury';
+      if (bd.payFrom === 'treasury') return tr >= 2 ? '2 treasury' : '1 treasury + 1 pop';
+      return here >= 2 ? '2 pop' : '1 pop + 1 treasury';
+    };
+    for (const b of builds) { // skip a second button that would pay the same way
+      const aid = b.builds[0]!.area, row = buildRows.get(aid) ?? [];
+      if (!row.some((r) => payLabel(r) === payLabel(b))) buildRows.set(aid, [...row, b]);
+    }
     const undo = legal.find((a) => a.type === 'undoShip');
     const steps = state.shipSteps?.[actor] ?? [];
     const built = state.shipsBuiltThisPhase?.[actor] ?? {};
@@ -1639,6 +1653,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
       .map(([aid, a]) => { const n = a.ships![actor]!; const nb = Math.min(n, built[aid] ?? 0); return `${areaById.get(aid)?.name ?? aid}${n > 1 ? ` ×${n}` : ''}${nb ? ` (${nb === n ? '' : `${nb} `}new)` : ''}`; });
     const stepText = (st: (typeof steps)[number]) => st.kind === 'build'
       ? `built a ship in ${areaById.get(st.area)?.name} (paid ${[st.fromArea && `${st.fromArea} from population`, st.fromTreasury && `${st.fromTreasury} from treasury`].filter(Boolean).join(' + ')})`
+      : st.kind === 'maintain' ? `maintained the ship in ${areaById.get(st.area)?.name} with a token from there`
       : `scrapped the ship in ${areaById.get(st.area)?.name}`;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1646,16 +1661,20 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
         {steps.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span className="civ-lbl">This phase you {steps.map(stepText).join('; then ')}.</span>
-            {undo && <button className="civ-btn" style={{ fontSize: 11 }} onClick={() => onApply(undo)}>↶ Undo last ({steps[steps.length - 1]!.kind === 'build' ? 'refunds the 2 tokens' : 'keeps the ship'})</button>}
+            {undo && <button className="civ-btn" style={{ fontSize: 11 }} onClick={() => onApply(undo)}>↶ Undo last ({({ build: 'refunds the 2 tokens', maintain: 'returns the token', scrap: 'keeps the ship' } as const)[steps[steps.length - 1]!.kind]})</button>}
           </div>
         )}
         {builds.length === 0 && <span className="civ-lbl">No ship can be built (need a coastal area + 2 tokens, max 4 ships).</span>}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {builds.map((b, i) => { const bd = b.builds[0]!; return <button className="civ-btn" key={i} onClick={() => onApply(b)}>⛵ Build in {areaById.get(bd.area)?.name} — pay from {bd.payFrom === 'treasury' ? 'treasury' : 'population'} (2)</button>; })}
-        </div>
-        {scraps.length > 0 && <>
-          <span className="civ-lbl" style={{ color: '#cdc4ad' }}>You owe 1 token maintenance per ship you keep (§22.3). Scrap a ship instead to avoid it:</span>
+        {[...buildRows].map(([aid, row]) => (
+          <div key={aid} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
+            <span className="civ-lbl">⛵ Build in {areaById.get(aid)?.name}:</span>
+            {row.map((b, i) => <button className="civ-btn" key={i} style={{ fontSize: 11 }} onClick={() => onApply(b)}>{payLabel(b)}</button>)}
+          </div>
+        ))}
+        {(scraps.length > 0 || levies.length > 0) && <>
+          <span className="civ-lbl" style={{ color: '#cdc4ad' }}>You owe 1 token maintenance per ship you keep (§22.3) — {owed} unpaid, taken from treasury when you finish. Pay one from the ship's own area instead, or scrap a ship to avoid it:</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {levies.map((m, i) => <button className="civ-btn" key={`m${i}`} style={{ fontSize: 11 }} onClick={() => onApply(m)}>⚓ Maintain ship in {areaById.get(m.area)?.name} — 1 pop from there</button>)}
             {scraps.map((sc, i) => <button className="civ-btn" key={i} style={{ fontSize: 11 }} onClick={() => onApply(sc)}>✗ Scrap ship in {areaById.get(sc.area)?.name}</button>)}
           </div>
         </>}
@@ -1672,7 +1691,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
     const cities = Object.values(state.areas).filter((a) => a.city === actor).length;
     const supportAfter = (buildArea: string) => Object.entries(state.areas)
       .filter(([aid]) => aid !== buildArea)
-      .reduce((sum, [aid, a]) => sum + Math.min(a.tokens[actor] ?? 0, areaById.get(aid)?.sustains ?? 0), 0);
+      .reduce((sum, [aid, a]) => sum + Math.min(a.tokens[actor] ?? 0, a.city ? 0 : areaLimitFor(state, aid, actor)), 0); // engine's §26.1 limit (Agriculture +1)
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {builds.length === 0 && <span className="civ-lbl">No city can be built (need 6 tokens on a city site).</span>}

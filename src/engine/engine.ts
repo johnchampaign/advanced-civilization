@@ -351,11 +351,13 @@ function setupShipMaintenance(s: GameState): void {
 }
 
 /** §22.3: how many of `id`'s ships in `area` were already in play when this phase
- *  began — only those may be scrapped (declined maintenance). */
+ *  began and are still unpaid — only those may be scrapped (declined maintenance)
+ *  or maintained by a levy from the area. */
 function scrappableShips(s: GameState, id: PlayerId, area: string): number {
   const here = s.areas[area]?.ships?.[id] ?? 0;
   const built = s.shipsBuiltThisPhase?.[id]?.[area] ?? 0;
-  return Math.max(0, Math.min(here - built, s.shipMaintOwed?.[id] ?? 0));
+  const paid = (s.shipSteps?.[id] ?? []).filter((st) => st.kind === 'maintain' && st.area === area).length;
+  return Math.max(0, Math.min(here - built - paid, s.shipMaintOwed?.[id] ?? 0));
 }
 
 /** §22.3: pay one token per owed ship (treasury, else a levy from a ship's area);
@@ -385,7 +387,7 @@ function shipCount(s: GameState, id: PlayerId): number {
   return n;
 }
 
-function applyBuildShips(s: GameState, actor: PlayerId, builds: { area: string; count: number; payFrom?: 'area' | 'treasury' }[]): void {
+function applyBuildShips(s: GameState, actor: PlayerId, builds: { area: string; count: number; payFrom?: 'area' | 'treasury' | 'split' }[]): void {
   const p = player(s, actor);
   for (const b of builds) {
     const a = s.areas[b.area];
@@ -401,7 +403,10 @@ function applyBuildShips(s: GameState, actor: PlayerId, builds: { area: string; 
       let cost = 2, fromArea = 0, fromTreasury = 0;
       const takeArea = () => { const n = Math.min(cost, a.tokens[actor] ?? 0); setTokens(s, b.area, actor, (a.tokens[actor] ?? 0) - n); p.stock += n; cost -= n; fromArea += n; };
       const takeTreasury = () => { const n = Math.min(cost, p.treasury); p.treasury -= n; p.stock += n; cost -= n; fromTreasury += n; };
-      if (b.payFrom === 'treasury') { takeTreasury(); takeArea(); } else { takeArea(); takeTreasury(); }
+      if (b.payFrom === 'split') {
+        if ((a.tokens[actor] ?? 0) < 1 || p.treasury < 1) throw new Error('a split payment needs a token in the area and one in treasury');
+        cost = 1; takeArea(); cost = 1; takeTreasury();
+      } else if (b.payFrom === 'treasury') { takeTreasury(); takeArea(); } else { takeArea(); takeTreasury(); }
       if (cost > 0) throw new Error('not enough tokens/treasury to build a ship');
       (a.ships ??= {})[actor] = (a.ships[actor] ?? 0) + 1;
       p.shipsAvailable -= 1;
@@ -409,7 +414,7 @@ function applyBuildShips(s: GameState, actor: PlayerId, builds: { area: string; 
       built[b.area] = (built[b.area] ?? 0) + 1;
       ((s.shipSteps ??= {})[actor] ??= []).push({ kind: 'build', area: b.area, fromArea, fromTreasury });
     }
-    log(s, 'ship.build', actor, `${actor} built ${b.count} ship(s) in ${areaName(b.area)}${b.payFrom === 'treasury' ? ' (paid from treasury)' : ''}.`, { area: b.area, count: b.count, paidFrom: b.payFrom ?? 'area' });
+    log(s, 'ship.build', actor, `${actor} built ${b.count} ship(s) in ${areaName(b.area)}${b.payFrom === 'treasury' ? ' (paid from treasury)' : b.payFrom === 'split' ? ' (paid 1 from the area, 1 from treasury)' : ''}.`, { area: b.area, count: b.count, paidFrom: b.payFrom ?? 'area' });
   }
 }
 
@@ -667,7 +672,7 @@ function resolveAreaCombat(s: GameState, aid: string, rng: Rng, combats?: Combat
 
 /** The population limit of an area for `owner` (§26.1, §26.11): the printed
  *  `sustains`, +1 if the owner holds Agriculture AND is the sole occupant. */
-function areaLimitFor(s: GameState, aid: string, owner: PlayerId): number {
+export function areaLimitFor(s: GameState, aid: string, owner: PlayerId): number {
   const area = areaById.get(aid);
   if (!area) return 0;
   const owners = Object.keys(s.areas[aid]!.tokens).filter((o) => (s.areas[aid]!.tokens[o] ?? 0) > 0);
@@ -2837,6 +2842,19 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         log(s, 'ship.scrap', actor, `${actor} scraps a ship in ${areaName(action.area)} (§22.3).`, { area: action.area, count: 1, reason: 'voluntary' });
         break; // stays acting; may build/scrap more or pass
       }
+      case 'maintainShip': {
+        if (s.phase !== 'shipConstruction') throw new Error('maintainShip only in shipConstruction phase');
+        const a = s.areas[action.area];
+        if (!a || scrappableShips(s, actor, action.area) <= 0) throw new Error('no unmaintained ship of yours there (§22.3)');
+        if ((a.tokens[actor] ?? 0) <= 0) throw new Error('no token of yours in that area to levy (§22.3)');
+        // §22.3: maintenance may be a levy of one token from the ship's area.
+        setTokens(s, action.area, actor, (a.tokens[actor] ?? 0) - 1);
+        player(s, actor).stock += 1;
+        if (s.shipMaintOwed) s.shipMaintOwed[actor] = Math.max(0, (s.shipMaintOwed[actor] ?? 0) - 1);
+        ((s.shipSteps ??= {})[actor] ??= []).push({ kind: 'maintain', area: action.area });
+        log(s, 'ship.maintain', actor, `${actor} maintains the ship in ${areaName(action.area)} with a token from the area (§22.3).`, { area: action.area });
+        break; // stays acting
+      }
       case 'undoShip': {
         if (s.phase !== 'shipConstruction') throw new Error('undoShip only in shipConstruction phase');
         const step = s.shipSteps?.[actor]?.pop();
@@ -2853,6 +2871,12 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
           p.stock -= step.fromArea + step.fromTreasury;
           p.treasury += step.fromTreasury;
           log(s, 'ship.undo', actor, `${actor} takes back the ship built in ${areaName(step.area)}.`, { area: step.area, undid: 'build', fromArea: step.fromArea, fromTreasury: step.fromTreasury });
+        } else if (step.kind === 'maintain') {
+          // Return the levied token; the ship owes maintenance again.
+          setTokens(s, step.area, actor, (a.tokens[actor] ?? 0) + 1);
+          p.stock -= 1;
+          if (s.shipMaintOwed) s.shipMaintOwed[actor] = (s.shipMaintOwed[actor] ?? 0) + 1;
+          log(s, 'ship.undo', actor, `${actor} takes back the token paid to maintain the ship in ${areaName(step.area)}.`, { area: step.area, undid: 'maintain' });
         } else {
           // Put the scrapped ship back; it owes maintenance again.
           (a.ships ??= {})[actor] = (a.ships[actor] ?? 0) + 1;
@@ -3103,11 +3127,15 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
               // §22.1/.2: offer paying from local population and/or from treasury.
               if ((a.tokens[actor] ?? 0) > 0) out.push({ type: 'buildShips', builds: [{ area: aid, count: 1, payFrom: 'area' }] });
               if (p.treasury > 0) out.push({ type: 'buildShips', builds: [{ area: aid, count: 1, payFrom: 'treasury' }] });
+              // A 1+1 split is distinct from the two above only when both sources hold 2+.
+              if ((a.tokens[actor] ?? 0) >= 2 && p.treasury >= 2) out.push({ type: 'buildShips', builds: [{ area: aid, count: 1, payFrom: 'split' }] });
             }
           }
         }
         // §22.3: a player may scrap a ship already in play instead of maintaining it.
         for (const aid of Object.keys(state.areas)) if (scrappableShips(state, actor, aid) > 0) out.push({ type: 'scrapShip', area: aid });
+        // §22.3: or maintain one by a levy from its own area (treasury is the default at pass).
+        for (const [aid, a] of Object.entries(state.areas)) if (scrappableShips(state, actor, aid) > 0 && (a.tokens[actor] ?? 0) > 0) out.push({ type: 'maintainShip', area: aid });
         if (state.shipSteps?.[actor]?.length) out.push({ type: 'undoShip' });
         break;
       }

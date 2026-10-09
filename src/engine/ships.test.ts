@@ -178,6 +178,32 @@ describe('undoing a ship build or scrap this phase (report 87b486cd)', () => {
     expect(adapter.legalActions(s, 'egypt').some((a) => a.type === 'scrapShip')).toBe(true); // still an old, scrappable ship
     expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
   });
+  it('builds a ship for 1 population + 1 treasury (§22.1 "a combination of the two")', () => {
+    let { s, x } = atShipBuilding((st, x) => { st.areas[x] = { tokens: { egypt: 4 } }; });
+    expect(adapter.legalActions(s, 'egypt').some((a) => a.type === 'buildShips' && a.builds[0]!.payFrom === 'split')).toBe(true);
+    s = adapter.applyAction(s, { type: 'buildShips', builds: [{ area: x, count: 1, payFrom: 'split' }] }, 'egypt');
+    expect(s.areas[x]!.tokens['egypt']).toBe(3);
+    expect(s.players['egypt']!.treasury).toBe(4);
+    expect(s.areas[x]!.ships?.['egypt']).toBe(1);
+    s = adapter.applyAction(s, { type: 'undoShip' }, 'egypt');
+    expect(s.areas[x]!.tokens['egypt']).toBe(4);
+    expect(s.players['egypt']!.treasury).toBe(5);
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
+  });
+  it('maintains a ship by a levy from its own area instead of treasury (§22.3)', () => {
+    let { s, x } = atShipBuilding((st, x) => { st.areas[x] = { tokens: { egypt: 3 }, ships: { egypt: 1 } }; });
+    s = adapter.applyAction(s, { type: 'maintainShip', area: x }, 'egypt');
+    expect(s.areas[x]!.tokens['egypt']).toBe(2);
+    // Paid now: neither scrappable nor maintainable again.
+    expect(adapter.legalActions(s, 'egypt').some((a) => a.type === 'scrapShip' || a.type === 'maintainShip')).toBe(false);
+    const undone = adapter.applyAction(s, { type: 'undoShip' }, 'egypt');
+    expect(undone.areas[x]!.tokens['egypt']).toBe(3);
+    expect(adapter.legalActions(undone, 'egypt').some((a) => a.type === 'maintainShip')).toBe(true);
+    while (s.phase === 'shipConstruction') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    expect(s.players['egypt']!.treasury).toBe(5); // treasury untouched
+    expect(s.areas[x]!.ships?.['egypt']).toBe(1);
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
+  });
 });
 
 describe('§23.5 naval movement', () => {

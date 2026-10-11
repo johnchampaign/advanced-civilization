@@ -78,6 +78,37 @@ describe('AI trade negotiation (open-offer board)', () => {
     expect(respond.type).toBe('pass');
   });
 
+  const ownOffer = () => ({
+    id: 2, from: 'babylon', wants: ['salt'], responses: [],
+    give: { actual: { hides: 2, ochre: 1 }, declared: { hides: 2 }, count: 3, claimed: { ochre: 1 } },
+  });
+
+  it('hands over a good wanted card when the offer\'s named cards repay it', async () => {
+    // egypt names two bronze and asks for wine; babylon's lone wine is its best
+    // card, but two bronze (24) outweigh it (5), so it answers with the wine.
+    const s = tradeState({ egypt: { bronze: 2, ochre: 1 }, babylon: { wine: 1, ochre: 2, hides: 2 } });
+    s.negotiation.offers = [{
+      id: 1, from: 'egypt', wants: ['wine'], responses: [],
+      give: { actual: { bronze: 2, ochre: 1 }, declared: { bronze: 2 }, count: 3, claimed: { ochre: 1 } },
+    }, ownOffer()]; // babylon already has its own offer up, so it turns to answering
+    s.negotiation.turnPointer = 1;
+    const respond = await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) });
+    expect(respond.type).toBe('respondOffer');
+    if (respond.type === 'respondOffer') expect(respond.give.declared['wine']).toBe(1);
+  });
+
+  it('keeps a good card when the offer only names cheap ones', async () => {
+    const s = tradeState({ egypt: { ochre: 2, hides: 1 }, babylon: { gold: 1, ochre: 1, iron: 2, papyrus: 2 } });
+    s.negotiation.offers = [{
+      id: 1, from: 'egypt', wants: ['gold'], responses: [],
+      give: { actual: { ochre: 2, hides: 1 }, declared: { ochre: 2 }, count: 3, claimed: { hides: 1 } },
+    }, ownOffer()];
+    s.negotiation.turnPointer = 1;
+    const respond = await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) });
+    expect(respond.type).toBe('respondOffer'); // it still answers (it holds ochre) …
+    if (respond.type === 'respondOffer') expect(respond.give.actual['gold'] ?? 0).toBe(0); // … but keeps the gold
+  });
+
   it('builds a ship from a coastal foothold with spare tokens', async () => {
     const { areas, adjacency, areaById } = await import('../data/index.js');
     const coast = areas.find((a) => !a.isWater && (adjacency[a.id] ?? []).some((n) => areaById.get(n)?.isWater))!;

@@ -316,13 +316,13 @@ const mentioned = (b: TradeBundle) => Object.keys({ ...bundleFace(b).guaranteed,
 
 /** Three+ cards to give away: a tradable calamity to offload (if held) plus the
  *  cheapest spares we aren't collecting, and optionally a wanted commodity. */
-function buildGive(me: { hand: Record<string, number> }, collect: string, wantToInclude?: string): TradeBundle | null {
+function buildGive(me: { hand: Record<string, number> }, collect: string, wantToInclude?: string, allowCollect = false): TradeBundle | null {
   const cards: string[] = [];
   const committed: Record<string, number> = {};
   const take = (c: string) => { committed[c] = (committed[c] ?? 0) + 1; cards.push(c); };
   const cal = givable(me.hand).map(([c]) => c).find(isTradableCal);
   if (cal) take(cal);
-  if (wantToInclude && !isCal(wantToInclude) && wantToInclude !== collect && (me.hand[wantToInclude] ?? 0) > (committed[wantToInclude] ?? 0)) take(wantToInclude);
+  if (wantToInclude && !isCal(wantToInclude) && (allowCollect || wantToInclude !== collect) && (me.hand[wantToInclude] ?? 0) > (committed[wantToInclude] ?? 0)) take(wantToInclude);
   for (const c of cheapCommodities(me.hand, new Set([collect]))) {
     if (cards.length >= 3) break;
     if ((me.hand[c] ?? 0) <= (committed[c] ?? 0)) continue;
@@ -330,6 +330,28 @@ function buildGive(me: { hand: Record<string, number> }, collect: string, wantTo
   }
   if (cards.length < 3 || cards.filter((c) => !isCal(c)).length < 2) return null; // need ≥3 & ≥2 truthful
   return buildBundle(cards);
+}
+
+/** Set value we'd gain from an offer's NAMED (binding) cards — the claimed rest
+ *  may be bluffs, so it counts for nothing. */
+function guaranteedGain(hand: Record<string, number>, b: TradeBundle): number {
+  let gain = 0;
+  for (const [c, k] of Object.entries(bundleFace(b).guaranteed)) {
+    if (isCal(c) || k <= 0) continue;
+    const n = hand[c] ?? 0;
+    gain += commoditySetValue(c, n + k) - commoditySetValue(c, n);
+  }
+  return gain;
+}
+/** Set value lost by parting with one card of `c`. */
+const partingCost = (hand: Record<string, number>, c: string) => commoditySetValue(c, hand[c] ?? 0) - commoditySetValue(c, (hand[c] ?? 0) - 1);
+/** A card the offer asks for that we'd hand over even though it's a good one:
+ *  the cheapest-to-lose wanted card whose loss the offer's named cards repay. */
+function wantedWorthGiving(hand: Record<string, number>, o: { wants: string[]; give: TradeBundle }): string | undefined {
+  const gain = guaranteedGain(hand, o.give);
+  return o.wants
+    .filter((w) => !isCal(w) && (hand[w] ?? 0) >= 1 && partingCost(hand, w) <= gain)
+    .sort((a, b) => partingCost(hand, a) - partingCost(hand, b))[0];
 }
 
 /** One trade action per turn (multiplayer-fair — only our own hand is read):
@@ -358,8 +380,14 @@ function planTradeTurn(state: GameState, actor: PlayerId, _rng: { pick<T>(a: rea
     if (o.from === actor || o.responses.some((r) => r.from === actor)) continue;
     const grows = mentioned(o.give).some((c) => !isCal(c) && (me.hand[c] ?? 0) >= 1);
     const haveCal = givable(me.hand).some(([c]) => isTradableCal(c));
-    if (!grows && !haveCal) continue;
-    const give = buildGive(me, myWant ?? '', o.wants.find((w) => (me.hand[w] ?? 0) >= 1));
+    // A wanted card we'll part with even if it's one we're collecting, when the
+    // offer's named cards are worth more to us than it is (so asking for a good
+    // card with a fair offer gets a real answer, not just ochre and hides).
+    const worthIt = wantedWorthGiving(me.hand, o);
+    if (!grows && !haveCal && !worthIt) continue;
+    const give = worthIt
+      ? buildGive(me, myWant ?? '', worthIt, true)
+      : buildGive(me, myWant ?? '', o.wants.find((w) => w !== myWant && (me.hand[w] ?? 0) >= 1));
     if (give) return { type: 'respondOffer', offerId: o.id, give };
   }
 

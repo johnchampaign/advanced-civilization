@@ -52,6 +52,28 @@ describe('AI trade negotiation (open-offer board)', () => {
     expect(action.type).toBe('postOffer'); // blind — it doesn't peek at babylon's empty hand
   });
 
+  it('offers fair value when it asks for a valuable card (report 257661f3)', async () => {
+    // egypt collects gold; three ochre (3 points) for a 9-point card is a
+    // lowball, so it names its better spares and offers ≥ 11 points.
+    const s = tradeState({ egypt: { gold: 2, ochre: 3, hides: 2, wine: 1, salt: 1 }, babylon: {} });
+    const action = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+    expect(action.type).toBe('postOffer');
+    if (action.type !== 'postOffer') return;
+    expect(action.wants).toEqual(['gold']);
+    const worth = Object.entries(action.give.actual).reduce((t, [c, k]) => t + k * ({ ochre: 1, hides: 1, salt: 3, wine: 5 } as Record<string, number>)[c]!, 0);
+    expect(worth).toBeGreaterThanOrEqual(11);
+    expect(action.give.declared['wine']).toBe(1); // the best card is named (binding)
+  });
+
+  it('never lowballs, nor pays a better card for a worse one, when spares fall short', async () => {
+    const s = tradeState({ egypt: { gold: 1, salt: 1, ochre: 2, hides: 1 }, babylon: {} });
+    const action = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+    if (action.type === 'postOffer') {
+      expect(action.wants).not.toEqual(['gold']);
+      expect(action.give.actual['gold'] ?? 0).toBe(0);
+    }
+  });
+
   it('dumps a tradable calamity onto a trade partner (bluffed, then passed on the deal)', async () => {
     const s = await runTradePhase(tradeState({
       egypt: { salt: 3, iron: 2, 'calamity:epidemic': 1 },

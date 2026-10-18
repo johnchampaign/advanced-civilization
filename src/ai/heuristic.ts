@@ -200,6 +200,8 @@ function fight(att: number, def: number, limit: number, attMetal: boolean, defMe
   return [a, d];
 }
 
+const BARBARIAN = '__barbarian__';
+
 const rivalsIn = (state: GameState, actor: PlayerId, aid: string) => {
   const a = state.areas[aid];
   return !!a && ((!!a.city && a.city !== actor) || Object.entries(a.tokens).some(([o, n]) => o !== actor && n > 0));
@@ -215,8 +217,9 @@ const rivalsIn = (state: GameState, actor: PlayerId, aid: string) => {
  *      (6 per city + 2 per city in play, §25.2/§26.31), or 12 onto open land
  *      when there is no site to use and population is large.
  *   4. Attack (when aggressive): storm rival cities we can take while our own
- *      cities stay supported, and throw surplus — tokens surplus removal would
- *      take anyway (§26.1) — at rival tokens on land we can clear.
+ *      cities stay supported, throw surplus — tokens surplus removal would
+ *      take anyway (§26.1) — at rival tokens on land we can clear, and clear
+ *      Barbarians off land with regular tokens too.
  *   5. Spread the remaining surplus into empty land, toward city sites further
  *      off, then into our own areas with room. */
 function planMovement(state: GameState, actor: PlayerId, aggressive: boolean, defensive: boolean): Action | null {
@@ -373,22 +376,36 @@ function planMovement(state: GameState, actor: PlayerId, aggressive: boolean, de
       Object.assign(free, snapFree); for (const k of Object.keys(after)) after[k] = snapAfter[k] ?? 0;
       moves.length = 0; moves.push(...snapMoves);
     }
-    // Land fights (§24.2) paid for with surplus only, so they cost nothing we
-    // would keep: clear a rival's tokens off land worth holding.
+    // Land fights (§24.2): clear a rival's tokens off land worth holding.
+    // Against nations, only with surplus — tokens surplus removal would take
+    // anyway (§26.1). Barbarians stay put until someone clears them, blocking
+    // the land, so against them regular tokens go in too (each donor keeps
+    // one) while our cities stay supported (report 39184c86).
+    let barbFights = 0;
     for (const aid of areaIds) {
       const a = state.areas[aid];
       if (!a || a.city || areaById.get(aid)?.isWater || sustains(aid) < 1) continue;
       const foes = Object.entries(a.tokens).filter(([o, n]) => o !== actor && n > 0);
       if (foes.length !== 1) continue;
       const [foe, r] = foes[0]!;
+      const barbarian = foe === BARBARIAN;
+      if (barbarian && barbFights >= 2) continue;
       const surplus = (n: string) => Math.max(0, Math.min(free[n] ?? 0, (after[n] ?? 0) - sustains(n)));
-      const donors = land(aid).filter((n) => !targets.has(n) && !stormed.has(n) && !state.areas[n]?.city && surplus(n) > 0);
-      const pool = donors.reduce((t, n) => t + surplus(n), 0);
+      const usable = (n: string) => (barbarian ? Math.max(0, (free[n] ?? 0) - 1, surplus(n)) : surplus(n));
+      const donors = land(aid).filter((n) => !targets.has(n) && !stormed.has(n) && !state.areas[n]?.city && usable(n) > 0)
+        .sort((x, y) => surplus(y) - surplus(x));
+      const pool = donors.reduce((t, n) => t + usable(n), 0);
       let force = 0;
       for (let f = 1; f <= pool; f++) { const [mine, theirs] = fight(f, r, sustains(aid), metal(actor), metal(foe)); if (theirs === 0 && mine > 0) { force = f; break; } }
       if (!force) continue;
-      for (const n of donors) { const short = force - (after[aid] ?? 0); if (short <= 0) break; shift(n, aid, Math.min(short, surplus(n))); }
-      free[aid] = 0;
+      const snapFree = { ...free }, snapAfter = { ...after }, snapMoves = moves.map((m) => ({ ...m }));
+      for (const n of donors) { const short = force - (after[aid] ?? 0); if (short <= 0) break; shift(n, aid, Math.min(short, usable(n))); }
+      if (!barbarian || supportAfter(state, actor, after, targets) >= 2 * (cities + targets.size)) {
+        free[aid] = 0; if (barbarian) barbFights++;
+        continue;
+      }
+      Object.assign(free, snapFree); for (const k of Object.keys(after)) after[k] = snapAfter[k] ?? 0;
+      moves.length = 0; moves.push(...snapMoves);
     }
   }
 

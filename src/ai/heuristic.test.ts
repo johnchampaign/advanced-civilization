@@ -245,6 +245,21 @@ describe('heuristic AI: movement and advances (reports 341f4378 / 9b9885cd)', ()
     expect(t.areas['alexandria']?.tokens['egypt']).toBe(7);
   });
 
+  it('clears Barbarians off land with regular tokens, not just surplus (report 39184c86)', async () => {
+    // Tanis has one token over its limit of 3 — not enough alone. Three of its
+    // four go after the two Barbarians in Sinai (limit 1) and win, two surviving.
+    const s = at('movement', { tanis: 4 });
+    s.areas['sinai'] = { tokens: { __barbarian__: 2 } };
+    const action = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+    if (action.type !== 'move') throw new Error(`expected a move, got ${action.type}`);
+    expect(action.moves).toContainEqual({ from: 'tanis', to: 'sinai', count: 3 });
+    // Two tokens of a nation are fought only with surplus (here none).
+    s.areas['sinai'] = { tokens: { babylon: 2 } };
+    s.areas['tanis']!.tokens['egypt'] = 3;
+    const calm = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+    expect(calm.type === 'move' && calm.moves.some((m) => m.to === 'sinai')).toBe(false);
+  });
+
   it('defends a city a rival could storm, with just enough tokens (§24.41)', async () => {
     // Babylon has 8 tokens next to egypt's Memphis: 7 could storm it. Two
     // defenders leave too few survivors (7 v 2 ends 6 v 0, short of 7).

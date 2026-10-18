@@ -191,6 +191,48 @@ describe('heuristic AI', () => {
   });
 });
 
+describe('heuristic AI: movement and advances (reports 341f4378 / 9b9885cd)', () => {
+  /** A state at `phase` with egypt's tokens placed and egypt to act. */
+  function at(phase: GameState['phase'], tokens: Record<string, number>): GameState {
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 1, maxTurns: 60 });
+    s.areas = Object.fromEntries(Object.entries(tokens).map(([aid, n]) => [aid, { tokens: { egypt: n } }]));
+    s.players['egypt']!.stock = pieceCounts.tokens - Object.values(tokens).reduce((t, n) => t + n, 0);
+    s.phase = phase; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    return s;
+  }
+
+  it('gathers for every city it can support and spreads surplus, all in one movement', async () => {
+    // 20 tokens on the Nile: enough for two cities (6 each + 2 support each).
+    // Memphis (an empty city site) can be filled from Alexandria/Tanis/Fayum.
+    const s = at('movement', { alexandria: 5, tanis: 4, fayum: 6, 'upper-egypt': 5 });
+    const action = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+    expect(action.type).toBe('move');
+    const t = adapter.applyAction(s, action, 'egypt');
+    const sites = ['alexandria', 'tanis', 'fayum', 'memphis'].filter((aid) => (t.areas[aid]?.tokens['egypt'] ?? 0) >= 6);
+    expect(sites.length).toBe(2);
+    // Upper Egypt's token over its limit of 4 went to fresh land rather than being lost.
+    const seeded = Object.keys(t.areas).filter((aid) => !(aid in s.areas) && aid !== 'memphis' && (t.areas[aid]?.tokens['egypt'] ?? 0) > 0);
+    expect(seeded.length).toBeGreaterThan(0);
+  });
+
+  it('buys a basket of advances with whole sets, wasting as little as possible', async () => {
+    // 97 points of cards: salt ×4 (48), wine ×3 (45), hides ×2 (4).
+    const s = at('acquireAdvances', { thebes: 2 });
+    s.players['egypt']!.hand = { salt: 4, wine: 3, hides: 2 };
+    s.players['egypt']!.treasury = 0;
+    const action = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+    expect(action.type).toBe('buyAdvance');
+    if (action.type !== 'buyAdvance') return;
+    expect(action.advances?.length ?? 1).toBeGreaterThanOrEqual(2); // two 45-50 cards, not one
+    const t = adapter.applyAction(s, action, 'egypt');
+    expect(t.players['egypt']!.advances.length).toBeGreaterThanOrEqual(2);
+    // Excess card value is lost (§31.58): spending the whole hand on one card
+    // would throw away ~50 points; the pooled purchase overpays by at most a few.
+    const buy = t.log.find((e) => e.kind === 'advance.buy')!.payload as { cost: number; paid: number };
+    expect(buy.paid - buy.cost).toBeLessThanOrEqual(4);
+  });
+});
+
 describe('heuristic AI: start areas (§16.3)', () => {
   it('chooses start areas and plays on from them', async () => {
     let s = createGame({ players: ['egypt', 'babylon', 'assyria'], seed: 5, maxTurns: 3, chooseStartAreas: true });

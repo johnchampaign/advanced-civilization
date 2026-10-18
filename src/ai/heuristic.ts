@@ -1,10 +1,12 @@
 // A simple heuristic AI controller for Advanced Civilization. It implements the
 // framework's PlayerController. Strategy per interactive phase:
-//   - movement: spread into adjacent empty/fertile land to grow population and
-//     reach city sites; otherwise hold (pass).
+//   - movement: one order set per turn — ferry by ship to empty land, gather 6
+//     tokens onto every city site population can support, and spread surplus
+//     into fresh land so it isn't lost.
 //   - cityConstruction: always build a city when able (cities drive everything).
-//   - acquireAdvances: buy the most valuable advance affordable, preferring the
-//     best cost-per-point after credits and progress toward new card groups.
+//   - acquireAdvances: buy a basket of advances in one pooled payment, new card
+//     groups first, then best value per point paid; pay with whole commodity
+//     sets chosen to overpay least, the rest exactly from treasury.
 //   - trade: seek mutually-beneficial set-building swaps (give a partner the
 //     commodity they collect for the commodity we collect), opportunistically
 //     dumping a tradable calamity among the undeclared cards; accept incoming
@@ -15,7 +17,7 @@
 
 import type { PlayerController, ControllerContext } from 'digital-boardgame-framework';
 import { advanceById, areaById, calamityById, civById, commodityById } from '../data/index.js';
-import { bundleFace, cardGroupsHeld, cityCount, citySiteIn, commoditySetValue, handValue, navalDestinations, neighbors, netAdvanceCost, populationCount } from '../engine/helpers.js';
+import { bundleFace, cardGroupsHeld, cityCount, citySiteIn, commoditySetValue, creditTowards, handValue, navalDestinations, neighbors, populationCount } from '../engine/helpers.js';
 import type { Action, GameState, PlayerId, TradeBundle } from '../engine/types.js';
 
 export class HeuristicAI implements PlayerController<GameState, Action, PlayerId> {
@@ -54,17 +56,14 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
 
     switch (state.phase) {
       case 'cityConstruction': {
-        // Only build a city we can actually support: after building, an area
-        // with a city holds no tokens (§26.1), so support comes from tokens
-        // elsewhere — need >=2 per city across all cities (§26.31). Building in
-        // area A removes all of A's tokens from the board.
+        // Only build a city we can actually support: an area with a city holds
+        // no tokens (§26.1), so support comes from tokens elsewhere — 2 per city
+        // across all cities (§26.31) — counted after the surplus removal that
+        // follows straight on (each area keeps only its population limit).
         const builds = actions.filter((a) => a.type === 'buildCity') as Extract<Action, { type: 'buildCity' }>[];
-        const pop = populationCount(state, actor);
         const cities = cityCount(state, actor);
-        const supported = builds.find((b) => {
-          const inArea = state.areas[b.area]?.tokens[actor] ?? 0;
-          return pop - inArea >= 2 * (cities + 1);
-        });
+        const tokens = Object.fromEntries(Object.entries(state.areas).map(([aid, a]) => [aid, a.tokens[actor] ?? 0]));
+        const supported = builds.find((b) => supportAfter(state, actor, tokens, new Set([b.area])) >= 2 * (cities + 1));
         return supported ?? { type: 'pass' };
       }
       case 'calamity': {
@@ -98,22 +97,7 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
       case 'acquireAdvances': {
         const buys = actions.filter((a) => a.type === 'buyAdvance') as Extract<Action, { type: 'buyAdvance' }>[];
         if (buys.length === 0) return { type: 'pass' };
-        const p = state.players[actor]!;
-        const owned = p.advances;
-        const groups = cardGroupsHeld(owned);
-        // Score: prefer advances that add a new color group, then highest face
-        // value per net cost.
-        const scored = buys.map((b) => {
-          const id = b.advance ?? b.advances?.[0] ?? '';
-          const adv = advanceById.get(id)!;
-          const addsGroup = adv.groups.some((g) => !groups.has(g)) ? 1 : 0;
-          const net = Math.max(1, netAdvanceCost(owned, id));
-          return { b, score: addsGroup * 1000 + adv.cost / net };
-        });
-        scored.sort((x, y) => y.score - x.score);
-        // Only buy if it doesn't drain the entire hand for a marginal card late
-        // game; here simply buy the top pick.
-        return scored[0]!.b;
+        return planAdvancePurchase(state.players[actor]!, buys.map((b) => b.advance ?? b.advances?.[0] ?? '')) ?? buys[0]!;
       }
       case 'shipConstruction': {
         // Build one ship when it has a coastal foothold with spare tokens and no
@@ -124,22 +108,11 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
         return best ?? { type: 'pass' };
       }
       case 'movement': {
-        // Ferry tokens to a fresh coast if we have a ship and somewhere worth going.
-        const naval = planNaval(state, actor);
-        if (naval) return naval;
-
-        // Top priority: if we can afford a *supported* city (6 to build + 2 per
-        // city to support, §26), consolidate 6 tokens onto a city site this turn
-        // — areas are capped at their limit after city construction, so the only
-        // way to assemble 6 is to gather them during movement.
-        const consolidate = planCityConsolidation(state, actor);
-        if (consolidate) return consolidate;
-
-        // Otherwise grow: spread the EXCESS over each area's limit into adjacent
-        // empty land, occupying new areas (more areas = more sustainable
-        // population, since each is capped at its limit after surplus removal).
-        const spread = planExpansionSpread(state, actor);
-        if (spread) return spread;
+        // A nation moves once per phase (§23), so everything worth doing this
+        // turn goes into ONE order set: ferrying, gathering 6 tokens onto city
+        // sites, and spreading surplus into fresh land.
+        const plan = planMovement(state, actor);
+        if (plan) return plan;
 
         const moves = actions.filter((a) => a.type === 'move') as Extract<Action, { type: 'move' }>[];
         if (moves.length === 0) return { type: 'pass' };
@@ -182,72 +155,193 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
   }
 }
 
-/** Plan a single movement that gathers 6 tokens onto an empty city site from its
- *  neighbours, so a supported city can be built this turn. Returns a move action
- *  or null if no worthwhile consolidation exists. Only gathers up to 6 (so the
- *  rest of the population stays spread out to support the city, §26.31). */
-function planCityConsolidation(state: GameState, actor: PlayerId): Action | null {
-  const pop = populationCount(state, actor);
-  const cities = cityCount(state, actor);
-  // Need 6 to build + 2 per city (including the new one) to support.
-  if (pop < 6 + 2 * (cities + 1)) return null;
+type Move = Extract<Action, { type: 'move' }>['moves'][number];
 
-  // Candidate city sites: empty of a city, where this player can muster >=6
-  // tokens from the site itself plus its immediate neighbours.
-  const candidates = Object.keys(state.areas).filter((aid) => {
-    const area = areaById.get(aid);
-    const a = state.areas[aid];
-    if (!area || area.isWater || !citySiteIn(state, aid) || a?.city) return false;
-    const here = a?.tokens[actor] ?? 0;
-    const adj = neighbors(state, aid).reduce((s, n) => s + (state.areas[n]?.tokens[actor] ?? 0), 0);
-    return here + adj >= 6;
-  });
-  if (candidates.length === 0) return null;
-  // Prefer the site where we already have the most tokens (least to move).
-  candidates.sort((x, y) => (state.areas[y]!.tokens[actor] ?? 0) - (state.areas[x]!.tokens[actor] ?? 0));
-  const target = candidates[0]!;
-
-  let onTarget = state.areas[target]!.tokens[actor] ?? 0;
-  const moves: { from: string; to: string; count: number }[] = [];
-  for (const n of neighbors(state, target)) {
-    if (onTarget >= 6) break;
-    if (areaById.get(n)?.isWater) continue;
-    const have = state.areas[n]?.tokens[actor] ?? 0;
-    if (have <= 0) continue;
-    const take = Math.min(have, 6 - onTarget);
-    moves.push({ from: n, to: target, count: take });
-    onTarget += take;
+/** Tokens left to support cities once surplus is removed (§26.31): every area
+ *  without a city keeps at most its population limit. `skip` are areas about
+ *  to become cities (their tokens go into the city). */
+function supportAfter(state: GameState, actor: PlayerId, tokens: Record<string, number>, skip: ReadonlySet<string>): number {
+  let n = 0;
+  for (const [aid, t] of Object.entries(tokens)) {
+    if (t <= 0 || skip.has(aid) || state.areas[aid]?.city) continue;
+    n += Math.min(t, areaById.get(aid)?.sustains ?? 0);
   }
-  // If the site already holds >=6, no move is needed (build phase will handle it).
-  if (moves.length === 0 || onTarget < 6) return null;
-  return { type: 'move', moves };
+  return n;
 }
 
-/** Spread tokens above each area's limit into adjacent empty land, seeding new
- *  areas so total population can grow (§20.1 over-fills areas; movement spreads
- *  the surplus before it is removed). Leaves each source at its limit. */
-function planExpansionSpread(state: GameState, actor: PlayerId): Action | null {
-  const moves: { from: string; to: string; count: number }[] = [];
+const rivalsIn = (state: GameState, actor: PlayerId, aid: string) => {
+  const a = state.areas[aid];
+  return !!a && ((!!a.city && a.city !== actor) || Object.entries(a.tokens).some(([o, n]) => o !== actor && n > 0));
+};
+
+/** The whole movement turn as one order set. Each token moves once, so the plan
+ *  only ever moves tokens that started the phase in an area (`free`), while
+ *  `after` tracks where everything ends up.
+ *   1. Ferry spare tokens by ship to unoccupied land (ship moves go first:
+ *      tokens that arrived overland may not embark, §23.51).
+ *   2. Gather 6 tokens onto as many city sites as population can support
+ *      (6 per city + 2 per city in play, §25.2/§26.31), or 12 onto open land
+ *      when there is no site to use and population is large.
+ *   3. Spread what would be lost to surplus removal (§20) into empty land,
+ *      toward city sites further off, then into our own areas with room. */
+function planMovement(state: GameState, actor: PlayerId): Action | null {
+  const free: Record<string, number> = {};
   for (const [aid, a] of Object.entries(state.areas)) {
     const t = a.tokens[actor] ?? 0;
-    const area = areaById.get(aid);
-    if (!area || area.isWater || a.city || t <= 0) continue;
-    let excess = t - area.sustains;
-    if (excess <= 0) continue;
-    for (const n of neighbors(state, aid)) {
-      if (excess <= 0) break;
-      const nb = areaById.get(n);
-      if (!nb || nb.isWater) continue;
-      const na = state.areas[n];
-      // Only seed empty land (no other nation, no city) to avoid picking fights.
-      const contested = na && Object.entries(na.tokens).some(([o, c]) => o !== actor && c > 0);
-      if (contested || na?.city) continue;
-      if ((na?.tokens[actor] ?? 0) > 0) continue; // already ours — seed fresh land
-      moves.push({ from: aid, to: n, count: 1 });
-      excess -= 1;
+    if (t > 0 && !areaById.get(aid)?.isWater) free[aid] = t;
+  }
+  const after: Record<string, number> = { ...free };
+  const moves: Move[] = [];
+  const shift = (from: string, to: string, count: number, byShip = false) => {
+    if (count <= 0) return;
+    free[from] = (free[from] ?? 0) - count;
+    after[from] = (after[from] ?? 0) - count;
+    after[to] = (after[to] ?? 0) + count;
+    const last = moves[moves.length - 1];
+    if (!byShip && last && !last.byShip && last.from === from && last.to === to) last.count += count;
+    else moves.push(byShip ? { from, to, count, byShip: true } : { from, to, count });
+  };
+  const sustains = (aid: string) => areaById.get(aid)?.sustains ?? 0;
+  const land = (aid: string) => neighbors(state, aid).filter((n) => !areaById.get(n)?.isWater);
+  const targets = new Set<string>(); // city sites being filled this turn
+
+  // 1. Ships.
+  const p = state.players[actor]!;
+  const range = 4 + (p.advances.includes('clothmaking') ? 1 : 0);
+  const astro = p.advances.includes('astronomy');
+  for (const [aid, a] of Object.entries(state.areas)) {
+    if ((a.ships?.[actor] ?? 0) <= 0 || (free[aid] ?? 0) < 3) continue;
+    let best: string | null = null, bestScore = 0;
+    for (const to of navalDestinations(state, aid, range, astro)) {
+      const area = areaById.get(to);
+      if (!area || area.isWater || (after[to] ?? 0) > 0 || rivalsIn(state, actor, to)) continue;
+      const score = area.sustains + (citySiteIn(state, to) ? 3 : 0);
+      if (score > bestScore) { bestScore = score; best = to; }
+    }
+    if (best) shift(aid, best, Math.min(5, free[aid]! - 2), true);
+  }
+
+  // 2. Cities: gather 6 tokens onto as many printed city sites as population can
+  // support (6 to build + 2 support per city), from the site and its neighbours.
+  // Failing any site, a large population may build on open land with 12 (§25.2).
+  const pop = populationCount(state, actor);
+  const cities = cityCount(state, actor);
+  const open = (aid: string) => !targets.has(aid) && !areaById.get(aid)?.isWater && !state.areas[aid]?.city && !rivalsIn(state, actor, aid);
+  const gatherable = (site: string) => (after[site] ?? 0) + land(site).reduce((t, n) => t + (targets.has(n) ? 0 : Math.max(0, free[n] ?? 0)), 0);
+  const areaIds = [...new Set([...Object.keys(state.areas), ...Object.keys(after)])];
+  /** Tentatively gather `need` tokens onto `site`; keep it only if the cities
+   *  planned so far stay supported, else roll back. */
+  const tryGather = (site: string, need: number): boolean => {
+    const snapFree = { ...free }, snapAfter = { ...after }, snapMoves = moves.map((m) => ({ ...m }));
+    const donors = land(site).filter((n) => !targets.has(n) && (free[n] ?? 0) > 0)
+      .sort((x, y) => ((after[y] ?? 0) - sustains(y)) - ((after[x] ?? 0) - sustains(x)));
+    for (const n of donors) {
+      const short = need - (after[site] ?? 0);
+      if (short <= 0) break;
+      shift(n, site, Math.min(short, free[n]!));
+    }
+    if ((after[site] ?? 0) >= need && supportAfter(state, actor, after, new Set([...targets, site])) >= 2 * (cities + targets.size + 1)) {
+      targets.add(site); free[site] = 0; // its tokens stay to build the city
+      return true;
+    }
+    Object.assign(free, snapFree); for (const k of Object.keys(after)) after[k] = snapAfter[k] ?? 0;
+    moves.length = 0; moves.push(...snapMoves);
+    return false;
+  };
+  while (targets.size < p.citiesAvailable && pop >= 8 * (targets.size + 1) + 2 * cities) {
+    const sites = areaIds.filter((aid) => open(aid) && citySiteIn(state, aid) && gatherable(aid) >= 6)
+      .sort((x, y) => (after[y] ?? 0) - (after[x] ?? 0));
+    if (!sites.some((site) => tryGather(site, 6))) break;
+  }
+  if (targets.size === 0 && p.citiesAvailable > 0 && pop >= 30 + 2 * cities) {
+    const fields = areaIds.filter((aid) => open(aid) && !citySiteIn(state, aid) && gatherable(aid) >= 12)
+      .sort((x, y) => (after[y] ?? 0) - (after[x] ?? 0));
+    fields.some((aid) => tryGather(aid, 12));
+  }
+
+  // March surplus toward an open city site that is out of reach this turn, so
+  // the tokens can be gathered onto it next turn.
+  const dist = new Map<string, number>();
+  let ring = areaIds.filter((aid) => open(aid) && citySiteIn(state, aid));
+  for (const aid of ring) dist.set(aid, 0);
+  for (let d = 1; d <= 3 && ring.length; d++) {
+    const next: string[] = [];
+    for (const aid of ring) for (const n of land(aid)) if (!dist.has(n) && !rivalsIn(state, actor, n)) { dist.set(n, d); next.push(n); }
+    ring = next;
+  }
+
+  // 3. Surplus: seed empty land (one token each), march toward city sites, then
+  // top up our own areas that are below their limit.
+  for (const pass of ['seed', 'march', 'fill'] as const) {
+    for (const aid of Object.keys(free)) {
+      if (targets.has(aid) || state.areas[aid]?.city) continue;
+      for (const n of land(aid)) {
+        const excess = Math.min(free[aid] ?? 0, (after[aid] ?? 0) - sustains(aid));
+        if (excess <= 0) break;
+        if (targets.has(n) || state.areas[n]?.city || rivalsIn(state, actor, n) || sustains(n) <= 0) continue;
+        if (pass === 'seed' && (after[n] ?? 0) === 0) shift(aid, n, 1);
+        else if (pass === 'march' && (dist.get(aid) ?? 0) >= 2 && dist.get(n) === dist.get(aid)! - 1) shift(aid, n, excess);
+        else if (pass === 'fill' && (after[n] ?? 0) > 0) shift(aid, n, Math.min(excess, sustains(n) - (after[n] ?? 0)));
+      }
     }
   }
+
   return moves.length ? { type: 'move', moves } : null;
+}
+
+// ---- Advances --------------------------------------------------------------
+
+/** One pooled purchase (§31): a basket of advances and the cheapest way to pay.
+ *  Excess card value is lost (§31.58) and a commodity set is worth n² × value,
+ *  so the AI pays with whole sets — splitting one throws value away — choosing
+ *  the sets that overpay least, and makes up the rest exactly from treasury. */
+function planAdvancePurchase(p: { advances: string[]; advancesThisTurn?: string[]; hand: Record<string, number>; treasury: number; grainLockedThisTurn?: number }, candidates: string[]): Action | null {
+  // Spendable cards: commodities only, minus Grain locked against Famine (§30.312).
+  const hand: Record<string, number> = {};
+  for (const [c, n] of Object.entries(p.hand)) if (!isCal(c) && n > 0) hand[c] = n;
+  if (hand['grain']) { hand['grain'] -= p.grainLockedThisTurn ?? 0; if (hand['grain'] <= 0) delete hand['grain']; }
+  // §31.53: cards bought earlier this turn give no credit yet.
+  const eligible = p.advances.filter((a) => !(p.advancesThisTurn ?? []).includes(a));
+  const net = (id: string) => Math.max(0, (advanceById.get(id)?.cost ?? Infinity) - creditTowards(eligible, id));
+  const budget = handValue(hand) + p.treasury;
+
+  // Basket: best first — a new colour group (A.S.T. entry needs them, §33),
+  // then the most face value per point actually paid — while the budget lasts.
+  const basket: string[] = [];
+  const groups = cardGroupsHeld(p.advances);
+  let need = 0;
+  const pool = candidates.filter((id) => advanceById.has(id));
+  while (pool.length) {
+    pool.sort((x, y) => score(y) - score(x));
+    const pick = pool.shift()!;
+    if (need + net(pick) > budget) continue;
+    basket.push(pick); need += net(pick);
+    for (const g of advanceById.get(pick)!.groups) groups.add(g);
+  }
+  function score(id: string): number {
+    const adv = advanceById.get(id)!;
+    return (adv.groups.some((g) => !groups.has(g)) ? 1000 : 0) + adv.cost / Math.max(1, net(id));
+  }
+  if (basket.length === 0) return null;
+
+  // Payment: the subset of whole sets that, with treasury, covers `need` while
+  // overpaying least; ties keep more treasury.
+  const sets = Object.keys(hand).map((c) => ({ c, v: commoditySetValue(c, hand[c]!) }));
+  let best: { mask: number; waste: number; treasury: number } | null = null;
+  for (let mask = 0; mask < 1 << sets.length; mask++) {
+    let v = 0;
+    sets.forEach((x, i) => { if (mask & (1 << i)) v += x.v; });
+    const treasury = Math.max(0, need - v);
+    if (treasury > p.treasury) continue;
+    const waste = Math.max(0, v - need);
+    if (!best || waste < best.waste || (waste === best.waste && treasury < best.treasury)) best = { mask, waste, treasury };
+  }
+  if (!best) return null;
+  const spendCommodities: Record<string, number> = {};
+  sets.forEach((x, i) => { if (best!.mask & (1 << i)) spendCommodities[x.c] = hand[x.c]!; });
+  return basket.length === 1
+    ? { type: 'buyAdvance', advance: basket[0]!, spendCommodities, spendTreasury: best.treasury }
+    : { type: 'buyAdvance', advances: basket, spendCommodities, spendTreasury: best.treasury };
 }
 
 // ---- Trade ----------------------------------------------------------------
@@ -435,32 +529,6 @@ function shipCount(state: GameState, actor: PlayerId): number {
   let n = 0;
   for (const a of Object.values(state.areas)) n += a.ships?.[actor] ?? 0;
   return n;
-}
-
-/** Ferry tokens with a ship to the best empty, fertile coast within range,
- *  keeping a couple of tokens behind. Returns a byShip move or null. */
-function planNaval(state: GameState, actor: PlayerId): Action | null {
-  const p = state.players[actor]!;
-  const range = 4 + (p.advances.includes('clothmaking') ? 1 : 0);
-  const astro = p.advances.includes('astronomy');
-  for (const [aid, a] of Object.entries(state.areas)) {
-    if ((a.ships?.[actor] ?? 0) <= 0) continue;
-    const have = a.tokens[actor] ?? 0;
-    if (have < 3) continue; // keep some behind; nothing worth ferrying
-    let best: string | null = null, bestScore = 0;
-    for (const to of navalDestinations(state, aid, range, astro)) {
-      const da = state.areas[to];
-      const area = areaById.get(to);
-      if (!area || area.isWater) continue;
-      const empty = !da || Object.values(da.tokens).every((n) => n === 0);
-      const enemy = da && Object.entries(da.tokens).some(([o, n]) => o !== actor && n > 0);
-      if (!empty || enemy) continue; // colonize unoccupied land
-      const score = (area.sustains ?? 0) + (citySiteIn(state, to) ? 3 : 0);
-      if (score > bestScore) { bestScore = score; best = to; }
-    }
-    if (best) return { type: 'move', moves: [{ from: aid, to: best, count: Math.min(5, have - 2), byShip: true }] };
-  }
-  return null;
 }
 
 /** §16.3 start-area choice: favour a fertile area with fertile land to grow into,

@@ -215,6 +215,32 @@ describe('heuristic AI: movement and advances (reports 341f4378 / 9b9885cd)', ()
     expect(seeded.length).toBeGreaterThan(0);
   });
 
+  it('storms a rival city it can take (§24.3)', async () => {
+    // Babylon's city in Memphis, ringed by egypt's tokens; egypt has no city
+    // pieces left to build, so its spare strength goes into an assault.
+    const s = at('movement', { alexandria: 6, tanis: 6, fayum: 6 });
+    s.areas['memphis'] = { tokens: {}, city: 'babylon' };
+    s.players['egypt']!.citiesAvailable = 0;
+    const action = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+    const t = adapter.applyAction(s, action, 'egypt');
+    expect(t.areas['memphis']?.tokens['egypt']).toBeGreaterThanOrEqual(7); // enough to storm
+    // The passive variant leaves the city alone.
+    const calm = await new HeuristicAI({ aggressive: false }).selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+    const u = adapter.applyAction(s, calm, 'egypt');
+    expect(u.areas['memphis']?.tokens['egypt'] ?? 0).toBe(0);
+  });
+
+  it('throws surplus tokens at a rival it can clear off the land (§24.2)', async () => {
+    // Tanis holds 6 against a limit of 3: three would be lost to surplus anyway,
+    // and three beat Babylon's two in Sinai (limit 1), leaving egypt in charge.
+    const s = at('movement', { tanis: 6 });
+    s.areas['sinai'] = { tokens: { babylon: 2 } };
+    const action = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+    expect(action.type).toBe('move');
+    if (action.type !== 'move') return;
+    expect(action.moves).toContainEqual({ from: 'tanis', to: 'sinai', count: 3 });
+  });
+
   it('scraps a stranded ship instead of paying its upkeep (§22.3, report c2fa4b00)', async () => {
     // A ship left in Nineveh with none of babylon's tokens beside it.
     const s = createGame({ players: ['egypt', 'babylon'], seed: 1, maxTurns: 60 });

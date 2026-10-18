@@ -215,6 +215,27 @@ describe('heuristic AI: movement and advances (reports 341f4378 / 9b9885cd)', ()
     expect(seeded.length).toBeGreaterThan(0);
   });
 
+  it('scraps a stranded ship instead of paying its upkeep (§22.3, report c2fa4b00)', async () => {
+    // A ship left in Nineveh with none of babylon's tokens beside it.
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 1, maxTurns: 60 });
+    s.areas = { babylon: { tokens: { babylon: 4 } }, niniveh: { tokens: {}, ships: { babylon: 1 } } };
+    s.players['babylon']!.stock = pieceCounts.tokens - 4; s.players['babylon']!.shipsAvailable -= 1; s.players['babylon']!.treasury = 5;
+    s.phase = 'shipConstruction'; s.activeOrder = ['babylon', 'egypt']; s.actedThisPhase = [];
+    s.shipMaintOwed = { babylon: 1, egypt: 0 }; s.shipsBuiltThisPhase = {}; s.shipSteps = {};
+    const action = await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) });
+    expect(action).toEqual({ type: 'scrapShip', area: 'niniveh' });
+  });
+
+  it('pays for a new ship from treasury so the shore keeps tokens to sail', async () => {
+    const { areas, adjacency, areaById } = await import('../data/index.js');
+    const coast = areas.find((a) => !a.isWater && a.sustains > 0 && (adjacency[a.id] ?? []).some((n) => areaById.get(n)?.isWater))!;
+    const s = at('shipConstruction', { [coast.id]: 4 });
+    s.players['egypt']!.treasury = 6;
+    const action = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+    expect(action.type).toBe('buildShips');
+    if (action.type === 'buildShips') expect(action.builds[0]!.payFrom).toBe('treasury');
+  });
+
   it('buys a basket of advances with whole sets, wasting as little as possible', async () => {
     // 97 points of cards: salt ×4 (48), wine ×3 (45), hides ×2 (4).
     const s = at('acquireAdvances', { thebes: 2 });

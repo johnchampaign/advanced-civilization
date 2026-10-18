@@ -100,11 +100,21 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
         return planAdvancePurchase(state.players[actor]!, buys.map((b) => b.advance ?? b.advances?.[0] ?? '')) ?? buys[0]!;
       }
       case 'shipConstruction': {
-        // Build one ship when it has a coastal foothold with spare tokens and no
-        // fleet yet — enough to start ferrying, without over-investing.
+        // §22.3: every ship costs upkeep each turn, so decline it (scrap) for a
+        // ship that can't be used — too few of our tokens beside it to ferry, or
+        // no unoccupied land in reach, e.g. on Nineveh's lake (report c2fa4b00).
+        const scrap = (actions.filter((a) => a.type === 'scrapShip') as Extract<Action, { type: 'scrapShip' }>[])
+          .find((a) => !shipUseful(state, actor, a.area, state.areas[a.area]?.tokens[actor] ?? 0));
+        if (scrap) return scrap;
+        // Build one ship when it has no fleet yet, where it can carry at least 3
+        // tokens straight away (movement follows directly) to land worth settling.
+        // Paying from treasury keeps the tokens on the shore to sail.
         const builds = actions.filter((a) => a.type === 'buildShips') as Extract<Action, { type: 'buildShips' }>[];
         if (builds.length === 0 || shipCount(state, actor) >= 1) return { type: 'pass' };
-        const best = builds.find((b) => (state.areas[b.builds[0]!.area]?.tokens[actor] ?? 0) >= 4);
+        const levy = { treasury: 0, split: 1, area: 2 } as const;
+        const best = builds
+          .filter((b) => { const { area, payFrom } = b.builds[0]!; return shipUseful(state, actor, area, (state.areas[area]?.tokens[actor] ?? 0) - levy[payFrom ?? 'area']); })
+          .sort((x, y) => levy[x.builds[0]!.payFrom ?? 'area'] - levy[y.builds[0]!.payFrom ?? 'area'])[0];
         return best ?? { type: 'pass' };
       }
       case 'movement': {
@@ -529,6 +539,18 @@ function shipCount(state: GameState, actor: PlayerId): number {
   let n = 0;
   for (const a of Object.values(state.areas)) n += a.ships?.[actor] ?? 0;
   return n;
+}
+
+/** Whether a ship in `aid` earns its upkeep: at least 3 of our tokens there to
+ *  carry (two stay behind, see planMovement) and unoccupied land within range. */
+function shipUseful(state: GameState, actor: PlayerId, aid: string, tokensThere: number): boolean {
+  if (tokensThere < 3) return false;
+  const p = state.players[actor]!;
+  const range = 4 + (p.advances.includes('clothmaking') ? 1 : 0);
+  return [...navalDestinations(state, aid, range, p.advances.includes('astronomy'))].some((to) => {
+    const area = areaById.get(to);
+    return !!area && !area.isWater && area.sustains > 0 && !Object.values(state.areas[to]?.tokens ?? {}).some((n) => n > 0) && !state.areas[to]?.city;
+  });
 }
 
 /** §16.3 start-area choice: favour a fertile area with fertile land to grow into,

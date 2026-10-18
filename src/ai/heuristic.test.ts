@@ -230,6 +230,37 @@ describe('heuristic AI: movement and advances (reports 341f4378 / 9b9885cd)', ()
     expect(u.areas['memphis']?.tokens['egypt'] ?? 0).toBe(0);
   });
 
+  it('lands tokens by ship to complete a storm force (§23.51)', async () => {
+    // Babylon's city in Alexandria: Memphis and Tanis can spare 6 between them,
+    // one short of 7; egypt's ship in Gaza brings the seventh.
+    const s = at('movement', { memphis: 4, tanis: 4, gaza: 2, thebes: 6 });
+    s.areas['gaza']!.ships = { egypt: 1 };
+    s.players['egypt']!.shipsAvailable -= 1;
+    s.areas['alexandria'] = { tokens: {}, city: 'babylon' };
+    s.players['egypt']!.citiesAvailable = 0;
+    const action = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+    if (action.type !== 'move') throw new Error(`expected a move, got ${action.type}`);
+    expect(action.moves).toContainEqual({ from: 'gaza', to: 'alexandria', count: 1, byShip: true });
+    const t = adapter.applyAction(s, action, 'egypt');
+    expect(t.areas['alexandria']?.tokens['egypt']).toBe(7);
+  });
+
+  it('defends a city a rival could storm, with just enough tokens (§24.41)', async () => {
+    // Babylon has 8 tokens next to egypt's Memphis: 7 could storm it. Two
+    // defenders leave too few survivors (7 v 2 ends 6 v 0, short of 7).
+    const s = at('movement', { alexandria: 4, tanis: 4 });
+    s.areas['memphis'] = { tokens: {}, city: 'egypt' };
+    s.areas['western-desert'] = { tokens: { babylon: 8 } };
+    s.players['egypt']!.citiesAvailable -= 1;
+    const action = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+    const t = adapter.applyAction(s, action, 'egypt');
+    expect(t.areas['memphis']?.tokens['egypt']).toBe(2);
+    // No threat, no defenders: they would only be lost to surplus removal.
+    delete s.areas['western-desert'];
+    const calm = adapter.applyAction(s, await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) }), 'egypt');
+    expect(calm.areas['memphis']?.tokens['egypt'] ?? 0).toBe(0);
+  });
+
   it('throws surplus tokens at a rival it can clear off the land (§24.2)', async () => {
     // Tanis holds 6 against a limit of 3: three would be lost to surplus anyway,
     // and three beat Babylon's two in Sinai (limit 1), leaving egypt in charge.

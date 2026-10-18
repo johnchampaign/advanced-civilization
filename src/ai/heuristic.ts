@@ -21,8 +21,9 @@ import { bundleFace, cardGroupsHeld, cityCount, citySiteIn, commoditySetValue, c
 import type { Action, GameState, PlayerId, TradeBundle } from '../engine/types.js';
 
 export class HeuristicAI implements PlayerController<GameState, Action, PlayerId> {
-  /** `aggressive: false` turns off attacking rivals (kept for comparison runs). */
-  constructor(private readonly opts: { aggressive?: boolean } = {}) {}
+  /** `aggressive: false` turns off attacking rivals and `defensive: false`
+   *  defending cities (both kept for comparison runs). */
+  constructor(private readonly opts: { aggressive?: boolean; defensive?: boolean } = {}) {}
 
   async selectAction(ctx: ControllerContext<GameState, Action, PlayerId>): Promise<Action> {
     const { state, actor, adapter } = ctx;
@@ -124,7 +125,7 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
         // A nation moves once per phase (§23), so everything worth doing this
         // turn goes into ONE order set: ferrying, gathering 6 tokens onto city
         // sites, and spreading surplus into fresh land.
-        const plan = planMovement(state, actor, this.opts.aggressive ?? true);
+        const plan = planMovement(state, actor, this.opts.aggressive ?? true, this.opts.defensive ?? true);
         if (plan) return plan;
 
         const moves = actions.filter((a) => a.type === 'move') as Extract<Action, { type: 'move' }>[];
@@ -209,15 +210,16 @@ const rivalsIn = (state: GameState, actor: PlayerId, aid: string) => {
  *  `after` tracks where everything ends up.
  *   1. Ferry spare tokens by ship to unoccupied land (ship moves go first:
  *      tokens that arrived overland may not embark, §23.51).
- *   2. Gather 6 tokens onto as many city sites as population can support
+ *   2. Defend (when defensive) any city a rival could storm this turn.
+ *   3. Gather 6 tokens onto as many city sites as population can support
  *      (6 per city + 2 per city in play, §25.2/§26.31), or 12 onto open land
  *      when there is no site to use and population is large.
- *   3. Attack (when aggressive): storm rival cities we can take while our own
+ *   4. Attack (when aggressive): storm rival cities we can take while our own
  *      cities stay supported, and throw surplus — tokens surplus removal would
  *      take anyway (§26.1) — at rival tokens on land we can clear.
- *   4. Spread the remaining surplus into empty land, toward city sites further
+ *   5. Spread the remaining surplus into empty land, toward city sites further
  *      off, then into our own areas with room. */
-function planMovement(state: GameState, actor: PlayerId, aggressive: boolean): Action | null {
+function planMovement(state: GameState, actor: PlayerId, aggressive: boolean, defensive: boolean): Action | null {
   const free: Record<string, number> = {};
   for (const [aid, a] of Object.entries(state.areas)) {
     const t = a.tokens[actor] ?? 0;
@@ -239,6 +241,7 @@ function planMovement(state: GameState, actor: PlayerId, aggressive: boolean): A
   const targets = new Set<string>(); // city sites being filled this turn
 
   // 1. Ships.
+  const sailed = new Set<string>(); // areas whose ship has made its voyage this turn
   const p = state.players[actor]!;
   const range = 4 + (p.advances.includes('clothmaking') ? 1 : 0);
   const astro = p.advances.includes('astronomy');
@@ -251,10 +254,50 @@ function planMovement(state: GameState, actor: PlayerId, aggressive: boolean): A
       const score = area.sustains + (citySiteIn(state, to) ? 3 : 0);
       if (score > bestScore) { bestScore = score; best = to; }
     }
-    if (best) shift(aid, best, Math.min(5, free[aid]! - 2), true);
+    if (best) { shift(aid, best, Math.min(5, free[aid]! - 2), true); sailed.add(aid); }
   }
 
-  // 2. Cities: gather 6 tokens onto as many printed city sites as population can
+  const metal = (id: string) => !!state.players[id]?.advances.includes('metalworking');
+  const eng = (id: string) => !!state.players[id]?.advances.includes('engineering');
+  /** Tokens a nation needs to storm a city of `def` (§24.31/§24.35). */
+  const toStorm = (att: string, def: string) => (eng(att) && !eng(def) ? 6 : eng(def) && !eng(att) ? 8 : 7);
+
+  // 2. Defence (§24.41: defenders must be beaten before a city can be stormed).
+  // A city a rival could storm this turn gets just enough defenders that too
+  // few attackers would survive to assault it. Defenders are lost to surplus
+  // removal afterwards (a city area holds no tokens, §26.1), so only the
+  // cheapest sufficient defence goes in, from neighbours that keep a token.
+  if (defensive) {
+    const acted = new Set(state.actedThisPhase);
+    for (const [aid, a] of Object.entries(state.areas)) {
+      if (a.city !== actor) continue;
+      const donors = land(aid).filter((n) => !state.areas[n]?.city && (free[n] ?? 0) > 1);
+      let need = 0;
+      for (const foe of Object.keys(state.players)) {
+        if (foe === actor) continue;
+        // Tokens already in the city, plus — if the rival has yet to move —
+        // what it could bring from next door (keeping one in each area).
+        const threat = (a.tokens[foe] ?? 0) + (acted.has(foe) ? 0
+          : land(aid).reduce((t, n) => t + Math.max(0, (state.areas[n]?.tokens[foe] ?? 0) - 1), 0));
+        const req = toStorm(foe, actor);
+        if (threat < req) continue;
+        let d = after[aid] ?? 0;
+        while (d < 8 && fight(threat, d, 0, metal(foe), metal(actor))[0] >= req) d++;
+        need = Math.max(need, d - (after[aid] ?? 0));
+      }
+      const spare = donors.reduce((t, n) => t + free[n]! - 1, 0);
+      if (need <= 0 || need > 5 || spare < need) continue;
+      const snapFree = { ...free }, snapAfter = { ...after }, snapMoves = moves.map((m) => ({ ...m }));
+      donors.sort((x, y) => ((after[y] ?? 0) - sustains(y)) - ((after[x] ?? 0) - sustains(x)));
+      let left = need;
+      for (const n of donors) { if (left <= 0) break; const k = Math.min(left, free[n]! - 1); shift(n, aid, k); left -= k; }
+      if (supportAfter(state, actor, after, targets) >= 2 * cityCount(state, actor)) { free[aid] = 0; continue; }
+      Object.assign(free, snapFree); for (const k of Object.keys(after)) after[k] = snapAfter[k] ?? 0;
+      moves.length = 0; moves.push(...snapMoves);
+    }
+  }
+
+  // 3. Cities: gather 6 tokens onto as many printed city sites as population can
   // support (6 to build + 2 support per city), from the site and its neighbours.
   // Failing any site, a large population may build on open land with 12 (§25.2).
   const pop = populationCount(state, actor);
@@ -292,15 +335,14 @@ function planMovement(state: GameState, actor: PlayerId, aggressive: boolean): A
     fields.some((aid) => tryGather(aid, 12));
   }
 
-  // 3. Attacks. Rivals are everyone else — other nations, human or AI, plus
+  // 4. Attacks. Rivals are everyone else — other nations, human or AI, plus
   // Barbarians and Pirates.
   if (aggressive) {
     const stormed = new Set<string>();
-    const metal = (id: string) => !!state.players[id]?.advances.includes('metalworking');
-    const eng = (id: string) => !!state.players[id]?.advances.includes('engineering');
     const leader = (id: string) => (state.players[id] ? cityCount(state, id) * 10 + state.players[id]!.astSpace : 0);
     // City storms (§24.3): the cheapest force that still takes the city, drawn
-    // from neighbours that each keep a token, while our own cities stay supported.
+    // from neighbours that each keep a token (and from ships in range), while
+    // our own cities stay supported.
     const rivalCities = areaIds.filter((aid) => {
       const a = state.areas[aid];
       return !!a?.city && a.city !== actor && Object.entries(a.tokens).every(([o, n]) => o === a.city || n <= 0);
@@ -309,18 +351,25 @@ function planMovement(state: GameState, actor: PlayerId, aggressive: boolean): A
       if (stormed.size >= 2) break;
       const def = state.areas[aid]!.city!;
       const pirate = !state.players[def];
-      const required = pirate ? (eng(actor) ? 6 : 7) : eng(actor) && !eng(def) ? 6 : eng(def) && !eng(actor) ? 8 : 7;
+      const required = pirate ? (eng(actor) ? 6 : 7) : toStorm(actor, def);
       const defenders = state.areas[aid]!.tokens[def] ?? 0;
       // Defending tokens fight first (§24.41); enough must survive to assault.
       let force = required;
       while (force < 20 && fight(force, defenders, 0, metal(actor), metal(def))[0] < required) force++;
       const donors = land(aid).filter((n) => !targets.has(n) && !state.areas[n]?.city && (free[n] ?? 0) > 1);
-      const spare = donors.reduce((t, n) => t + free[n]! - 1, 0);
+      // Ships within range can land up to 5 more each (§23.51) to make up the force.
+      const fleets = Object.keys(state.areas).filter((x) => (state.areas[x]!.ships?.[actor] ?? 0) > 0 && !sailed.has(x)
+        && !donors.includes(x) && (free[x] ?? 0) > 1 && navalDestinations(state, x, range, astro).has(aid));
+      const landSpare = donors.reduce((t, n) => t + free[n]! - 1, 0);
+      const spare = landSpare + fleets.reduce((t, x) => t + Math.min(5, free[x]! - 1), 0);
       if (spare < force || pop < force + 4 + 2 * (cities + targets.size)) continue;
       const snapFree = { ...free }, snapAfter = { ...after }, snapMoves = moves.map((m) => ({ ...m }));
+      const snapSailed = new Set(sailed);
       donors.sort((x, y) => ((after[y] ?? 0) - sustains(y)) - ((after[x] ?? 0) - sustains(x)));
       for (const n of donors) { const short = force - (after[aid] ?? 0); if (short <= 0) break; shift(n, aid, Math.min(short, free[n]! - 1)); }
+      for (const x of fleets) { const short = force - (after[aid] ?? 0); if (short <= 0) break; shift(x, aid, Math.min(short, 5, free[x]! - 1), true); sailed.add(x); }
       if (supportAfter(state, actor, after, targets) >= 2 * (cities + targets.size)) { stormed.add(aid); free[aid] = 0; continue; }
+      sailed.clear(); for (const x of snapSailed) sailed.add(x);
       Object.assign(free, snapFree); for (const k of Object.keys(after)) after[k] = snapAfter[k] ?? 0;
       moves.length = 0; moves.push(...snapMoves);
     }
@@ -356,7 +405,7 @@ function planMovement(state: GameState, actor: PlayerId, aggressive: boolean): A
     ring = next;
   }
 
-  // 4. Surplus: seed empty land (one token each), march toward city sites, then
+  // 5. Surplus: seed empty land (one token each), march toward city sites, then
   // top up our own areas that are below their limit.
   for (const pass of ['seed', 'march', 'fill'] as const) {
     for (const aid of Object.keys(free)) {

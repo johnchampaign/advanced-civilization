@@ -1533,17 +1533,17 @@ function floodAllocationSpec(s: GameState, holder: PlayerId, region: string[]): 
   return Object.keys(caps).length ? { calamityId: 'flood', holder, kind: 'unitPoints', pool: 10, caps, cityWorth: 5 } : null;
 }
 
-/** Slave Revolt (§30.42): 15 tokens can't support cities (Mining +5, Enlightenment
- *  −5, cancelling if both, §30.423); cities are reduced one at a time until the
- *  rest are supportable by the remaining (unlocked) tokens. */
 /** Slave Revolt (§30.42): withhold 15 tokens (Mining +5, Enlightenment −5,
  *  cancelling §30.423) from city support, then reduce cities one at a time — the
- *  victim chooses which (newly-built first, §26.32). Returns true if it paused for
- *  that choice; false if it resolved immediately (the event is then finalized by
- *  the caller). */
+ *  victim chooses which (newly-built first, §26.32). Only tokens already on the
+ *  board are withheld: with fewer than 15 there, just those are, and the tokens a
+ *  reduced city leaves behind always count for support (§30.422). Returns true if
+ *  it paused for that choice; false if it resolved immediately (the event is then
+ *  finalized by the caller). */
 function startSlaveRevolt(s: GameState, holder: PlayerId, before: ReturnType<typeof snapAreas>, overviewBefore: string): boolean {
   const p = player(s, holder);
-  const lock = Math.max(0, 15 + (has(p, 'mining') ? 5 : 0) - (has(p, 'enlightenment') ? 5 : 0));
+  const nominal = Math.max(0, 15 + (has(p, 'mining') ? 5 : 0) - (has(p, 'enlightenment') ? 5 : 0));
+  const lock = Math.min(nominal, populationCount(s, holder));
   log(s, 'calamity.slaverevolt', holder, `${holder} suffers Slave Revolt: ${lock} tokens withheld from city support (§30.42).`, { calamity: 'slaverevolt', withheld: lock });
   return reduceForSupport(s, holder, lock, { mode: 'slaverevolt', before, overviewBefore });
 }

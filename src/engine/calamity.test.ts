@@ -344,6 +344,23 @@ describe('advance modifiers on calamities (§30/§32)', () => {
     expect(s.pendingSupport).toBeUndefined(); // fully resolved
   });
 
+  it('Slave Revolt withholds only the tokens on the board; reduced cities\' tokens support (§30.422)', () => {
+    // 9 tokens on board, 3 cities: all 9 are withheld (not a flat 15), so the
+    // 4+ tokens a reduced city leaves behind support the other two cities.
+    const big = land.slice(1).filter((a) => a.sustains >= 4).slice(0, 3).map((a) => a.id);
+    let s = scenario({
+      tokens: { egypt: { [land[0]!.id]: 9 } },
+      cities: { egypt: big },
+      hands: { egypt: { 'calamity:slaverevolt': 1 } },
+    });
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    expect(s.pendingSupport?.mode).toBe('slaverevolt');
+    expect(s.pendingSupport?.lock).toBe(9);
+    s = adapter.applyAction(s, { type: 'chooseCities', areas: [s.pendingSupport!.candidates[0]!] }, 'egypt');
+    expect(s.pendingSupport).toBeUndefined(); // one reduction was enough
+    expect(cityCount(s, 'egypt')).toBe(2); // a flat 15 would have reduced all three
+  });
+
   it('Earthquake: Engineering reduces a city instead of destroying an area (§30.213)', () => {
     function quakePop(eng: boolean): number {
       let s = scenario({

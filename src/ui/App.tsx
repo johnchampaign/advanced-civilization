@@ -1651,6 +1651,10 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
     // scrapped, so they'd otherwise vanish from the panel — report 87b486cd).
     const fleet = Object.entries(state.areas).filter(([, a]) => (a.ships?.[actor] ?? 0) > 0)
       .map(([aid, a]) => { const n = a.ships![actor]!; const nb = Math.min(n, built[aid] ?? 0); return `${areaById.get(aid)?.name ?? aid}${n > 1 ? ` ×${n}` : ''}${nb ? ` (${nb === n ? '' : `${nb} `}new)` : ''}`; });
+    // Ships in an area still unpaid (mirrors the engine's count), so a button that
+    // covers several ships shows it's not done after one click (report 2dd860b0).
+    const unpaidIn = (aid: string) => Math.max(0, Math.min((state.areas[aid]?.ships?.[actor] ?? 0) - (built[aid] ?? 0)
+      - steps.filter((st) => st.kind === 'maintain' && st.area === aid).length, owed));
     const stepText = (st: (typeof steps)[number]) => st.kind === 'build'
       ? `built a ship in ${areaById.get(st.area)?.name} (paid ${[st.fromArea && `${st.fromArea} from population`, st.fromTreasury && `${st.fromTreasury} from treasury`].filter(Boolean).join(' + ')})`
       : st.kind === 'maintain' ? `maintained the ship in ${areaById.get(st.area)?.name} with a token from there`
@@ -1674,7 +1678,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
         {(scraps.length > 0 || levies.length > 0) && <>
           <span className="civ-lbl" style={{ color: '#cdc4ad' }}>You owe 1 token maintenance per ship you keep (§22.3) — {owed} unpaid, taken from treasury when you finish. Pay one from the ship's own area instead, or scrap a ship to avoid it:</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            {levies.map((m, i) => <button className="civ-btn" key={`m${i}`} style={{ fontSize: 11 }} onClick={() => onApply(m)}>⚓ Maintain ship in {areaById.get(m.area)?.name} — 1 pop from there</button>)}
+            {levies.map((m, i) => { const left = unpaidIn(m.area); return <button className="civ-btn" key={`m${i}`} style={{ fontSize: 11 }} onClick={() => onApply(m)}>⚓ Maintain {left > 1 ? 'a ship' : 'ship'} in {areaById.get(m.area)?.name}{left > 1 ? ` (${left} unpaid there)` : ''} — 1 pop from there</button>; })}
             {scraps.map((sc, i) => <button className="civ-btn" key={i} style={{ fontSize: 11 }} onClick={() => onApply(sc)}>✗ Scrap ship in {areaById.get(sc.area)?.name}</button>)}
           </div>
         </>}

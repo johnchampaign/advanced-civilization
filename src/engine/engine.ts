@@ -282,7 +282,7 @@ function growthCaps(s: GameState, id: PlayerId): Record<string, number> {
  *  automatically. If not, the growth is left for the player to *place* their
  *  limited stock where they choose (interactive), via `placeTokens`. */
 function setupPopulationExpansion(s: GameState): void {
-  s.expansion = { remaining: {}, caps: {} };
+  s.expansion = { remaining: {}, caps: {}, placed: {} };
   for (const id of astOrder(s)) { // §20.3: population increases in A.S.T. order
     const p = player(s, id);
     const caps = growthCaps(s, id);
@@ -312,13 +312,35 @@ function applyPlaceTokens(s: GameState, actor: PlayerId, placements: Record<stri
     if (n > rem || n > p.stock) throw new Error('not enough stock to place');
     s.areas[aid]!.tokens[actor] = (s.areas[aid]!.tokens[actor] ?? 0) + n;
     p.stock -= n; caps[aid] = (caps[aid] ?? 0) - n; rem -= n;
+    const mine = ((exp!.placed ??= {})[actor] ??= {});
+    mine[aid] = (mine[aid] ?? 0) + n;
   }
   exp!.remaining[actor] = rem;
   const placed = Object.entries(placements).filter(([, n]) => n > 0);
   if (placed.length) {
     log(s, 'tokens.place', actor, `${actor} placed ${placed.reduce((t, [, n]) => t + n, 0)} token${placed.reduce((t, [, n]) => t + n, 0) === 1 ? '' : 's'}: ${placed.map(([aid, n]) => `${areaName(aid)} +${n}`).join(', ')} (§18).`, { placements: Object.fromEntries(placed) });
   }
-  if (rem <= 0 || Object.values(caps).every((c) => c <= 0)) { if (!s.actedThisPhase.includes(actor)) s.actedThisPhase.push(actor); }
+  // The player stays on the clock after the last token so they can still reset;
+  // 'pass' (Done placing) confirms the placement (report 271f360c).
+}
+
+/** Return every token this player placed this phase to stock and restore their
+ *  growth capacity, so they can place again from scratch (report 271f360c). */
+function applyResetPlacement(s: GameState, actor: PlayerId): void {
+  const exp = s.expansion;
+  const placed = exp?.placed?.[actor];
+  const caps = exp?.caps[actor];
+  if (!exp || !caps || !placed || !Object.values(placed).some((n) => n > 0)) throw new Error('no placed tokens to take back');
+  const p = player(s, actor);
+  let total = 0;
+  for (const [aid, n] of Object.entries(placed)) {
+    if (n <= 0) continue;
+    setTokens(s, aid, actor, (s.areas[aid]?.tokens[actor] ?? 0) - n);
+    p.stock += n; caps[aid] = (caps[aid] ?? 0) + n; total += n;
+  }
+  exp.remaining[actor] = (exp.remaining[actor] ?? 0) + total;
+  exp.placed![actor] = {};
+  log(s, 'tokens.reset', actor, `${actor} takes back the ${total} token${total === 1 ? '' : 's'} placed and starts the placement over.`, { total });
 }
 
 function runCensus(s: GameState): void {
@@ -2817,6 +2839,10 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         if (s.phase !== 'populationExpansion') throw new Error('placeTokens only in population expansion');
         applyPlaceTokens(s, actor, action.placements);
         break;
+      case 'resetPlacement':
+        if (s.phase !== 'populationExpansion') throw new Error('resetPlacement only in population expansion');
+        applyResetPlacement(s, actor);
+        break;
       case 'move':
         if (s.phase !== 'movement') throw new Error('move only in movement phase');
         applyMovement(s, actor, action.moves, action.voyages);
@@ -3115,6 +3141,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         if ((state.expansion?.remaining[actor] ?? 0) > 0) {
           for (const [aid, cap] of Object.entries(caps)) if (cap > 0) out.push({ type: 'placeTokens', placements: { [aid]: 1 } });
         }
+        if (Object.values(state.expansion?.placed?.[actor] ?? {}).some((n) => n > 0)) out.push({ type: 'resetPlacement' });
         break;
       }
       case 'shipConstruction': {

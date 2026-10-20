@@ -687,6 +687,37 @@ describe('population expansion (§13 placement when stock-limited)', () => {
       s = adapter.applyAction(s, legal[0]!, 'egypt');
     }
     expect(s.players['egypt']!.stock).toBe(0);
-    expect(s.phase).not.toBe('populationExpansion'); // all placed — the phase moves on
+    // All placed: the player confirms (or resets) before the phase moves on.
+    expect(adapter.currentActor(s)).toBe('egypt');
+    s = adapter.applyAction(s, { type: 'pass' }, 'egypt');
+    expect(s.phase).not.toBe('populationExpansion');
+  });
+
+  it('a stock-short player can reset their placement and start over (report 271f360c)', async () => {
+    const { areas } = await import('../data/index.js');
+    let s = createGame({ players: ['egypt', 'babylon'], seed: 7 });
+    const ids = areas.filter((a) => !a.isWater).slice(0, 8).map((a) => a.id);
+    s.areas = {} as typeof s.areas;
+    for (const a of ids) s.areas[a] = { tokens: { egypt: 2 } };
+    s.players['egypt']!.stock = 3; s.players['egypt']!.treasury = 20;
+    s.players['babylon']!.stock = 4; s.players['babylon']!.treasury = 20;
+    s.phase = 'taxation'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    setupTaxation(s);
+    normalize(s);
+    const capsBefore = { ...s.expansion!.caps['egypt']! };
+    expect(adapter.legalActions(s, 'egypt').some((a) => a.type === 'resetPlacement')).toBe(false);
+    const first = ids[0]!;
+    for (let i = 0; i < 2; i++) s = adapter.applyAction(s, { type: 'placeTokens', placements: { [first]: 1 } }, 'egypt');
+    s = adapter.applyAction(s, { type: 'placeTokens', placements: { [ids[1]!]: 1 } }, 'egypt');
+    expect(s.players['egypt']!.stock).toBe(0);
+    expect(adapter.legalActions(s, 'egypt').some((a) => a.type === 'resetPlacement')).toBe(true);
+    s = adapter.applyAction(s, { type: 'resetPlacement' }, 'egypt');
+    expect(s.phase).toBe('populationExpansion');
+    expect(s.players['egypt']!.stock).toBe(3);
+    expect(s.expansion!.remaining['egypt']).toBe(3);
+    expect(s.expansion!.caps['egypt']).toEqual(capsBefore);
+    expect(s.areas[first]!.tokens['egypt']).toBe(2);
+    expect(s.areas[ids[1]!]!.tokens['egypt']).toBe(2);
+    expect(adapter.legalActions(s, 'egypt').some((a) => a.type === 'pass')).toBe(false); // must place again
   });
 });

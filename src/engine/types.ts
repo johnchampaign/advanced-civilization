@@ -413,6 +413,9 @@ export interface GameState {
     remaining: Record<PlayerId, number>;
     /** Per-player remaining growth capacity per area (area -> tokens it may still gain). */
     caps: Record<PlayerId, Record<string, number>>;
+    /** Tokens each player has placed so far this phase (area -> count), so
+     *  `resetPlacement` can take them all back. */
+    placed?: Record<PlayerId, Record<string, number>>;
   };
   /** The most recent calamity phase's outcomes, one per calamity, so the UI can
    *  show a step-by-step modal. Overwritten each calamity phase; empty if none. */
@@ -499,6 +502,12 @@ export interface PlaceTokensAction {
   type: 'placeTokens';
   /** area id -> tokens to add (population expansion / placement). */
   placements: Record<string, number>;
+}
+
+/** Take back every token placed so far this population expansion and start the
+ *  placement over (allowed until you confirm with 'pass' — report 271f360c). */
+export interface ResetPlacementAction {
+  type: 'resetPlacement';
 }
 
 /** One stop of a ship voyage (§23.5). `steps[0]` is where the ship starts;
@@ -740,6 +749,7 @@ export type Action =
   | ScrapShipAction
   | MaintainShipAction
   | UndoShipAction
+  | ResetPlacementAction
   | ResolveConflictAction
   | BuildCityAction
   | TradeAcquisitionAction

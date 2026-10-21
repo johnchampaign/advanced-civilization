@@ -398,8 +398,12 @@ export interface GameState {
     /** Monotonic id source for offers. */
     nextOfferId?: number;
     /** Players who have passed ("Done trading") — skipped for the rest of the
-     *  phase so they aren't repeatedly prompted; the phase ends when all are done. */
+     *  phase so they aren't repeatedly prompted; the phase ends when all are done.
+     *  A response to a done player's standing offer brings them back to decide. */
     done?: PlayerId[];
+    /** Consecutive "wait" turns with no offer, response, deal or withdrawal in
+     *  between; once every player still trading has waited, the phase ends. */
+    waitStreak?: number;
     /** Standing open offers anyone may respond to. */
     offers: OpenOffer[];
     /** Deals executed this phase (for the Trade Details review). */
@@ -607,6 +611,12 @@ export interface WithdrawOfferAction {
   type: 'withdrawOffer';
 }
 
+/** Let this trading turn go by without leaving the trade phase (unlike `pass`,
+ *  "Done trading"): see what the others offer and trade later in the phase. */
+export interface TradeWaitAction {
+  type: 'tradeWait';
+}
+
 /** Buy a Gold/Ivory card from stack 9 at 18 treasury tokens (§27.5). */
 export interface BuyTradeCardAction {
   type: 'buyTradeCard';
@@ -757,6 +767,7 @@ export type Action =
   | RespondOfferAction
   | AcceptResponseAction
   | WithdrawOfferAction
+  | TradeWaitAction
   | BuyTradeCardAction
   | ResolveCalamityAction
   | BuyAdvanceAction

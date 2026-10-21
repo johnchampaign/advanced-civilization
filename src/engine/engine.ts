@@ -2223,7 +2223,11 @@ function enterPhase(s: GameState, phase: Phase): void {
       : [...census];
     s.actedThisPhase = [];
     if (phase === 'trade') {
-      s.negotiation = { turnPointer: 0, passStreak: 0, actions: 0, nextOfferId: 0, done: [], offers: [], completed: [] };
+      // Trading has no turn order in the rules (§28); the digital round-robin
+      // opens with a different nation each turn, so the census leader isn't
+      // always the one proposing before seeing anyone else's offer (report 102e774c).
+      const opener = Math.max(0, s.turn - 1) % Math.max(1, s.activeOrder.length);
+      s.negotiation = { turnPointer: opener, passStreak: 0, actions: 0, nextOfferId: 0, done: [], offers: [], completed: [], waitStreak: 0 };
     }
     if (phase === 'shipConstruction') setupShipMaintenance(s); // §22.3: snapshot owed maintenance (paid when each player finishes)
     if (phase === 'taxation') setupTaxation(s); // §19: auto-tax non-Coinage; Coinage holders pick
@@ -2627,9 +2631,11 @@ function applyBuyAdvance(s: GameState, actor: PlayerId, advanceIds: string[], sp
 function tradePhaseEnded(s: GameState): boolean {
   const n = s.negotiation;
   const cap = 12 * Math.max(1, s.activeOrder.length);
-  // Phase ends once every player has passed ("Done trading"), or the cap is hit.
+  // Phase ends once every player has passed ("Done trading"), or the cap is hit,
   const done = n.done ?? [];
-  return s.activeOrder.every((p) => done.includes(p)) || (n.actions ?? 0) >= cap;
+  const trading = s.activeOrder.filter((p) => !done.includes(p));
+  // …or everyone still in has let a whole round go by with nothing new.
+  return trading.length === 0 || (n.actions ?? 0) >= cap || (n.waitStreak ?? 0) >= trading.length;
 }
 
 const commodityName = (c: string) => (isCalamityCard(c) ? calamityById.get(calamityIdOf(c))?.name ?? c : commodityById.get(c)?.name ?? c);
@@ -2659,6 +2665,13 @@ function applyRespondOffer(s: GameState, actor: PlayerId, a: { offerId: number; 
   if (err) throw new Error(`respondOffer: ${err}`);
   o.responses = o.responses.filter((r) => r.from !== actor);
   o.responses.push({ from: actor, give: a.give });
+  // The offer's owner may already be done trading; bring them back to accept
+  // or decline, or the responder is left hanging (report 102e774c).
+  const n = s.negotiation;
+  if ((n.done ?? []).includes(o.from)) {
+    n.done = n.done!.filter((p) => p !== o.from);
+    log(s, 'trade.wake', o.from, `${o.from} rejoins trading to answer ${actor}'s response.`, { by: actor, offerId: o.id });
+  }
   s.negotiation.actions = (s.negotiation.actions ?? 0) + 1;
   s.negotiation.passStreak = 0;
   log(s, 'trade.respond', actor, `${actor} responds to ${o.from}'s offer.`, { to: o.from, offerId: o.id });
@@ -2803,21 +2816,31 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         if (s.phase !== 'trade') throw new Error('postOffer only in trade phase');
         applyPostOffer(s, actor, action);
         s.negotiation.turnPointer += 1;
+        s.negotiation.waitStreak = 0;
         break;
       case 'respondOffer':
         if (s.phase !== 'trade') throw new Error('respondOffer only in trade phase');
         applyRespondOffer(s, actor, action);
         s.negotiation.turnPointer += 1;
+        s.negotiation.waitStreak = 0;
         break;
       case 'acceptResponse':
         if (s.phase !== 'trade') throw new Error('acceptResponse only in trade phase');
         applyAcceptResponse(s, actor, action);
         s.negotiation.turnPointer += 1;
+        s.negotiation.waitStreak = 0;
         break;
       case 'withdrawOffer':
         if (s.phase !== 'trade') throw new Error('withdrawOffer only in trade phase');
         applyWithdrawOffer(s, actor);
         s.negotiation.turnPointer += 1;
+        s.negotiation.waitStreak = 0;
+        break;
+      case 'tradeWait':
+        if (s.phase !== 'trade') throw new Error('tradeWait only in trade phase');
+        s.negotiation.waitStreak = (s.negotiation.waitStreak ?? 0) + 1;
+        s.negotiation.turnPointer += 1;
+        log(s, 'trade.wait', actor, `${actor} waits to see the others' offers.`, {});
         break;
       case 'buyTradeCard':
         // §27.51: only right after you collect your own trade cards.
@@ -3284,6 +3307,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
         // acceptResponse) and are constructed by the UI/AI, not enumerated; the
         // safe exit is pass (already added). Gold/Ivory is bought during trade-
         // card collection, not here (§27.51).
+        out.push({ type: 'tradeWait' });
         break;
       }
     }

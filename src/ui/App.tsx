@@ -2521,9 +2521,11 @@ function TradeControls({ state, actor, onApply }: { state: GameState; actor: Pla
         ))}
       </div>
 
-      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button className="civ-btn" onClick={() => onApply({ type: 'tradeWait' })}>Wait — see what others offer</button>
         <button className="civ-btn" onClick={() => onApply({ type: 'pass' })}>Done trading (pass)</button>
       </div>
+      <div className="civ-lbl">Waiting keeps you in: your turn comes round again after the others have had theirs, so you can answer new offers and see who's dealing. Trading ends when everyone is done, or a full round goes by with nothing new.</div>
     </div>
   );
 }
@@ -2626,9 +2628,13 @@ function StepModal({ token, pages, accent }: { token: string; pages: ReactNode[]
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(8,6,3,0.82)', display: 'grid', placeItems: 'center', zIndex: 120 }}>
       <div style={{ background: '#211c14', color: '#eee', padding: 22, borderRadius: 12, border: `2px solid ${accent}`, width: 500, maxWidth: '92vw', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 8px 40px #000' }}>
         {pages[idx]}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 16 }}>
           <span className="civ-lbl" style={{ color: '#9a8d6a' }}>{idx + 1} / {pages.length}</span>
-          <button className="civ-btn" onClick={() => (last ? setSeen(token) : setI((x) => x + 1))}>{last ? 'Continue' : 'Acknowledge →'}</button>
+          <span style={{ display: 'flex', gap: 6 }}>
+            {/* The full story stays in the log; no need to click through every page (report 102e774c). */}
+            {!last && <button className="civ-btn" onClick={() => setSeen(token)}>Skip the rest</button>}
+            <button className="civ-btn" onClick={() => (last ? setSeen(token) : setI((x) => x + 1))}>{last ? 'Continue' : 'Acknowledge →'}</button>
+          </span>
         </div>
       </div>
     </div>

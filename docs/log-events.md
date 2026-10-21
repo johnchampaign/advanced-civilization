@@ -87,6 +87,8 @@ The engine's `state.log` is an array of the framework's `GameLogEntry<PlayerId>`
 | `trade.cards.draw` | `{count, cities}` |
 | `trade.offer` | `{gives, wants: string[]}` |
 | `trade.respond` | `{to, offerId}` |
+| `trade.wake` | `{by, offerId}` — a done player is brought back because someone responded to their standing offer |
+| `trade.wait` | `{}` — the player let their trading turn go by without leaving the phase |
 | `trade.offer.expire` / `trade.response.expire` | — |
 | `trade.complete` | `{with, gave, got}` (counts only — §28 keeps contents private) |
 | `trade.buyNinth` | `{count, cost}` (§27.51 — bought right after the buyer collects their trade cards) |

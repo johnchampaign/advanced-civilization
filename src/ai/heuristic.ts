@@ -17,7 +17,7 @@
 
 import type { PlayerController, ControllerContext } from 'digital-boardgame-framework';
 import { advanceById, areaById, calamityById, civById, commodityById } from '../data/index.js';
-import { bundleFace, cardGroupsHeld, cityCount, citySiteIn, commoditySetValue, creditTowards, handValue, navalDestinations, neighbors, populationCount } from '../engine/helpers.js';
+import { bundleFace, cardGroupsHeld, cityCount, citySiteIn, commoditySetValue, creditTowards, handValue, landNeighbors, navalDestinations, neighbors, populationCount } from '../engine/helpers.js';
 import type { Action, GameState, PlayerId, TradeBundle } from '../engine/types.js';
 
 export class HeuristicAI implements PlayerController<GameState, Action, PlayerId> {
@@ -251,7 +251,7 @@ function planMovement(state: GameState, actor: PlayerId, aggressive: boolean, de
   for (const [aid, a] of Object.entries(state.areas)) {
     if ((a.ships?.[actor] ?? 0) <= 0 || (free[aid] ?? 0) < 3) continue;
     let best: string | null = null, bestScore = 0;
-    for (const to of navalDestinations(state, aid, range, astro)) {
+    for (const to of overseas(state, aid, range, astro)) {
       const area = areaById.get(to);
       if (!area || area.isWater || (after[to] ?? 0) > 0 || rivalsIn(state, actor, to)) continue;
       const score = area.sustains + (citySiteIn(state, to) ? 3 : 0);
@@ -683,13 +683,22 @@ function shipCount(state: GameState, actor: PlayerId): number {
   return n;
 }
 
+/** Land a ship at `aid` can carry tokens to that they couldn't walk to in the
+ *  same move — a hop to an area `aid` borders by land is a wasted ship (e.g.
+ *  Elam to Nineveh across their shared lake, report 03a70fab). */
+function overseas(state: GameState, aid: string, range: number, astro: boolean): Set<string> {
+  const walk = new Set(landNeighbors(state, aid));
+  return new Set([...navalDestinations(state, aid, range, astro)].filter((to) => !walk.has(to)));
+}
+
 /** Whether a ship in `aid` earns its upkeep: at least 3 of our tokens there to
- *  carry (two stay behind, see planMovement) and unoccupied land within range. */
+ *  carry (two stay behind, see planMovement) and unoccupied land within range
+ *  that can't be reached on foot. */
 function shipUseful(state: GameState, actor: PlayerId, aid: string, tokensThere: number): boolean {
   if (tokensThere < 3) return false;
   const p = state.players[actor]!;
   const range = 4 + (p.advances.includes('clothmaking') ? 1 : 0);
-  return [...navalDestinations(state, aid, range, p.advances.includes('astronomy'))].some((to) => {
+  return [...overseas(state, aid, range, p.advances.includes('astronomy'))].some((to) => {
     const area = areaById.get(to);
     return !!area && !area.isWater && area.sustains > 0 && !Object.values(state.areas[to]?.tokens ?? {}).some((n) => n > 0) && !state.areas[to]?.city;
   });

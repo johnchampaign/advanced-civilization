@@ -298,6 +298,26 @@ describe('heuristic AI: movement and advances (reports 341f4378 / 9b9885cd)', ()
     expect(action).toEqual({ type: 'scrapShip', area: 'niniveh' });
   });
 
+  it("won't build a ship just to carry tokens to a land neighbour (report 03a70fab)", async () => {
+    // Elam's lake reaches Nineveh and Lesser Armenia, but both border Elam by
+    // land; everything only a ship could reach is taken.
+    const s = createGame({ players: ['assyria', 'babylon'], seed: 1, maxTurns: 60 });
+    s.areas = {
+      elam: { tokens: { assyria: 5 } },
+      armenia: { tokens: { babylon: 1 } }, caucasus: { tokens: { babylon: 1 } }, nisa: { tokens: { babylon: 1 } },
+    };
+    s.players['assyria']!.stock = pieceCounts.tokens - 5; s.players['assyria']!.treasury = 10;
+    s.players['babylon']!.stock = pieceCounts.tokens - 3;
+    s.phase = 'shipConstruction'; s.activeOrder = ['assyria', 'babylon']; s.actedThisPhase = [];
+    s.shipMaintOwed = { assyria: 0, babylon: 0 }; s.shipsBuiltThisPhase = {}; s.shipSteps = {};
+    const action = await ai.selectAction({ state: s, actor: 'assyria', adapter, rng: new Rng(1) });
+    expect(action.type).toBe('pass');
+    // With Nisa open the lake ship is worth having.
+    s.areas['nisa'] = { tokens: {} };
+    const again = await ai.selectAction({ state: s, actor: 'assyria', adapter, rng: new Rng(1) });
+    expect(again.type).toBe('buildShips');
+  });
+
   it('pays for a new ship from treasury so the shore keeps tokens to sail', async () => {
     const { areas, adjacency, areaById } = await import('../data/index.js');
     const coast = areas.find((a) => !a.isWater && a.sustains > 0 && (adjacency[a.id] ?? []).some((n) => areaById.get(n)?.isWater))!;

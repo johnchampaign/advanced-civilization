@@ -48,6 +48,13 @@ describe('auto-skip forced passes (report dcd9894a)', () => {
     expect(adapter.currentActor(s)).toBe('egypt');
   });
 
+  it('says how close a skipped advance purchase came (reports 39b39ef9, a11b0bfb)', () => {
+    const s = at('acquireAdvances', (st) => { st.players['egypt']!.hand = { ochre: 2 }; st.players['egypt']!.treasury = 10; st.players['egypt']!.stock -= 10; });
+    const msg = s.log.find((e) => e.kind === 'phase.skip' && e.side === 'egypt')!.msg;
+    // Two Ochre are worth 4 (a set of two Ochre: 2 × 2 × 1), plus 10 treasury.
+    expect(msg).toMatch(/no advance is affordable \(cheapest: .+ at \d+ after credits; cards and treasury total 14\)/);
+  });
+
   it('skips trading under §28.3: fewer than three tradable cards, or nobody to trade with', () => {
     // egypt has 2 cards: may not trade. babylon has 5 but then no partner left.
     const s = at('trade', (st) => { st.players['egypt']!.hand = { salt: 2 }; st.players['babylon']!.hand = { iron: 3, wine: 2 }; });

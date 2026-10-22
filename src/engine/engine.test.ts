@@ -488,6 +488,19 @@ describe('advance refinements (§32.261/.631/.251)', () => {
     expect(adapter.legalActions(s, 'egypt').some((a) => a.type === 'buildCity' && a.area === sites[1]!)).toBe(false);
   });
 
+  it('Architecture is not offered where another player has tokens (§32.631)', async () => {
+    const { areas } = await import('../data/index.js');
+    const site = areas.find((a) => !a.isWater && a.isCitySite)!.id;
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 7 });
+    s.areas = { [site]: { tokens: { egypt: 4, babylon: 1 } } } as typeof s.areas;
+    s.players['egypt']!.advances = ['architecture'];
+    s.players['egypt']!.treasury = 20; s.players['egypt']!.citiesAvailable = 9;
+    s.phase = 'cityConstruction'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    expect(adapter.legalActions(s, 'egypt').some((a) => a.type === 'buildCity' && a.area === site)).toBe(false);
+    s.areas[site]!.tokens = { egypt: 4 }; // alone there: 4 on-board + 2 treasury
+    expect(adapter.legalActions(s, 'egypt')).toContainEqual({ type: 'buildCity', area: site, useTreasury: 2 });
+  });
+
   it('Roadbuilding cannot pass through an area holding an enemy city (§32.251)', async () => {
     const { adjacency, areaById } = await import('../data/index.js');
     const isLand = (id: string) => !areaById.get(id)?.isWater;

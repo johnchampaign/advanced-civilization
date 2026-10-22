@@ -68,6 +68,7 @@ import {
   type PendingUnitLoss,
   type Phase,
   type PlayerId,
+  type PlayerState,
   type SecondaryLoss,
   type UnitSet,
 } from './types.js';
@@ -2351,6 +2352,31 @@ function tradableCards(s: GameState, id: PlayerId): number {
   return Object.entries(player(s, id).hand).reduce((t, [c, n]) => t + (n > 0 && isGivable(c) ? n : 0), 0);
 }
 
+/** Commodity cards a player may spend on advances: not calamity cards, and not
+ *  Grain locked against Famine this turn (§30.312). */
+function spendableHand(p: PlayerState): Record<string, number> {
+  const commHand: Record<string, number> = {};
+  for (const [c, n] of Object.entries(p.hand)) if (!isCalamityCard(c) && n > 0) commHand[c] = n;
+  if (commHand['grain']) { commHand['grain'] -= (p.grainLockedThisTurn ?? 0); if (commHand['grain'] <= 0) delete commHand['grain']; }
+  return commHand;
+}
+
+/** For an auto-skipped advance purchase: how close the player came, so a
+ *  "no advance is affordable" skip isn't a mystery to a player holding a big
+ *  hand (reports 39b39ef9, a11b0bfb). Empty when nothing is left to buy. */
+function closestAdvanceNote(p: PlayerState): string {
+  const creditEligible = p.advances.filter((a) => !(p.advancesThisTurn ?? []).includes(a));
+  const have = handValue(spendableHand(p), { mining: miningAvailable(p) }) + p.treasury;
+  let best: { name: string; need: number } | null = null;
+  for (const adv of advanceById.values()) {
+    if (has(p, adv.id)) continue;
+    if ((adv.prerequisites ?? []).some((pre) => !has(p, pre) || (p.advancesThisTurn ?? []).includes(pre))) continue;
+    const need = adv.cost - creditTowards(creditEligible, adv.id);
+    if (!best || need < best.need) best = { name: adv.name, need };
+  }
+  return best ? ` (cheapest: ${best.name} at ${best.need} after credits; cards and treasury total ${have})` : '';
+}
+
 let _probe: CivAdapter | undefined;
 
 /** If the player on the clock has nothing to do but pass, the reason why — the
@@ -2377,7 +2403,7 @@ function forcedSkip(s: GameState): { actor: PlayerId; reason: string } | null {
   const legal = (_probe ??= new CivAdapter()).legalActions(s, actor);
   if (!legal.length || legal.some((a) => a.type !== 'pass')) return null;
   const reason = s.phase === 'cityConstruction' ? 'no city can be built'
-    : s.phase === 'acquireAdvances' ? ((player(s, actor).advancesThisTurn ?? []).length ? 'nothing more is affordable' : 'no advance is affordable')
+    : s.phase === 'acquireAdvances' ? ((player(s, actor).advancesThisTurn ?? []).length ? 'nothing more is affordable' : 'no advance is affordable') + closestAdvanceNote(player(s, actor))
     : 'no ship can be built';
   return { actor, reason };
 }
@@ -3235,7 +3261,9 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
           const onBoard = a.tokens[actor] ?? 0;
           // §32.631: Architecture assists only ONE city per turn — don't offer a
           // treasury-assisted build the player can't actually make (a dead button).
-          const arch = has(p, 'architecture') && !p.builtWithTreasuryThisTurn;
+          // Nor where another player or Barbarians have tokens (§32.631/§25.3).
+          const shared = Object.entries(a.tokens).some(([o, n]) => o !== actor && (n ?? 0) > 0);
+          const arch = has(p, 'architecture') && !p.builtWithTreasuryThisTurn && !shared;
           const maxTreasury = arch ? Math.min(Math.floor(required / 2), p.treasury) : 0;
           const reachable = onBoard + maxTreasury >= required;
           if (reachable && p.citiesAvailable > 0) {
@@ -3247,9 +3275,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
       case 'acquireAdvances': {
         // Only commodity cards are spendable currency (not calamity cards). §30.312:
         // Grain locked against Famine this turn isn't spendable either.
-        const commHand: Record<string, number> = {};
-        for (const [c, n] of Object.entries(p.hand)) if (!isCalamityCard(c) && n > 0) commHand[c] = n;
-        if (commHand['grain']) { commHand['grain'] -= (p.grainLockedThisTurn ?? 0); if (commHand['grain'] <= 0) delete commHand['grain']; }
+        const commHand = spendableHand(p);
         const creditEligible = p.advances.filter((a) => !(p.advancesThisTurn ?? []).includes(a)); // §31.53
         for (const adv of advanceById.values()) {
           if (has(p, adv.id)) continue;

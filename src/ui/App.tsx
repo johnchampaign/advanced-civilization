@@ -1702,18 +1702,26 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
     const supportAfter = (buildArea: string) => Object.entries(state.areas)
       .filter(([aid]) => aid !== buildArea)
       .reduce((sum, [aid, a]) => sum + Math.min(a.tokens[actor] ?? 0, a.city ? 0 : areaLimitFor(state, aid, actor)), 0); // engine's §26.1 limit (Agriculture +1)
+    const p = state.players[actor]!;
+    // §32.631 Architecture: treasury may make up to half of ONE city per turn.
+    const archReady = p.advances.includes('architecture') && !p.builtWithTreasuryThisTurn;
+    const anyUnsupported = builds.some((b) => supportAfter(b.area) < 2 * (cities + 1));
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {builds.length === 0 && <span className="civ-lbl">No city can be built (need 6 tokens on a city site).</span>}
-        <span className="civ-lbl">A city needs <b>2 supporting tokens elsewhere</b> on the board (§26.31) — tokens left in the city's own area are returned to stock.</span>
+        {builds.length === 0 && <span className="civ-lbl">No city can be built (need 6 tokens on a city site{archReady ? ', or 3 with Architecture and 3 treasury' : ''}).</span>}
+        {builds.length > 0 && !anyUnsupported
+          ? <span className="civ-lbl">✓ You have enough supporting tokens elsewhere for any one of these cities (§26.31: 2 per city).</span>
+          : <span className="civ-lbl">A city needs <b>2 supporting tokens elsewhere</b> on the board (§26.31) — tokens left in the city's own area are returned to stock.{anyUnsupported ? ' Builds marked ⚠ would be lost for lack of support.' : ''}</span>}
+        {archReady && <span className="civ-lbl">Architecture: one city this turn may be built with up to half its tokens from treasury ({p.treasury} in treasury) (§32.631).</span>}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
           {builds.map((b, i) => {
             const unsupported = supportAfter(b.area) < 2 * (cities + 1);
+            const fromTreasury = b.useTreasury ?? 0;
             return (
               <button className="civ-btn" key={i} style={unsupported ? { borderColor: '#c0392b' } : undefined} {...peek(b.area)}
                 title={unsupported ? 'You lack 2 supporting tokens elsewhere — this city would be reduced immediately (§26.31).' : ''}
                 onClick={() => { if (!unsupported || confirm(`You don't have 2 supporting tokens elsewhere, so the city in ${areaById.get(b.area)?.name} will be lost immediately (§26.31). Build anyway?`)) onApply(b); }}>
-                Build city in {areaById.get(b.area)?.name}{unsupported ? ' ⚠' : ''}
+                Build city in {areaById.get(b.area)?.name}{fromTreasury > 0 ? ` (Architecture: ${fromTreasury} from treasury)` : ''}{unsupported ? ' ⚠' : ''}
               </button>
             );
           })}

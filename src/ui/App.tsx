@@ -253,8 +253,14 @@ export default function App() {
   const onPlaceClick = useCallback((area: string | null) => { if (area && (placeCaps[area] ?? 0) > 0) apply({ type: 'placeTokens', placements: { [area]: 1 } }); }, [placeCaps, apply]);
 
   const boardRef = useRef<HTMLDivElement>(null);
+  const recenterKey = useRef('');
   useEffect(() => {
     if (view !== 'map') return;
+    // Finishing a move clears the origin; don't yank the view back to the
+    // nation's heartland every time (report df6826ad) — only recenter on the
+    // homeland when the actor, phase or view actually changes.
+    if (inMovement && !planner.origin && recenterKey.current === `${actor}|${state.phase}|${view}`) return;
+    recenterKey.current = `${actor}|${state.phase}|${view}`;
     const target = inMovement && planner.origin ? planner.origin : (actor ? nationFocusArea(state, actor) : null);
     const t = setTimeout(() => scrollBoardTo(boardRef.current, target), 60);
     return () => clearTimeout(t);
@@ -1905,6 +1911,13 @@ function CivilWarControls({ state, legal, onApply }: { state: GameState; legal: 
       <span className="civ-lbl">{victimSelect
         ? <>Select <b>{target}</b> unit points of your own to form the first faction (§30.4121). Keep your weakest here — you'll choose which faction to keep at the end.</>
         : <>Seize <b>{target}</b> of <b style={{ color: nationColor(cw.victim) }}>{nationName(cw.victim)}</b>'s units to complete the first faction (§30.4123) — take their strongest.</>}</span>
+      {/* Units the victim already put into the first faction aren't listed below;
+          say what they were so a missing city isn't a mystery (report 7e1ef278). */}
+      {!victimSelect && fpts(cw.faction1) > 0 && (
+        <span className="civ-lbl" {...peek(factionAreas(cw.faction1))} style={{ color: '#9a8d6a' }}>
+          Already in the first faction (chosen by {nationName(cw.victim)}): {fpts(cw.faction1)} pts — {factionDesc(cw.faction1)}. Their remaining units are listed below.
+        </span>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: '30vh', overflowY: 'auto' }}>
         {inv.map((x) => (
           <div key={x.aid + (x.city ? ':c' : '')} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

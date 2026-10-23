@@ -120,10 +120,16 @@ export function OnlineGame({ gameId, token }: { gameId: string; token: string })
   const planner = useMovementPlanner(game.view ?? EMPTY_STATE, moveActor, game.legalActions, submitAction);
 
   const boardRef = useRef<HTMLDivElement>(null);
+  const recenterKey = useRef('');
   useEffect(() => {
     if (!game.view || view !== 'map') return;
     const me = (game.you ?? game.view.seating[0]!) as PlayerId;
     const inMove = !!game.yourTurn && game.view.phase === 'movement';
+    // Finishing a move clears the origin; keep the view where it is rather than
+    // snapping back to the homeland (report df6826ad).
+    const key = `${game.view.phase}|${game.yourTurn}|${game.you}|${view}`;
+    if (inMove && !planner.origin && recenterKey.current === key) return;
+    recenterKey.current = key;
     const target = inMove && planner.origin ? planner.origin : nationFocusArea(game.view, me);
     const t = setTimeout(() => scrollBoardTo(boardRef.current, target), 60);
     return () => clearTimeout(t);

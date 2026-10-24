@@ -2337,11 +2337,14 @@ function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: Pla
  *  must be ones you're really giving — and for the rest either say nothing or
  *  make a non-binding claim (true or a bluff). Used both to post an offer and
  *  to respond to one. */
-function OfferBuilder({ me, submitLabel, onSubmit, wantPicker }: {
+function OfferBuilder({ me, submitLabel, onSubmit, wantPicker, receive }: {
   me: { hand: Record<string, number> };
   submitLabel: string;
   onSubmit: (give: TradeBundle, wants: string[]) => void;
   wantPicker: boolean;
+  /** When responding: the offer's bundle, so the builder can show a live
+   *  hand-value gain (if its claims are true) as cards are added. */
+  receive?: TradeBundle;
 }) {
   const [give, setGive] = useState<Record<string, number>>({});
   const [guar, setGuar] = useState<Record<string, number>>({}); // card -> how many of it are named (guaranteed)
@@ -2374,6 +2377,16 @@ function OfferBuilder({ me, submitLabel, onSubmit, wantPicker }: {
   const bumpGuar = (c: string, d: number) => setGuar((g) => ({ ...g, [c]: Math.max(0, Math.min(give[c] ?? 0, (g[c] ?? 0) + d)) }));
   const toggleWant = (c: string) => setWants((w) => (w.includes(c) ? w.filter((x) => x !== c) : w.length < 5 ? [...w, c] : w));
   const submit = () => { onSubmit({ actual: give, declared, count: total, claimed }, wants); setGive({}); setGuar({}); setClaim({}); setWants([]); };
+  // Live value of the deal if the offer's claims are true: lose the cards
+  // you're adding, gain its named + claimed cards (same sum as on responses).
+  const gain = (() => {
+    if (!receive) return null;
+    const rf = bundleFace(receive);
+    const after = { ...me.hand };
+    for (const [c, k] of Object.entries(give)) { after[c] = (after[c] ?? 0) - k; if (after[c]! <= 0) delete after[c]; }
+    for (const m of [rf.guaranteed, rf.claimed]) for (const [c, k] of Object.entries(m)) after[c] = (after[c] ?? 0) + k;
+    return handValue(after) - handValue(me.hand);
+  })();
   const hint = total < 3 ? 'Pick at least 3 cards to give.' : named < 2 ? 'Name at least 2 of the cards you give — named cards are guaranteed (§28.3).' : !wantsOk ? 'Pick 1–5 commodities you want.' : '';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, border: '1px solid #7a4a18', borderRadius: 4, padding: 6 }}>
@@ -2420,6 +2433,9 @@ function OfferBuilder({ me, submitLabel, onSubmit, wantPicker }: {
             {COMMODITY_ORDER.map((c) => <button key={c} className={`civ-btn ${wants.includes(c) ? 'on' : ''}`} style={{ padding: '0 6px', fontSize: 11 }} onClick={() => toggleWant(c)}>{commodityById.get(c)?.name}</button>)}
           </div>
         </div>
+      )}
+      {gain !== null && (
+        <span className="civ-lbl">Value of this deal to you <i>if their claims are true</i>: <b style={{ color: gain >= 0 ? '#2e6b3a' : '#8a3b12' }}>{gain >= 0 ? '+' : ''}{gain}</b></span>
       )}
       {hint && <span className="civ-lbl" style={{ color: '#8a3b12' }}>{hint}</span>}
       <button className="civ-btn" disabled={!ok} onClick={submit}>{submitLabel}</button>
@@ -2536,7 +2552,7 @@ function TradeControls({ state, actor, onApply }: { state: GameState; actor: Pla
             <div style={{ fontSize: 12 }}><b style={{ color: civById.get(o.from)?.color }}>{civById.get(o.from)?.name}</b> gives {describe(o.give)} · wants <b>{o.wants.map(cName).join(' or ')}</b></div>
             {o.responses.some((r) => r.from === actor) ? <span className="civ-lbl">You've responded.</span>
               : respondTo === o.id
-                ? <OfferBuilder me={me} wantPicker={false} submitLabel={`Respond to ${civById.get(o.from)?.name}`} onSubmit={(give) => { onApply({ type: 'respondOffer', offerId: o.id, give }); setRespondTo(null); }} />
+                ? <OfferBuilder me={me} wantPicker={false} receive={o.give} submitLabel={`Respond to ${civById.get(o.from)?.name}`} onSubmit={(give) => { onApply({ type: 'respondOffer', offerId: o.id, give }); setRespondTo(null); }} />
                 : <button className="civ-btn" style={{ marginTop: 3 }} onClick={() => setRespondTo(o.id)}>Respond to this offer</button>}
           </div>
         ))}

@@ -30,9 +30,9 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
     const actions = adapter.legalActions(state, actor);
     if (actions.length === 0) return { type: 'pass' };
 
-    // §27.51: a ninth-stack (Gold/Ivory) window right after drawing. The AI has
-    // never bought from it; keep that behaviour explicit.
-    if (state.ninthStack?.awaiting) return { type: 'pass' };
+    // §27.51: a ninth-stack (Gold/Ivory) window right after drawing — 18 treasury
+    // a card, the tokens returning to stock.
+    if (state.ninthStack?.awaiting) return planNinthStack(state, actor, actions);
 
     // §16.3: choose where the first token goes (before turn 1).
     if (state.pendingStart) {
@@ -101,7 +101,12 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
       case 'acquireAdvances': {
         const buys = actions.filter((a) => a.type === 'buyAdvance') as Extract<Action, { type: 'buyAdvance' }>[];
         if (buys.length === 0) return { type: 'pass' };
-        return planAdvancePurchase(state.players[actor]!, buys.map((b) => b.advance ?? b.advances?.[0] ?? '')) ?? buys[0]!;
+        // Next turn's tax comes out of stock, 2 a city (§19.1), and nothing
+        // refills stock before then except treasury spent here; any shortfall
+        // means revolting cities, handed to a rival (§19.31-.32).
+        const me = state.players[actor]!;
+        const taxShort = Math.max(0, 2 * cityCount(state, actor) - me.stock);
+        return planAdvancePurchase(me, buys.map((b) => b.advance ?? b.advances?.[0] ?? ''), taxShort) ?? buys[0]!;
       }
       case 'shipConstruction': {
         // §22.3: every ship costs upkeep each turn, so decline it (scrap) for a
@@ -147,11 +152,12 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
         return scored[0] && scored[0].score >= 3 ? scored[0].m : { type: 'pass' };
       }
       case 'taxation': {
-        // Coinage holder: tax higher (3) when treasury is low and stock can cover
-        // it, to fund advances; otherwise the standard rate 2.
+        // Coinage holder (§19.2): tax higher (3) when treasury is low and stock
+        // can cover it, to fund advances; otherwise the standard rate 2 — or 1
+        // when stock can't pay 2 a city, since unpaid cities revolt (§19.31).
         const me = state.players[actor]!;
         const cities = Object.values(state.areas).filter((a) => a.city === actor).length;
-        const rate = me.treasury < 40 && me.stock >= cities * 3 ? 3 : 2;
+        const rate = me.treasury < 40 && me.stock >= cities * 3 ? 3 : me.stock >= cities * 2 ? 2 : 1;
         return { type: 'setTaxRate', rate };
       }
       case 'trade':
@@ -174,13 +180,16 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
 type Move = Extract<Action, { type: 'move' }>['moves'][number];
 
 /** Tokens left to support cities once surplus is removed (§26.31): every area
- *  without a city keeps at most its population limit. `skip` are areas about
+ *  without a city keeps at most its population limit (one more with
+ *  Agriculture where we're alone, §32.241). `skip` are areas about
  *  to become cities (their tokens go into the city). */
 function supportAfter(state: GameState, actor: PlayerId, tokens: Record<string, number>, skip: ReadonlySet<string>): number {
+  const agri = !!state.players[actor]?.advances.includes('agriculture');
   let n = 0;
   for (const [aid, t] of Object.entries(tokens)) {
     if (t <= 0 || skip.has(aid) || state.areas[aid]?.city) continue;
-    n += Math.min(t, areaById.get(aid)?.sustains ?? 0);
+    const limit = (areaById.get(aid)?.sustains ?? 0) + (agri && !rivalsIn(state, actor, aid) ? 1 : 0); // §32.241
+    n += Math.min(t, limit);
   }
   return n;
 }
@@ -239,7 +248,11 @@ function planMovement(state: GameState, actor: PlayerId, aggressive: boolean, de
     if (!byShip && last && !last.byShip && last.from === from && last.to === to) last.count += count;
     else moves.push(byShip ? { from, to, count, byShip: true } : { from, to, count });
   };
-  const sustains = (aid: string) => areaById.get(aid)?.sustains ?? 0;
+  // Population limits as surplus removal applies them: Agriculture adds one
+  // where we're alone (§32.241) — and a contested area, the only place a fight
+  // happens, keeps its printed limit, as the rule says for conflicts.
+  const agri = state.players[actor]!.advances.includes('agriculture');
+  const sustains = (aid: string) => (areaById.get(aid)?.sustains ?? 0) + (agri && !rivalsIn(state, actor, aid) ? 1 : 0);
   const land = (aid: string) => neighbors(state, aid).filter((n) => !areaById.get(n)?.isWater);
   const targets = new Set<string>(); // city sites being filled this turn
 
@@ -423,7 +436,14 @@ function planMovement(state: GameState, actor: PlayerId, aggressive: boolean, de
   }
 
   // 5. Surplus: seed empty land (one token each), march toward city sites, then
-  // top up our own areas that are below their limit.
+  // top up our own areas that are below their limit. Surplus left where it is
+  // goes back to stock at surplus removal (§26.1), and next turn's tax is paid
+  // from stock, 2 a city (§19.1), before anything else refills it — unpaid
+  // cities revolt to a rival (§19.31). So spread only what stock can spare.
+  const surplusNow = Object.keys(after).reduce((t, aid) =>
+    t + (targets.has(aid) || state.areas[aid]?.city ? 0 : Math.max(0, (after[aid] ?? 0) - sustains(aid))), 0);
+  let spreadable = Math.max(0, p.stock + 6 * targets.size + p.treasury + surplusNow - 2 * (cities + targets.size) - 2);
+  const spread = (from: string, to: string, k: number) => { const n = Math.min(k, spreadable); if (n > 0) { shift(from, to, n); spreadable -= n; } };
   for (const pass of ['seed', 'march', 'fill'] as const) {
     for (const aid of Object.keys(free)) {
       if (targets.has(aid) || state.areas[aid]?.city) continue;
@@ -431,9 +451,9 @@ function planMovement(state: GameState, actor: PlayerId, aggressive: boolean, de
         const excess = Math.min(free[aid] ?? 0, (after[aid] ?? 0) - sustains(aid));
         if (excess <= 0) break;
         if (targets.has(n) || state.areas[n]?.city || rivalsIn(state, actor, n) || sustains(n) <= 0) continue;
-        if (pass === 'seed' && (after[n] ?? 0) === 0) shift(aid, n, 1);
-        else if (pass === 'march' && (dist.get(aid) ?? 0) >= 2 && dist.get(n) === dist.get(aid)! - 1) shift(aid, n, excess);
-        else if (pass === 'fill' && (after[n] ?? 0) > 0) shift(aid, n, Math.min(excess, sustains(n) - (after[n] ?? 0)));
+        if (pass === 'seed' && (after[n] ?? 0) === 0) spread(aid, n, 1);
+        else if (pass === 'march' && (dist.get(aid) ?? 0) >= 2 && dist.get(n) === dist.get(aid)! - 1) spread(aid, n, excess);
+        else if (pass === 'fill' && (after[n] ?? 0) > 0) spread(aid, n, Math.min(excess, sustains(n) - (after[n] ?? 0)));
       }
     }
   }
@@ -441,13 +461,41 @@ function planMovement(state: GameState, actor: PlayerId, aggressive: boolean, de
   return moves.length ? { type: 'move', moves } : null;
 }
 
-// ---- Advances --------------------------------------------------------------
+// ---- Ninth stack -----------------------------------------------------------
+
+/** Buy Gold/Ivory from the ninth stack (§27.51). Treasury piles up once the
+ *  cheap advances are bought, and with 55 tokens in all a big treasury starves
+ *  stock — next turn's tax (2 a city from stock, §19.1) then falls short and
+ *  cities revolt to a rival (§19.31-.32). Each card bought puts 18 tokens back
+ *  in stock. So buy enough to cover that tax, and otherwise one card to grow a
+ *  Gold or Ivory set already in hand (sets score n² × 9; a lone random card is
+ *  worth only 9 of the 18 paid) — never past the 8-card hand limit (§31.71). */
+function planNinthStack(state: GameState, actor: PlayerId, actions: Action[]): Action {
+  const p = state.players[actor]!;
+  const offered = actions.filter((a) => a.type === 'buyTradeCard') as Extract<Action, { type: 'buyTradeCard' }>[];
+  const most = offered.reduce((m, a) => Math.max(m, a.count), 0);
+  const held = Object.entries(p.hand).reduce((t, [c, k]) => t + (isCal(c) ? 0 : k), 0);
+  const room = Math.max(0, 8 - held);
+  const taxShort = Math.max(0, 2 * cityCount(state, actor) - p.stock);
+  const growing = (p.hand['gold'] ?? 0) + (p.hand['ivory'] ?? 0) > 0;
+  const want = taxShort > 0 ? Math.ceil(taxShort / 18) : growing && p.treasury >= 18 ? 1 : 0;
+  const count = Math.min(want, most, room);
+  return count > 0 ? { type: 'buyTradeCard', count } : { type: 'pass' };
+}
+
+// ---- Advances --------------------------------------------------------------// ---- Advances --------------------------------------------------------------
+
+/** Extra weight for advances whose effect is worth more than their price:
+ *  Agriculture's +1 population limit in every area held alone (§32.241) feeds
+ *  every city and trade card after it — "the most important card" for a
+ *  nation short of land, per the rulebook's strategy notes. */
+const ADVANCE_BONUS: Record<string, number> = { agriculture: 3 };
 
 /** One pooled purchase (§31): a basket of advances and the cheapest way to pay.
  *  Excess card value is lost (§31.58) and a commodity set is worth n² × value,
  *  so the AI pays with whole sets — splitting one throws value away — choosing
  *  the sets that overpay least, and makes up the rest exactly from treasury. */
-function planAdvancePurchase(p: { advances: string[]; advancesThisTurn?: string[]; hand: Record<string, number>; treasury: number; grainLockedThisTurn?: number }, candidates: string[]): Action | null {
+function planAdvancePurchase(p: { advances: string[]; advancesThisTurn?: string[]; hand: Record<string, number>; treasury: number; grainLockedThisTurn?: number }, candidates: string[], taxShort = 0): Action | null {
   // Spendable cards: commodities only, minus Grain locked against Famine (§30.312).
   const hand: Record<string, number> = {};
   for (const [c, n] of Object.entries(p.hand)) if (!isCal(c) && n > 0) hand[c] = n;
@@ -472,21 +520,24 @@ function planAdvancePurchase(p: { advances: string[]; advancesThisTurn?: string[
   }
   function score(id: string): number {
     const adv = advanceById.get(id)!;
-    return (adv.groups.some((g) => !groups.has(g)) ? 1000 : 0) + adv.cost / Math.max(1, net(id));
+    return (adv.groups.some((g) => !groups.has(g)) ? 1000 : 0) + adv.cost / Math.max(1, net(id)) + (ADVANCE_BONUS[id] ?? 0);
   }
   if (basket.length === 0) return null;
 
   // Payment: the subset of whole sets that, with treasury, covers `need` while
-  // overpaying least; ties keep more treasury.
+  // overpaying least; ties keep more treasury — unless stock is short for next
+  // turn's tax, when spending treasury (which returns to stock) comes first.
   const sets = Object.keys(hand).map((c) => ({ c, v: commoditySetValue(c, hand[c]!) }));
-  let best: { mask: number; waste: number; treasury: number } | null = null;
+  const refill = Math.min(taxShort, need, p.treasury);
+  let best: { mask: number; short: number; waste: number; treasury: number } | null = null;
   for (let mask = 0; mask < 1 << sets.length; mask++) {
     let v = 0;
     sets.forEach((x, i) => { if (mask & (1 << i)) v += x.v; });
     const treasury = Math.max(0, need - v);
     if (treasury > p.treasury) continue;
+    const short = Math.max(0, refill - treasury);
     const waste = Math.max(0, v - need);
-    if (!best || waste < best.waste || (waste === best.waste && treasury < best.treasury)) best = { mask, waste, treasury };
+    if (!best || short < best.short || (short === best.short && (waste < best.waste || (waste === best.waste && treasury < best.treasury)))) best = { mask, short, waste, treasury };
   }
   if (!best) return null;
   const spendCommodities: Record<string, number> = {};

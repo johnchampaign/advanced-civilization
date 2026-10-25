@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Rng } from 'digital-boardgame-framework';
-import { adapter, createGame } from '../engine/index.js';
+import { adapter, createGame, normalize } from '../engine/index.js';
 import { pieceConservationProblems } from '../engine/helpers.js';
 import { pieceCounts } from '../data/index.js';
 import { availableNations, boardPresets } from '../engine/boards.js';
@@ -343,6 +343,33 @@ describe('heuristic AI: movement and advances (reports 341f4378 / 9b9885cd)', ()
     // would throw away ~50 points; the pooled purchase overpays by at most a few.
     const buy = t.log.find((e) => e.kind === 'advance.buy')!.payload as { cost: number; paid: number };
     expect(buy.paid - buy.cost).toBeLessThanOrEqual(4);
+  });
+});
+
+describe('heuristic AI: treasury, stock and tax (report ba6a5bda)', () => {
+  /** Egypt at its ninth-stack window (§27.51): one city, `onBoard` tokens. */
+  function atNinth(treasury: number, onBoard: number): GameState {
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 11, maxTurns: 60 });
+    s.areas = { thebes: { tokens: {}, city: 'egypt' }, memphis: { tokens: { egypt: onBoard } }, susa: { tokens: {}, city: 'babylon' } };
+    for (const id of s.seating) { const p = s.players[id]!; p.citiesAvailable -= 1; p.hand = {}; p.treasury = id === 'egypt' ? treasury : 0; }
+    s.players['egypt']!.stock = pieceCounts.tokens - onBoard - treasury;
+    s.players['babylon']!.stock = pieceCounts.tokens;
+    s.phase = 'tradeAcquisition'; s.ninthStack = undefined; s.activeOrder = [...s.seating]; s.actedThisPhase = [];
+    normalize(s);
+    return s;
+  }
+  const pick = (s: GameState) => ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+
+  it('buys Gold/Ivory to grow a set in hand, not as a lone random card', async () => {
+    expect(await pick(atNinth(40, 5))).toEqual({ type: 'pass' }); // one card is worth 9, not 18
+    const s = atNinth(40, 5);
+    s.players['egypt']!.hand['gold'] = (s.players['egypt']!.hand['gold'] ?? 0) + 1;
+    expect(await pick(s)).toEqual({ type: 'buyTradeCard', count: 1 });
+  });
+
+  it('buys one when next turn’s tax would leave stock short (§19.31)', async () => {
+    // 20 in treasury and 34 on the board leaves 1 in stock: not enough for 2 tax.
+    expect(await pick(atNinth(20, 34))).toEqual({ type: 'buyTradeCard', count: 1 });
   });
 });
 

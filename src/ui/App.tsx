@@ -1501,7 +1501,21 @@ export function MovementControls({ planner }: { planner: MovementPlanner }) {
           </div>
         </div>
       ) : !origin ? (
-        <span className="civ-lbl">Click an area with your tokens to move <b>from</b>. Planned moves show on the map right away (dashed marker) and aren't final until you finish.</span>
+        <>
+          <span className="civ-lbl">Click an area with your tokens to move <b>from</b>. Planned moves show on the map right away (dashed marker) and aren't final until you finish.</span>
+          {/* Every area you can still move from, so a small island or a stack
+              sharing an area with a rival isn't missed (report b51038a9). */}
+          {planner.highlight.size > 0 && (
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span className="civ-lbl">Your tokens:</span>
+              {[...planner.highlight].sort((a, b) => name(a).localeCompare(name(b))).map((a) => (
+                <button className="civ-btn" key={a} onClick={() => planner.onBoardClick(a)}>
+                  {name(a)} ({available(a)}{planner.shipsAt(a) > 0 ? ` + ${planner.shipsAt(a)}⛵` : ''})
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span className="civ-lbl">From <b>{name(origin)}</b> — choose how many, then click a highlighted destination on the map <i>or a button below</i>:</span>
@@ -1752,7 +1766,10 @@ const isCal = (c: string) => c.startsWith('calamity:');
 const isGivableCard = (c: string) => !isCal(c) || calamityById.get(c.slice(9))?.tradable === true;
 const cardLabel = (c: string) => (isCal(c) ? `⚠ ${c.slice(9)}` : c);
 /** Sort card ids: commodities ascending by value, calamities last. */
-const byCardValue = (a: string, b: string) => (isCal(a) ? 1000 : commodityById.get(a)?.value ?? 0) - (isCal(b) ? 1000 : commodityById.get(b)?.value ?? 0);
+// Ties (e.g. Ochre and Hides, both worth 1) fall back to COMMODITY_ORDER, so a
+// hand lists in the same order as the want picker below it (report 0bac26cf).
+const byCardValue = (a: string, b: string) => (isCal(a) ? 1000 : commodityById.get(a)?.value ?? 0) - (isCal(b) ? 1000 : commodityById.get(b)?.value ?? 0)
+  || COMMODITY_ORDER.indexOf(a) - COMMODITY_ORDER.indexOf(b) || a.localeCompare(b);
 
 const COMMODITY_ORDER = ['ochre', 'hides', 'iron', 'papyrus', 'salt', 'timber', 'grain', 'oil', 'cloth', 'wine', 'bronze', 'silver', 'resin', 'spices', 'dye', 'gems', 'gold', 'ivory'];
 
@@ -2390,7 +2407,7 @@ function OfferBuilder({ me, submitLabel, onSubmit, wantPicker, receive }: {
   const hint = total < 3 ? 'Pick at least 3 cards to give.' : named < 2 ? 'Name at least 2 of the cards you give — named cards are guaranteed (§28.3).' : !wantsOk ? 'Pick 1–5 commodities you want.' : '';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, border: '1px solid #7a4a18', borderRadius: 4, padding: 6 }}>
-      <span className="civ-lbl">Your hand — click to add to the offer:</span>
+      <span className="civ-lbl">Your hand (worth <b>{handValue(me.hand)}</b>) — click to add to the offer:</span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
         {Object.entries(me.hand).filter(([c, n]) => n > 0 && isGivableCard(c)).sort((a, b) => byCardValue(a[0], b[0])).map(([c, n]) => (
           <button className="civ-btn" key={c} disabled={(give[c] ?? 0) >= n} onClick={() => add(c)}>{cName(c)} ×{n - (give[c] ?? 0)}</button>
@@ -2400,7 +2417,7 @@ function OfferBuilder({ me, submitLabel, onSubmit, wantPicker, receive }: {
       {total > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <span className="civ-lbl">You give {total} card{total === 1 ? '' : 's'}. The other player is told the number, plus the cards you <b>name</b> — at least 2, and named cards are guaranteed. About the rest you can say nothing, or make a claim (it may be a bluff) — §28.3.</span>
-          {Object.entries(give).map(([c, n]) => {
+          {Object.entries(give).sort((a, b) => byCardValue(a[0], b[0])).map(([c, n]) => {
             const g = Math.min(n, guar[c] ?? 0);
             return (
               <div key={c} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, flexWrap: 'wrap' }}>
@@ -2423,7 +2440,8 @@ function OfferBuilder({ me, submitLabel, onSubmit, wantPicker, receive }: {
               </div>
             );
           })}
-          <span className="civ-lbl">Named: <b>{named}</b>{named < 2 ? ' (need at least 2)' : ''}</span>
+          <span className="civ-lbl">Named: <b>{named}</b>{named < 2 ? ' (need at least 2)' : ''}
+            {' '}· cards given are worth <b>{handValue(give)}</b> · your hand after giving them: <b>{handValue(Object.fromEntries(Object.entries(me.hand).map(([c, k]) => [c, k - (give[c] ?? 0)])))}</b></span>
         </div>
       )}
       {wantPicker && (

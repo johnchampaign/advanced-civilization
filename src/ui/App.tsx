@@ -845,11 +845,17 @@ function LogView({ state }: { state: GameState }) {
       </div>
       <div style={{ background: 'rgba(0,0,0,0.22)', borderRadius: 4, padding: 10, fontSize: 12, lineHeight: 1.7, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', maxWidth: 980 }}>
         {lines.length === 0 && <span className="civ-lbl">{q ? '(no entries match the filter)' : '(nothing has happened yet)'}</span>}
-        {[...lines].reverse().map((l, i) => {
+        {[...lines].reverse().map((l, i, rev) => {
           const e = typeof l === 'string' ? null : l;
           const side = e?.side ?? null;
+          // A rule between phases, so a phase is easy to find when scrolling
+          // back (report 605b96e6). The list is newest-first, so the line sits
+          // under the last entry of the newer phase.
+          const prev = i > 0 ? rev[i - 1] : undefined;
+          const pe = prev && typeof prev !== 'string' ? prev : null;
+          const newPhase = !!e && !!pe && (pe.turn !== e.turn || pe.phase !== e.phase);
           return (
-            <div key={e?.seq ?? `legacy-${i}`} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+            <div key={e?.seq ?? `legacy-${i}`} style={{ display: 'flex', gap: 8, alignItems: 'baseline', ...(newPhase ? { borderTop: '1px solid #6f6a5a', marginTop: 6, paddingTop: 4 } : {}) }}>
               <span style={{ color: '#6f6a5a', minWidth: 42, textAlign: 'right', userSelect: 'none' }}>#{e ? e.seq + 1 : '·'}</span>
               <span style={{ color: '#8a8570', minWidth: 74, userSelect: 'none', fontSize: 10 }}>
                 {e ? `t${e.turn}·${PHASE_SHORT[e.phase ?? ''] ?? e.phase ?? ''}` : ''}
@@ -909,6 +915,7 @@ function AstView({ state }: { state: GameState }) {
             return (
               <tr key={id}>
                 <td style={{ padding: '2px 8px', fontWeight: 800, color: civById.get(id)?.color }}>{civById.get(id)?.name}</td>
+                <td style={{ padding: '2px 6px', textAlign: 'right', color: '#ffd98a', fontWeight: 700 }} title="Total advance points (§33.25)">{advancesFaceValue(p.advances)}</td>
                 {Array.from({ length: track.finishSpace }, (_, i) => i + 1).map((space) => {
                   const epoch = [...epochs].reverse().find((e) => space >= (track.epochStart[e.id] ?? 1))!;
                   const here = p.astSpace === space;
@@ -927,7 +934,7 @@ function AstView({ state }: { state: GameState }) {
           })}
         </tbody>
       </table>
-      <p className="civ-lbl" style={{ color: '#ccc' }}>Numbers in Late Iron Age spaces are the civilization-card point total needed to enter (§33.25). Dots are nation markers.</p>
+      <p className="civ-lbl" style={{ color: '#ccc' }}>The gold number after each nation is its current advance-point total. Numbers in Late Iron Age spaces are the civilization-card point total needed to enter (§33.25). Dots are nation markers.</p>
     </div>
   );
 }
@@ -935,12 +942,17 @@ function AstView({ state }: { state: GameState }) {
 function CensusView({ state }: { state: GameState }) {
   const rows = state.seating.map((id) => {
     const p = state.players[id]!;
-    let tokens = 0, cities = 0;
-    for (const a of Object.values(state.areas)) { tokens += a.tokens[id] ?? 0; if (a.city === id) cities++; }
+    let tokens = 0, cities = 0, ships = 0;
+    const shipAreas: [string, number][] = [];
+    for (const [aid, a] of Object.entries(state.areas)) {
+      tokens += a.tokens[id] ?? 0; if (a.city === id) cities++;
+      const k = a.ships?.[id] ?? 0;
+      if (k > 0) { ships += k; shipAreas.push([aid, k]); }
+    }
     // handCount is set by viewFor for redacted (online) views; fall back to the
     // visible hand (hotseat / one's own seat) where the cards aren't hidden.
     const cards = p.handCount ?? Object.values(p.hand).reduce((s, n) => s + n, 0);
-    return { id, tokens, cities, cards, advances: p.advances, stock: p.stock, treasury: p.treasury };
+    return { id, tokens, cities, ships, shipAreas, cards, advances: p.advances, advPoints: advancesFaceValue(p.advances), stock: p.stock, treasury: p.treasury };
   }).sort((a, b) => b.tokens - a.tokens || astRank(a.id) - astRank(b.id)); // §21.2: ties in A.S.T. order, as movement order uses
   const cell: CSSProperties = { padding: '3px 12px 3px 0', textAlign: 'right' };
   const head: CSSProperties = { ...cell, fontWeight: 700, color: '#cdc4ad' };
@@ -954,8 +966,8 @@ function CensusView({ state }: { state: GameState }) {
         <tr style={{ textAlign: 'right' }}>
           <th style={{ ...head, textAlign: 'left' }}>#</th>
           <th style={{ ...head, textAlign: 'left' }}>Nation</th>
-          <th style={head}>Pop</th><th style={head}>Cities</th><th style={head}>Cards</th>
-          <th style={head}>Advances</th><th style={head}>Stock</th><th style={head}>Treasury</th>
+          <th style={head}>Pop</th><th style={head}>Cities</th><th style={head} title="Ships on the board">Ships</th><th style={head}>Cards</th>
+          <th style={head}>Advances</th><th style={head} title="Total face value of advances owned (Late Iron Age, §33.25)">Adv. points</th><th style={head}>Stock</th><th style={head}>Treasury</th>
         </tr>
         {rows.map((r, i) => (
           <tr key={r.id} style={{ borderTop: '1px solid #333' }}>
@@ -963,13 +975,28 @@ function CensusView({ state }: { state: GameState }) {
             <td style={{ ...cell, textAlign: 'left', color: civById.get(r.id)?.color, fontWeight: 700 }}>{civById.get(r.id)?.name}</td>
             <td style={cell}>{r.tokens}</td>
             <td style={cell}>{r.cities}</td>
+            <td style={cell}>{r.ships}</td>
             <td style={cell}>{r.cards}</td>
             <td style={cell}>{r.advances.length}</td>
+            <td style={cell}>{r.advPoints}</td>
             <td style={cell}>{r.stock}</td>
             <td style={cell}>{r.treasury}</td>
           </tr>
         ))}
       </tbody></table>
+      {/* Where every nation's ships are, so seapower can be gauged without
+          hunting the map (report 605b96e6). */}
+      {rows.some((r) => r.ships > 0) && (
+        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div className="civ-lbl" style={{ color: '#cdc4ad', fontWeight: 700 }}>Ships at sea and in port</div>
+          {rows.filter((r) => r.ships > 0).map((r) => (
+            <div key={r.id} style={{ fontSize: 12 }}>
+              <span style={{ color: civById.get(r.id)?.color, fontWeight: 700, marginRight: 8 }}>{civById.get(r.id)?.name}</span>
+              {r.shipAreas.map(([aid, k]) => `${areaById.get(aid)?.name ?? aid}${k > 1 ? ` ×${k}` : ''}`).sort().join(' · ')}
+            </div>
+          ))}
+        </div>
+      )}
       <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div className="civ-lbl" style={{ color: '#cdc4ad', fontWeight: 700 }}>Advances owned</div>
         {rows.map((r) => (
@@ -1073,6 +1100,12 @@ function GoodsView({ state, focus }: { state: GameState; focus: PlayerId }) {
         {commCount} commodity card{commCount === 1 ? '' : 's'} · total value <b>{handValue(hand, { mining })}</b>
         {' '}— a card alone is worth its number; a set of n of the same commodity is worth n² × its value, so collecting pays off.
       </p>
+      {/* What plundering a city drew this turn (§24.51) — private to the taker (report 605b96e6). */}
+      {(state.players[focus]!.pillagedCards ?? []).filter((t) => t.turn === state.turn).map((t, i) => (
+        <p key={i} className="civ-lbl" style={{ marginTop: 0, color: '#ffd98a' }}>
+          Plundered from {civById.get(t.from)?.name ?? t.from} this turn: <b>{isCal(t.card) ? `⚠ ${calamityById.get(t.card.slice(9))?.name ?? t.card.slice(9)}` : commodityById.get(t.card)?.name ?? t.card}</b>
+        </p>
+      ))}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {entries.length === 0 && <span>(no cards)</span>}
         {entries.map(([c, n]) => {
@@ -2417,7 +2450,8 @@ function OfferBuilder({ me, submitLabel, onSubmit, wantPicker, receive }: {
       {total > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <span className="civ-lbl">You give {total} card{total === 1 ? '' : 's'}. The other player is told the number, plus the cards you <b>name</b> — at least 2, and named cards are guaranteed. About the rest you can say nothing, or make a claim (it may be a bluff) — §28.3.</span>
-          {Object.entries(give).sort((a, b) => byCardValue(a[0], b[0])).map(([c, n]) => {
+          {/* Click order, so the cards you name read in the order you picked them (report aa3a026f). */}
+          {Object.entries(give).map(([c, n]) => {
             const g = Math.min(n, guar[c] ?? 0);
             return (
               <div key={c} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, flexWrap: 'wrap' }}>

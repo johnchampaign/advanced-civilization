@@ -92,6 +92,10 @@ describe('§24.3 city assault', () => {
     // Stole one of babylon's ochre cards.
     expect(s.players['egypt']!.hand['ochre']).toBe(1);
     expect(s.players['babylon']!.hand['ochre']).toBe(1);
+    // The taker is told what they drew; nobody else sees it (report 605b96e6).
+    expect(s.players['egypt']!.pillagedCards).toEqual([{ from: 'babylon', card: 'ochre', turn: s.turn }]);
+    expect(adapter.viewFor(s, 'egypt').players['egypt']!.pillagedCards).toHaveLength(1);
+    expect(adapter.viewFor(s, 'babylon').players['egypt']!.pillagedCards).toBeUndefined();
     expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
   });
 

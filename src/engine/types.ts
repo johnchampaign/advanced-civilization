@@ -121,6 +121,10 @@ export interface PlayerState {
    *  `viewFor` so opponents can see the SIZE of a rival's hand without its
    *  contents. Undefined in the canonical (unredacted) state. */
   handCount?: number;
+  /** Trade cards this player took by plundering a city (§24.51), so the taker
+   *  can see what they drew. Private like the hand: `viewFor` strips it from
+   *  other players' views. */
+  pillagedCards?: { from: PlayerId; card: string; turn: number }[];
   /** AST position (space index; 0 = start). */
   astSpace: number;
   /** Current epoch id. */

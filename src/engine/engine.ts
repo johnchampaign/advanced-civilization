@@ -670,6 +670,9 @@ function stealCardFromVictim(s: GameState, attacker: PlayerId, victim: PlayerId,
   vhand[card] = (vhand[card] ?? 0) - 1;
   if (vhand[card]! <= 0) delete vhand[card];
   player(s, attacker).hand[card] = (player(s, attacker).hand[card] ?? 0) + 1;
+  // Keep only this turn's takings: the list just tells the taker what they drew.
+  const taker = player(s, attacker);
+  taker.pillagedCards = [...(taker.pillagedCards ?? []).filter((t) => t.turn === s.turn), { from: victim, card, turn: s.turn }];
   if (isCalamityCard(card)) s.calamityTradedFrom[calamityIdOf(card)] = victim;
   log(s, 'combat.pillage', attacker, `${attacker} pillages a trade card from ${victim}.`, { victim });
 }
@@ -3351,6 +3354,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
       if (id !== _viewer) {
         p.hand = {} as Record<string, number>;
         p.calamities = [];
+        delete p.pillagedCards;
       }
     }
     // Open offers & responses: ACTUAL cards are secret (§28.3) — everyone sees

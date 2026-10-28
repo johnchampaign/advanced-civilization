@@ -680,7 +680,8 @@ function wantedWorthGiving(hand: Record<string, number>, o: { wants: string[]; g
 
 /** One trade action per turn (multiplayer-fair — only our own hand is read):
  *  accept a good response to our offer, else post one offer, else respond to an
- *  offer that grows our set / lets us offload a calamity, else pass. */
+ *  offer that grows our set / lets us offload a calamity, else wait (or pass
+ *  when nobody else is still trading or we're down to fewer than 3 cards). */
 function planTradeTurn(state: GameState, actor: PlayerId, _rng: { pick<T>(a: readonly T[]): T }): Action | null {
   const me = state.players[actor]!;
   const n = state.negotiation;
@@ -700,10 +701,15 @@ function planTradeTurn(state: GameState, actor: PlayerId, _rng: { pick<T>(a: rea
       const give = buildFairGive(me, want, myWant ?? want);
       if (give) return { type: 'postOffer', give, wants: [want] };
     }
-    // No fair offer, but a calamity to offload: still put up the cheap bundle.
-    if (myWant && givable(me.hand).some(([c]) => isTradableCal(c))) {
-      const give = buildGive(me, myWant);
-      if (give) return { type: 'postOffer', give, wants: [myWant] };
+    // No fair offer, but a calamity to offload: still put up the cheap bundle —
+    // asking for the cheapest commodity it doesn't already mention, so it reads
+    // as a fair swap someone might take. (Asking for, say, Gold with two Hides
+    // gets no takers and just looks silly, report 8697595a.)
+    if (givable(me.hand).some(([c]) => isTradableCal(c))) {
+      const give = buildGive(me, myWant ?? '');
+      const named = give ? mentioned(give) : [];
+      const want = [...commodityById.values()].sort((a, b) => a.value - b.value).find((c) => !named.includes(c.id))?.id;
+      if (give && want) return { type: 'postOffer', give, wants: [want] };
     }
   }
 
@@ -723,7 +729,12 @@ function planTradeTurn(state: GameState, actor: PlayerId, _rng: { pick<T>(a: rea
     if (give) return { type: 'respondOffer', offerId: o.id, give };
   }
 
-  return { type: 'pass' };
+  // Nothing to do this turn — but while we hold three cards and anyone else is
+  // still trading, wait rather than leave: AIs that all went "done" before a
+  // human's first turn left them auto-skipped with nobody to trade with
+  // (report d17b8c78). Trading still ends after a full round of waiting.
+  const others = state.activeOrder.some((p) => p !== actor && !(n.done ?? []).includes(p));
+  return others && totalGivable(me.hand) >= 3 ? { type: 'tradeWait' } : { type: 'pass' };
 }
 
 // ---- Ships ----------------------------------------------------------------

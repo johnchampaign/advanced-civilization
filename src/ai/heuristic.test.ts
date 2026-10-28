@@ -86,7 +86,17 @@ describe('AI trade negotiation (open-offer board)', () => {
     expect(s.log.some((l) => (l.msg ?? '').includes('egypt') && (l.msg ?? '').includes('suffers Epidemic'))).toBe(false);
   });
 
-  it('passes rather than respond to an offer it cannot benefit from', async () => {
+  it('keeps a calamity-dump offer looking fair: asks for a cheap card (report 8697595a)', async () => {
+    // Nothing fair to offer for gold, but a tradable calamity to pass on: two
+    // hides plus the calamity (claimed as ochre) ask for a card worth about as
+    // little — iron, the cheapest commodity the offer doesn't mention — not gold.
+    const s = tradeState({ egypt: { gold: 1, hides: 2, 'calamity:epidemic': 1 }, babylon: {} });
+    const action = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+    expect(action.type).toBe('postOffer');
+    if (action.type === 'postOffer') expect(action.wants).toEqual(['iron']);
+  });
+
+  it('does not respond to an offer it cannot benefit from', async () => {
     // egypt offers iron/ochre wanting salt; babylon holds only wine and gains nothing.
     const s = tradeState({ egypt: { iron: 5, ochre: 1 }, babylon: { wine: 3 } });
     s.negotiation.offers = [{
@@ -97,7 +107,9 @@ describe('AI trade negotiation (open-offer board)', () => {
     }];
     s.negotiation.turnPointer = 1; // babylon's turn
     const respond = await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) });
-    expect(respond.type).toBe('pass');
+    // It holds three cards and egypt is still trading, so it waits rather than
+    // leaving (report d17b8c78) — but it doesn't answer this offer.
+    expect(respond.type).toBe('tradeWait');
   });
 
   const ownOffer = () => ({

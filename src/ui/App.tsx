@@ -788,9 +788,9 @@ export function StatusPanel({ state, id }: { state: GameState; id: PlayerId }) {
       <div style={{ background: civById.get(id)?.color, color: '#fff', textAlign: 'center', fontWeight: 800, padding: 2, borderRadius: 3 }}>
         {civById.get(id)?.name.toUpperCase()}
       </div>
-      <Row label="IN STOCK" vals={[['◾', p.stock], ['🏛', p.citiesAvailable], ['⛵', p.shipsAvailable]]} />
+      <Row label="IN STOCK" vals={[['◾', p.stock + unsettledPillage(state, id)], ['🏛', p.citiesAvailable], ['⛵', p.shipsAvailable]]} />
       <Row label="ON MAP" vals={[['◾', boardTokens], ['🏛', boardCities]]} />
-      <Row label="TREASURY" vals={[['💰', p.treasury]]} />
+      <Row label="TREASURY" vals={[['💰', p.treasury - unsettledPillage(state, id)]]} />
       <div className="civ-lbl">AST space {p.astSpace} · {epochs.find((e) => e.id === p.epoch)?.name}</div>
       {(() => {
         // Always-visible reminder of any calamity cards in hand (the player needs to
@@ -956,7 +956,7 @@ function CensusView({ state }: { state: GameState }) {
     // handCount is set by viewFor for redacted (online) views; fall back to the
     // visible hand (hotseat / one's own seat) where the cards aren't hidden.
     const cards = p.handCount ?? Object.values(p.hand).reduce((s, n) => s + n, 0);
-    return { id, tokens, cities, ships, shipAreas, cards, advances: p.advances, advPoints: advancesFaceValue(p.advances), stock: p.stock, treasury: p.treasury };
+    return { id, tokens, cities, ships, shipAreas, cards, advances: p.advances, advPoints: advancesFaceValue(p.advances), stock: p.stock + unsettledPillage(state, id), treasury: p.treasury - unsettledPillage(state, id) };
   }).sort((a, b) => b.tokens - a.tokens || astRank(a.id) - astRank(b.id)); // §21.2: ties in A.S.T. order, as movement order uses
   const cell: CSSProperties = { padding: '3px 12px 3px 0', textAlign: 'right' };
   const head: CSSProperties = { ...cell, fontWeight: 700, color: '#cdc4ad' };
@@ -2006,8 +2006,17 @@ function CivilWarControls({ state, legal, onApply }: { state: GameState; legal: 
 
 /** §24.52: after storming a city the attacker may move UP TO three tokens from
  *  stock to treasury — or fewer, or none, as they wish. */
+/** Pillage the engine has provisionally moved from stock to treasury while the
+ *  attacker chooses how much to keep (§24.52). Displays show stock and treasury
+ *  without it until the choice is made, so a player deciding doesn't count on
+ *  tokens they may hand back (report 3e9b18cb). */
+function unsettledPillage(state: GameState, id: PlayerId): number {
+  return (state.pendingPillage ?? []).filter((x) => x.attacker === id).reduce((t, x) => t + x.taken, 0);
+}
+
 function PillageControls({ state, legal, onApply }: { state: GameState; legal: Action[]; onApply: (a: Action) => void }) {
   const pl = state.pendingPillage![0]!;
+  const before = state.players[pl.attacker]!.treasury - unsettledPillage(state, pl.attacker);
   const peek = useAreaPeek();
   const counts = (legal.filter((a) => a.type === 'pillage') as Extract<Action, { type: 'pillage' }>[]).map((a) => a.count).sort((a, b) => b - a);
   return (
@@ -2019,7 +2028,7 @@ function PillageControls({ state, legal, onApply }: { state: GameState; legal: A
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
         {counts.map((n) => (
           <button key={n} className={`civ-btn ${n === pl.taken ? 'on' : ''}`} onClick={() => onApply({ type: 'pillage', count: n })}>
-            {n === 0 ? 'Pillage nothing' : `Take ${n} token${n === 1 ? '' : 's'}`}
+            {n === 0 ? 'Pillage nothing' : `Take ${n} token${n === 1 ? '' : 's'}`} → treasury {before + n}
           </button>
         ))}
       </div>

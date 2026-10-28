@@ -225,6 +225,37 @@ describe('trade turns: waiting, waking, who opens (report 102e774c)', () => {
     expect(s.phase).not.toBe('trade');
   });
 
+  it('passes the turn on from the waiting player, not back to them past done seats', () => {
+    // Report b94f25b3: with done players after the waiter, the pointer wrapped
+    // straight back to them and three waits ended the phase unheard.
+    const s0 = createGame({ players: ['egypt', 'babylon', 'crete', 'assyria', 'thrace'], seed: 1, maxTurns: 60 });
+    s0.players['egypt']!.hand = { salt: 3, iron: 2 };
+    s0.players['babylon']!.hand = { iron: 3, salt: 2 };
+    s0.players['crete']!.hand = { wine: 3, ochre: 2 };
+    s0.phase = 'trade'; s0.activeOrder = ['egypt', 'babylon', 'crete', 'assyria', 'thrace']; s0.actedThisPhase = [];
+    s0.negotiation = { turnPointer: 3, passStreak: 0, actions: 0, nextOfferId: 0, done: ['assyria', 'thrace'], offers: [], completed: [], waitStreak: 0 };
+    let s = adapter.applyAction(s0, { type: 'tradeWait' }, 'egypt'); // pointer starts on a done seat
+    expect(adapter.currentActor(s)).toBe('babylon');
+    s = adapter.applyAction(s, { type: 'tradeWait' }, 'babylon');
+    expect(adapter.currentActor(s)).toBe('crete');
+    s = adapter.applyAction(s, { type: 'tradeWait' }, 'crete');
+    expect(s.phase).not.toBe('trade');
+  });
+
+  it('keeps a player in to answer a response even when no one else is still trading', () => {
+    // Report 2a7bebba: babylon was auto-skipped with a response waiting on its offer.
+    let s = trading();
+    s.autoSkip = true; s.negotiation.turnPointer = 1;
+    s = adapter.applyAction(s, { type: 'postOffer', give: give({ iron: 2, salt: 1 }), wants: ['salt'] }, 'babylon');
+    s = adapter.applyAction(s, { type: 'respondOffer', offerId: 1, give: give({ wine: 2, ochre: 1 }) }, 'crete');
+    s.negotiation.done = ['crete']; // the responder has since finished trading
+    s = adapter.applyAction(s, { type: 'pass' }, 'egypt'); // babylon is the only one left
+    expect(s.phase).toBe('trade');
+    expect(adapter.currentActor(s)).toBe('babylon');
+    s = adapter.applyAction(s, { type: 'acceptResponse', offerId: 1, responder: 'crete' }, 'babylon');
+    expect(s.negotiation.completed).toHaveLength(1);
+  });
+
   it('opens trading with a different nation each turn', () => {
     const openers = [1, 2, 3].map((turn) => {
       let s = createGame({ players: ['egypt', 'babylon', 'crete'], seed: 1, maxTurns: 60 });

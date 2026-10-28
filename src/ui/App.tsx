@@ -476,10 +476,14 @@ export function AreaPeekProvider({ children }: { children: ReactNode }) {
  *  group of areas) up on the board — spread it onto a button: `{...peek(areaId)}`. */
 export function useAreaPeek() {
   const { setPeek } = useContext(PeekCtx);
+  // A button that vanishes when clicked (Civil War's "Keep the first faction")
+  // never gets its mouse-leave, so the highlight stuck into the next turn
+  // (report 70512871): clear it on press, and when the panel goes away.
+  useEffect(() => () => setPeek(NO_PEEK), [setPeek]);
   return useCallback((area: string | readonly string[]) => {
     const on = () => setPeek(new Set(typeof area === 'string' ? [area] : area));
     const off = () => setPeek(NO_PEEK);
-    return { onMouseEnter: on, onMouseLeave: off, onFocus: on, onBlur: off };
+    return { onMouseEnter: on, onMouseLeave: off, onFocus: on, onBlur: off, onPointerDown: off };
   }, [setPeek]);
 }
 
@@ -1456,7 +1460,10 @@ export function useMovementPlanner(
       if (!meta || meta.isWater) continue;
       // Only flag quiet areas: where someone else is present the conflict phase
       // decides the count first, so any number here is a fighting decision.
-      const contested = Object.entries(a.tokens).some(([o, n]) => o !== actor && (n ?? 0) > 0);
+      // A rival's city — pirate and barbarian ones included — is an attack too,
+      // even with no tokens beside it (report c9ce179f: a 7-token assault on a
+      // pirate city was warned about as surplus).
+      const contested = (!!a.city && a.city !== actor) || Object.entries(a.tokens).some(([o, n]) => o !== actor && (n ?? 0) > 0);
       if (contested) continue;
       const limit = a.city ? 0 : meta.sustains + (agriculture ? 1 : 0);
       // A stack big enough for a city is deliberate — only the leftovers are lost.
@@ -1850,6 +1857,7 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
   const setT = (aid: string, max: number, d: number) => setTok((s) => ({ ...s, [aid]: Math.max(0, Math.min(max, (s[aid] ?? 0) + d)) }));
   const sugg = (legal.find((x) => x.type === 'chooseUnits') as Extract<Action, { type: 'chooseUnits' }> | undefined);
   const calName = calamityById.get(u.calamityId)?.name ?? u.calamityId;
+  const primary = state.pendingSecondary?.primary;
   // Prominent status line (the reporters wanted the tally big and obvious, not a
   // faint green note tucked at the bottom).
   const banner = remaining > 0 ? `${remaining} more unit point${remaining === 1 ? '' : 's'} to choose`
@@ -1861,6 +1869,9 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
         <div style={{ fontWeight: 800, color: '#ffd23f', textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 12 }}>⚠ {calName} — choose units to lose{u.areas ? ' (flood plain)' : ''}</div>
         <div style={{ fontSize: 22, fontWeight: 800, color: bannerColor, lineHeight: 1.2 }}>{banner}</div>
         <div style={{ fontSize: 12, color: '#cdc4ad' }}>You must give up <b>{target}</b> unit point{target === 1 ? '' : 's'} (a token = 1, a city = {u.cityWorth}{keepMin ? ', leaving 1 token' : ''} — one less for each extra token you leave in its place).</div>
+        {/* A secondary victim: say whose calamity this is, so it isn't mistaken
+            for their own draw (report 6aab6ad4 expected to share losses out). */}
+        {primary && primary !== u.holder && <div style={{ fontSize: 12, color: '#cdc4ad' }}>{civById.get(primary)?.name ?? primary} drew this {calName} and chose these points for you; the nation that draws it decides how the losses are shared out (§29.64).</div>}
       </div>
       {maxGrain > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', background: 'rgba(80,140,60,0.18)', border: '1px solid #5a8c4a', borderRadius: 6, padding: '5px 9px' }}>
@@ -2602,9 +2613,12 @@ function TradeControls({ state, actor, onApply }: { state: GameState; actor: Pla
         {otherOffers.map((o) => (
           <div key={o.id} style={{ border: '1px solid #7a4a18', borderRadius: 4, padding: 6, marginTop: 3 }}>
             <div style={{ fontSize: 12 }}><b style={{ color: civById.get(o.from)?.color }}>{civById.get(o.from)?.name}</b> gives {describe(o.give)} · wants <b>{o.wants.map(cName).join(' or ')}</b></div>
-            {o.responses.some((r) => r.from === actor) ? <span className="civ-lbl">You've responded.</span>
-              : respondTo === o.id
-                ? <OfferBuilder me={me} wantPicker={false} receive={o.give} submitLabel={`Respond to ${civById.get(o.from)?.name}`} onSubmit={(give) => { onApply({ type: 'respondOffer', offerId: o.id, give }); setRespondTo(null); }} />
+            {/* A response can be sweetened or replaced until the deal is struck,
+                as at the table (report 015ed31d) — a new one replaces the old. */}
+            {respondTo === o.id
+              ? <OfferBuilder me={me} wantPicker={false} receive={o.give} submitLabel={`${o.responses.some((r) => r.from === actor) ? 'Replace my response to' : 'Respond to'} ${civById.get(o.from)?.name}`} onSubmit={(give) => { onApply({ type: 'respondOffer', offerId: o.id, give }); setRespondTo(null); }} />
+              : o.responses.some((r) => r.from === actor)
+                ? <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}><span className="civ-lbl">You've responded.</span><button className="civ-btn" onClick={() => setRespondTo(o.id)}>Change my response</button></div>
                 : <button className="civ-btn" style={{ marginTop: 3 }} onClick={() => setRespondTo(o.id)}>Respond to this offer</button>}
           </div>
         ))}

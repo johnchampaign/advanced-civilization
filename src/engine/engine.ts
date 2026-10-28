@@ -2313,7 +2313,7 @@ function applyPass(s: GameState, actor: PlayerId, skipped?: string): void {
     // are done. (Other players' offers no longer force you back in.)
     s.negotiation.done = [...(s.negotiation.done ?? []), actor].filter((p, i, a) => a.indexOf(p) === i);
     s.negotiation.passStreak += 1;
-    s.negotiation.turnPointer += 1;
+    advanceTradeTurn(s, actor);
   } else if (!s.actedThisPhase.includes(actor)) {
     // Passing taxation = accept the default rate 2 (still collect the tax).
     if (s.phase === 'taxation') collectTax(s, actor, 2);
@@ -2334,6 +2334,15 @@ function applyPass(s: GameState, actor: PlayerId, skipped?: string): void {
 const PHASE_NAME: Partial<Record<Phase, string>> = {
   cityConstruction: 'city building', acquireAdvances: 'buying advances', shipConstruction: 'ship building', trade: 'trading',
 };
+
+/** Hand the trade turn to whoever sits after `actor`. Stepping the raw pointer
+ *  instead let it land on a done player and wrap straight back to the same
+ *  nation, so one player's repeated waits ended the phase before the others
+ *  still trading ever got a turn (reports b94f25b3, 2fd6f16f). */
+function advanceTradeTurn(s: GameState, actor: PlayerId): void {
+  const i = s.activeOrder.indexOf(actor);
+  s.negotiation.turnPointer = i >= 0 ? i + 1 : s.negotiation.turnPointer + 1;
+}
 
 /** Whose turn it is in the trade phase: round-robin from the pointer, skipping
  *  players who are done trading. */
@@ -2397,7 +2406,10 @@ function forcedSkip(s: GameState): { actor: PlayerId; reason: string } | null {
     if (tradableCards(s, actor) < 3) return { actor, reason: 'fewer than three tradable cards (§28.3)' };
     const done = s.negotiation.done ?? [];
     const partners = s.activeOrder.filter((id) => id !== actor && !done.includes(id) && tradableCards(s, id) >= 3);
-    if (partners.length === 0) return { actor, reason: 'no one else still trading has three cards' };
+    // A response waiting on your own offer is still yours to accept or decline,
+    // even when its sender has since finished trading (report 2a7bebba).
+    const answered = s.negotiation.offers.some((o) => o.from === actor && o.responses.length > 0);
+    if (partners.length === 0 && !answered) return { actor, reason: 'no one else still trading has three cards' };
     return null;
   }
   if (s.phase !== 'cityConstruction' && s.phase !== 'acquireAdvances' && s.phase !== 'shipConstruction') return null;
@@ -2844,31 +2856,31 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
       case 'postOffer':
         if (s.phase !== 'trade') throw new Error('postOffer only in trade phase');
         applyPostOffer(s, actor, action);
-        s.negotiation.turnPointer += 1;
+        advanceTradeTurn(s, actor);
         s.negotiation.waitStreak = 0;
         break;
       case 'respondOffer':
         if (s.phase !== 'trade') throw new Error('respondOffer only in trade phase');
         applyRespondOffer(s, actor, action);
-        s.negotiation.turnPointer += 1;
+        advanceTradeTurn(s, actor);
         s.negotiation.waitStreak = 0;
         break;
       case 'acceptResponse':
         if (s.phase !== 'trade') throw new Error('acceptResponse only in trade phase');
         applyAcceptResponse(s, actor, action);
-        s.negotiation.turnPointer += 1;
+        advanceTradeTurn(s, actor);
         s.negotiation.waitStreak = 0;
         break;
       case 'withdrawOffer':
         if (s.phase !== 'trade') throw new Error('withdrawOffer only in trade phase');
         applyWithdrawOffer(s, actor);
-        s.negotiation.turnPointer += 1;
+        advanceTradeTurn(s, actor);
         s.negotiation.waitStreak = 0;
         break;
       case 'tradeWait':
         if (s.phase !== 'trade') throw new Error('tradeWait only in trade phase');
         s.negotiation.waitStreak = (s.negotiation.waitStreak ?? 0) + 1;
-        s.negotiation.turnPointer += 1;
+        advanceTradeTurn(s, actor);
         log(s, 'trade.wait', actor, `${actor} waits to see the others' offers.`, {});
         break;
       case 'buyTradeCard':

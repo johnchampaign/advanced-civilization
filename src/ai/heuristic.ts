@@ -641,20 +641,30 @@ function wantsByGain(hand: Record<string, number>): string[] {
  *  for nothing). The best two cards are the named, binding ones. Null if our
  *  spares can't make a fair offer. */
 function buildFairGive(me: { hand: Record<string, number> }, want: string, collect: string): TradeBundle | null {
-  const target = commValue(want) + 2;
+  return buildWorthGive(me, commValue(want) + 2, new Set([want, collect]), commValue(want));
+}
+
+/** Three+ of our cheapest spares (not `exclude`, none worth more than `cap`),
+ *  plus a tradable calamity if held, whose face value reaches `target`. The best
+ *  two cards are the named, binding ones. Null if our spares fall short. */
+function buildWorthGive(me: { hand: Record<string, number> }, target: number, exclude: Set<string>, cap = Infinity): TradeBundle | null {
   const cards: string[] = [];
   const cal = givable(me.hand).map(([c]) => c).find(isTradableCal);
   if (cal) cards.push(cal);
   let worth = 0;
-  for (const c of cheapCommodities(me.hand, new Set([want, collect]))) {
+  for (const c of cheapCommodities(me.hand, exclude)) {
     if (cards.length >= 3 && worth >= target) break;
-    if (commValue(c) > commValue(want)) break; // never pay a better card for a worse one
+    if (commValue(c) > cap) break; // never pay a better card for a worse one
     cards.push(c);
     worth += commValue(c);
   }
   if (worth < target || cards.length < 3 || cards.filter((c) => !isCal(c)).length < 2) return null;
   return buildBundle(cards.sort((a, b) => commValue(b) - commValue(a)));
 }
+
+/** Face value of an offer's NAMED (binding) commodity cards. */
+const guaranteedWorth = (b: TradeBundle) =>
+  Object.entries(bundleFace(b).guaranteed).reduce((t, [c, k]) => t + (isCal(c) ? 0 : commValue(c) * k), 0);
 
 /** Set value we'd gain from an offer's NAMED (binding) cards — the claimed rest
  *  may be bluffs, so it counts for nothing. */
@@ -690,10 +700,16 @@ function planTradeTurn(state: GameState, actor: PlayerId, _rng: { pick<T>(a: rea
   const n = state.negotiation;
   const myWant = topCommodity(me.hand);
 
-  // (a) Accept a response to our own offer (judged on its declared cards).
+  // (a) Accept a response to our own offer (judged on its declared cards) — but
+  // only a fair one: it names a card we asked for, or names cards worth what we
+  // named. Taking any answer made a reply of cheap cards with a hidden calamity
+  // pure profit for the responder.
   const mine = n.offers.find((o) => o.from === actor);
   if (mine && mine.responses.length) {
-    const good = mine.responses.find((r) => mentioned(r.give).some((c) => !isCal(c) && (mine.wants.includes(c) || (me.hand[c] ?? 0) >= 1))) ?? mine.responses[0];
+    const fair = (r: { give: TradeBundle }) =>
+      mine.wants.some((w) => (bundleFace(r.give).guaranteed[w] ?? 0) > 0) || guaranteedWorth(r.give) >= guaranteedWorth(mine.give);
+    const ok = mine.responses.filter(fair);
+    const good = ok.find((r) => mentioned(r.give).some((c) => !isCal(c) && (mine.wants.includes(c) || (me.hand[c] ?? 0) >= 1))) ?? ok[0];
     if (good) return { type: 'acceptResponse', offerId: mine.id, responder: good.from };
   }
 
@@ -719,19 +735,24 @@ function planTradeTurn(state: GameState, actor: PlayerId, _rng: { pick<T>(a: rea
     }
   }
 
-  // (c) Respond to another player's offer that benefits us and we haven't answered.
+  // (c) Respond to another player's offer that benefits us (or takes a calamity
+  // off our hands) and we haven't answered. The answer carries a card the offer
+  // asks for, or else is worth at least what the offer guarantees: a reply of
+  // ochre, hides and a hidden calamity to an offer of good cards just looked
+  // like junk (report 11132aca).
   for (const o of n.offers) {
     if (o.from === actor || o.responses.some((r) => r.from === actor)) continue;
     const grows = mentioned(o.give).some((c) => !isCal(c) && (me.hand[c] ?? 0) >= 1);
-    const haveCal = givable(me.hand).some(([c]) => isTradableCal(c));
     // A wanted card we'll part with even if it's one we're collecting, when the
     // offer's named cards are worth more to us than it is (so asking for a good
     // card with a fair offer gets a real answer, not just ochre and hides).
     const worthIt = wantedWorthGiving(me.hand, o);
-    if (!grows && !haveCal && !worthIt) continue;
-    const give = worthIt
-      ? buildGive(me, myWant ?? '', worthIt, true)
-      : buildGive(me, myWant ?? '', o.wants.find((w) => w !== myWant && (me.hand[w] ?? 0) >= 1));
+    const spare = o.wants.find((w) => !isCal(w) && w !== myWant && (me.hand[w] ?? 0) >= 1);
+    const haveCal = givable(me.hand).some(([c]) => isTradableCal(c));
+    const give = worthIt ? buildGive(me, myWant ?? '', worthIt, true)
+      : spare && (grows || haveCal) ? buildGive(me, myWant ?? '', spare)
+      : grows || haveCal ? buildWorthGive(me, guaranteedWorth(o.give), new Set([myWant ?? '']))
+      : null;
     if (give) return { type: 'respondOffer', offerId: o.id, give };
   }
 

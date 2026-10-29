@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Rng } from 'digital-boardgame-framework';
 import { adapter, createGame, normalize } from '../engine/index.js';
 import { pieceConservationProblems } from '../engine/helpers.js';
-import { pieceCounts } from '../data/index.js';
+import { commodityById, pieceCounts } from '../data/index.js';
 import { availableNations, boardPresets } from '../engine/boards.js';
 import { HeuristicAI } from './heuristic.js';
 import type { GameState, PlayerId } from '../engine/types.js';
@@ -148,6 +148,55 @@ describe('AI trade negotiation (open-offer board)', () => {
     const respond = await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) });
     expect(respond.type).toBe('respondOffer'); // it still answers (it holds ochre) …
     if (respond.type === 'respondOffer') expect(respond.give.actual['gold'] ?? 0).toBe(0); // … but keeps the gold
+  });
+
+  it('answers an offer without the asked-for card with cards worth what it names, not ochre and hides (report 11132aca)', async () => {
+    // egypt names two bronze (12) and asks for gems; babylon has no gems but
+    // collects bronze, so its answer must match the 12, not be its cheapest three.
+    const s = tradeState({
+      egypt: { bronze: 2, ochre: 1 },
+      babylon: { bronze: 1, ochre: 2, hides: 1, salt: 2, timber: 1, 'calamity:epidemic': 1 },
+    });
+    s.negotiation.offers = [{
+      id: 1, from: 'egypt', wants: ['gems'], responses: [],
+      give: { actual: { bronze: 2, ochre: 1 }, declared: { bronze: 2 }, count: 3, claimed: { ochre: 1 } },
+    }, ownOffer()];
+    s.negotiation.turnPointer = 1;
+    const respond = await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) });
+    expect(respond.type).toBe('respondOffer');
+    if (respond.type !== 'respondOffer') return;
+    const worth = Object.entries(respond.give.actual).reduce((t, [c, k]) => t + (commodityById.get(c)?.value ?? 0) * k, 0);
+    expect(worth).toBeGreaterThanOrEqual(12);
+  });
+
+  it('does not answer an offer just to slip a calamity into junk cards', async () => {
+    // Nothing egypt names or wants is in babylon's hand; only the calamity would
+    // tempt it, and an ochre-and-hides reply is no answer at all.
+    const s = tradeState({ egypt: { bronze: 2, ochre: 1 }, babylon: { hides: 2, iron: 1, 'calamity:epidemic': 1 } });
+    s.negotiation.offers = [{
+      id: 1, from: 'egypt', wants: ['gems'], responses: [],
+      give: { actual: { bronze: 2, ochre: 1 }, declared: { bronze: 2 }, count: 3, claimed: { ochre: 1 } },
+    }, ownOffer()];
+    s.negotiation.turnPointer = 1;
+    const respond = await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) });
+    expect(respond.type).not.toBe('respondOffer');
+  });
+
+  it('declines a junk answer to its own offer but takes one naming the card it asked for', async () => {
+    const s = tradeState({ egypt: { ochre: 2, hides: 1, gems: 1 }, babylon: { bronze: 2, ochre: 1, wine: 1 } });
+    const offer = {
+      id: 2, from: 'babylon' as PlayerId, wants: ['gems'],
+      give: { actual: { bronze: 2, ochre: 1 }, declared: { bronze: 2 }, count: 3, claimed: { ochre: 1 } },
+    };
+    const junk = { from: 'egypt' as PlayerId, give: { actual: { ochre: 2, hides: 1 }, declared: { ochre: 2 }, count: 3, claimed: { hides: 1 } } };
+    s.negotiation.offers = [{ ...offer, responses: [junk] }];
+    s.negotiation.turnPointer = 1;
+    const declined = await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) });
+    expect(declined.type).not.toBe('acceptResponse');
+    const real = { from: 'egypt' as PlayerId, give: { actual: { gems: 1, ochre: 2 }, declared: { gems: 1, ochre: 1 }, count: 3, claimed: { ochre: 1 } } };
+    s.negotiation.offers = [{ ...offer, responses: [real] }];
+    const taken = await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) });
+    expect(taken.type).toBe('acceptResponse');
   });
 
   it('builds a ship from a coastal foothold with spare tokens', async () => {

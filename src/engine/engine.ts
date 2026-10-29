@@ -2668,10 +2668,12 @@ function applyBuyAdvance(s: GameState, actor: PlayerId, advanceIds: string[], sp
 // ---- Trade action handlers ----------------------------------------------
 
 /** The trade phase is over (no pending offer) once everyone has passed in a row,
- *  or the generous per-phase proposal cap is hit (bounds an eager AI). */
+ *  or the generous per-phase proposal cap is hit (only a safety net: computer
+ *  players ration their offers, and at 12 per player the cap cut every phase
+ *  short mid-round while a human was still trading, report 34c4f05f). */
 function tradePhaseEnded(s: GameState): boolean {
   const n = s.negotiation;
-  const cap = 12 * Math.max(1, s.activeOrder.length);
+  const cap = 40 * Math.max(1, s.activeOrder.length);
   // Phase ends once every player has passed ("Done trading"), or the cap is hit,
   const done = n.done ?? [];
   const trading = s.activeOrder.filter((p) => !done.includes(p));
@@ -2692,6 +2694,7 @@ function applyPostOffer(s: GameState, actor: PlayerId, a: { give: TradeBundle; w
   n.offers = n.offers.filter((o) => o.from !== actor); // one standing offer per player
   n.nextOfferId = (n.nextOfferId ?? 0) + 1;
   n.offers.push({ id: n.nextOfferId, from: actor, give: a.give, wants, responses: [] });
+  n.posted = { ...n.posted, [actor]: (n.posted?.[actor] ?? 0) + 1 };
   n.actions = (n.actions ?? 0) + 1;
   n.passStreak = 0;
   log(s, 'trade.offer', actor, `${actor} posts a trade offer (gives ${bundleSize(a.give.actual)}, wants ${wants.map(commodityName).join(' or ')}).`, { gives: bundleSize(a.give.actual), wants });

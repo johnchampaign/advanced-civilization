@@ -96,6 +96,13 @@ describe('AI trade negotiation (open-offer board)', () => {
     if (action.type === 'postOffer') expect(action.wants).toEqual(['iron']);
   });
 
+  it('stops posting offers after a few per phase, so AI-only deals do not run trading to its cap (report 34c4f05f)', async () => {
+    const s = tradeState({ egypt: { salt: 3, iron: 2, ochre: 1 }, babylon: {} });
+    s.negotiation.posted = { egypt: 3 };
+    const action = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+    expect(action.type).not.toBe('postOffer');
+  });
+
   it('does not respond to an offer it cannot benefit from', async () => {
     // egypt offers iron/ochre wanting salt; babylon holds only wine and gains nothing.
     const s = tradeState({ egypt: { iron: 5, ochre: 1 }, babylon: { wine: 3 } });

@@ -401,6 +401,10 @@ export interface GameState {
     actions?: number;
     /** Monotonic id source for offers. */
     nextOfferId?: number;
+    /** Offers each player has posted this phase (public — offers are on the
+     *  board). Computer players stop posting after a few, so their deals with
+     *  each other don't run the phase to its cap (report 34c4f05f). */
+    posted?: Partial<Record<PlayerId, number>>;
     /** Players who have passed ("Done trading") — skipped for the rest of the
      *  phase so they aren't repeatedly prompted; the phase ends when all are done.
      *  A response to a done player's standing offer brings them back to decide. */

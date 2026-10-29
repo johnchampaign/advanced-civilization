@@ -678,6 +678,9 @@ function wantedWorthGiving(hand: Record<string, number>, o: { wants: string[]; g
     .sort((a, b) => partingCost(hand, a) - partingCost(hand, b))[0];
 }
 
+/** Offers a computer player posts per trade phase before it only answers others'. */
+const AI_OFFERS_PER_PHASE = 3;
+
 /** One trade action per turn (multiplayer-fair — only our own hand is read):
  *  accept a good response to our offer, else post one offer, else respond to an
  *  offer that grows our set / lets us offload a calamity, else wait (or pass
@@ -695,8 +698,11 @@ function planTradeTurn(state: GameState, actor: PlayerId, _rng: { pick<T>(a: rea
   }
 
   // (b) Post one standing offer if we have none — a fair one: asking for a
-  // valuable card with a handful of ochre and hides just gets declined.
-  if (!mine && totalGivable(me.hand) >= 3) {
+  // valuable card with a handful of ochre and hides just gets declined. Only a
+  // few per phase: computer players re-posting after every deal kept trading
+  // with each other until the phase hit its cap and closed on the human
+  // (reports 34c4f05f, 576e4a53). We still answer offers after that.
+  if (!mine && (n.posted?.[actor] ?? 0) < AI_OFFERS_PER_PHASE && totalGivable(me.hand) >= 3) {
     for (const want of wantsByGain(me.hand)) {
       const give = buildFairGive(me, want, myWant ?? want);
       if (give) return { type: 'postOffer', give, wants: [want] };

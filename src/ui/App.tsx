@@ -1942,7 +1942,7 @@ function CivilWarControls({ state, legal, onApply }: { state: GameState; legal: 
     const f1 = fpts(cw.faction1), f2 = fpts(cw.faction2!);
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <span className="civ-lbl">Your nation has split in two (§30.415). Choose which faction to <b>keep playing</b>; <b style={{ color: nationColor(cw.beneficiary) }}>{nationName(cw.beneficiary)}</b> annexes the other:</span>
+        <span className="civ-lbl">Your nation has split in two (§30.415). Choose which faction to <b>keep playing</b>; <b style={panelName(cw.beneficiary)}>{nationName(cw.beneficiary)}</b> annexes the other:</span>
         <button className="civ-btn" {...peek(factionAreas(cw.faction1))} onClick={() => onApply({ type: 'civilWarKeep', faction: 1 })}>Keep the first faction — <b>{f1} pts</b> ({factionDesc(cw.faction1)})</button>
         <button className="civ-btn" {...peek(factionAreas(cw.faction2!))} onClick={() => onApply({ type: 'civilWarKeep', faction: 2 })}>Keep the second faction — <b>{f2} pts</b> ({factionDesc(cw.faction2!)})</button>
       </div>
@@ -1971,23 +1971,23 @@ function CivilWarControls({ state, legal, onApply }: { state: GameState; legal: 
       <span className="civ-lbl">⚔ Civil War (§30.41){victimSelect ? '' : ` — you are ${nationName(cw.beneficiary)}, the beneficiary`}</span>
       <span className="civ-lbl">{victimSelect
         ? <>Select <b>{target}</b> unit points of your own to form the first faction (§30.4121). Keep your weakest here — you'll choose which faction to keep at the end.</>
-        : <>Seize <b>{target}</b> of <b style={{ color: nationColor(cw.victim) }}>{nationName(cw.victim)}</b>'s units to complete the first faction (§30.4123) — take their strongest.</>}</span>
+        : <>Seize <b>{target}</b> of <b style={panelName(cw.victim)}>{nationName(cw.victim)}</b>'s units to complete the first faction (§30.4123) — take their strongest.</>}</span>
       {/* Units the victim already put into the first faction aren't listed below;
           say what they were so a missing city isn't a mystery (report 7e1ef278). */}
       {!victimSelect && fpts(cw.faction1) > 0 && (
-        <span className="civ-lbl" {...peek(factionAreas(cw.faction1))} style={{ color: '#9a8d6a' }}>
+        <span className="civ-lbl" {...peek(factionAreas(cw.faction1))} style={{ color: '#5a3410' }}>
           Already in the first faction (chosen by {nationName(cw.victim)}): {fpts(cw.faction1)} pts — {factionDesc(cw.faction1)}. Their remaining units are listed below.
         </span>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: '30vh', overflowY: 'auto' }}>
         {inv.map((x) => (
           <div key={x.aid + (x.city ? ':c' : '')} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 110, color: nationColor(cw.victim) }}>{areaById.get(x.aid)?.name ?? x.aid}</span>
+            <span style={{ width: 110, color: '#3a2207', fontWeight: 700, borderLeft: `5px solid ${nationColor(cw.victim)}`, paddingLeft: 6 }}>{areaById.get(x.aid)?.name ?? x.aid}</span>
             {!x.city && <>
               <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setT(x.aid, x.tokens, -1)}>−</button>
               <b style={{ width: 36, textAlign: 'center' }}>{tok[x.aid] ?? 0}/{x.tokens}</b>
               <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setT(x.aid, x.tokens, +1)}>+</button>
-              <span className="civ-lbl" style={{ color: '#9a8d6a' }}>tokens</span>
+              <span className="civ-lbl" style={{ color: '#5a3410' }}>tokens</span>
             </>}
             {x.city && <button className={`civ-btn ${cities.includes(x.aid) ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => setCities((c) => c.includes(x.aid) ? c.filter((y) => y !== x.aid) : [...c, x.aid])}>{cities.includes(x.aid) ? '✓ ' : ''}city (5)</button>}
           </div>
@@ -2102,7 +2102,7 @@ function StartControls({ state, legal, selectedArea, onApply, actor }: { state: 
       <span className="civ-lbl">🏁 Choose your <b>starting area</b> — your first token goes here (§16.3). Nations choose in a random order{after.length ? <>; still to choose after you: {after.map((id) => nationName(id)).join(', ')}</> : ''}.</span>
       {placed.length > 0 && (
         <span className="civ-lbl">Already placed: {placed.map(({ owner, aid }, i) => (
-          <span key={owner}>{i ? ', ' : ''}<b style={{ color: nationColor(owner) }}>{nationName(owner)}</b> in {areaById.get(aid)?.name ?? aid}</span>
+          <span key={owner}>{i ? ', ' : ''}<b style={panelName(owner)}>{nationName(owner)}</b> in {areaById.get(aid)?.name ?? aid}</span>
         ))}</span>
       )}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -2245,12 +2245,12 @@ function AllocationControls({ state, legal, onApply }: { state: GameState; legal
   });
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span className="civ-lbl" style={{ color: '#e6b85a' }}>§29.64 — as the victim you direct the secondary losses:</span>
+      <span className="civ-lbl" style={{ color: '#5a1e06', fontWeight: 700 }}>§29.64 — as the victim you direct the secondary losses:</span>
       <span className="civ-lbl">Direct <b>{maxTotal} {unit}</b> of loss onto rival nations (max {a.kind === 'cities' ? '' : `${a.pool === 20 ? 8 : 10} `}per nation):</span>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         {rivals.map((v) => (
           <div key={v} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 90, color: nationColor(v), fontWeight: 700 }}>{nationName(v)}</span>
+            <span style={{ width: 90, color: '#3a2207', fontWeight: 700, borderLeft: `5px solid ${nationColor(v)}`, paddingLeft: 6 }}>{nationName(v)}</span>
             <button className="civ-btn" style={{ padding: '0 8px' }} onClick={() => set(v, -1)}>−</button>
             <b style={{ width: 24, textAlign: 'center' }}>{alloc[v] ?? 0}</b>
             <button className="civ-btn" style={{ padding: '0 8px' }} onClick={() => set(v, +1)}>+</button>
@@ -2725,6 +2725,9 @@ function HotseatReport({ state, focus }: { state: GameState; focus: PlayerId }) 
 
 const nationName = (id: string) => id === '__barbarian__' ? 'Barbarians' : id === '__pirate__' ? 'Pirates' : civById.get(id)?.name ?? id;
 const nationColor = (id: string) => id === '__barbarian__' ? '#b08' : id === '__pirate__' ? '#000' : civById.get(id)?.color ?? '#ccc';
+/** A nation's name on the tan panels: panel-brown text underlined in the nation's
+ *  colour — Egypt's gold or Thrace's orange vanish as text there (report 94c787dc). */
+const panelName = (id: string): CSSProperties => ({ color: '#3a2207', fontWeight: 700, borderBottom: `3px solid ${nationColor(id)}` });
 
 /** Generic step-through overlay: pages through `pages` one at a time, each behind
  *  an Acknowledge button; the final page's Continue dismisses it (tracked by

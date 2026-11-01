@@ -8,7 +8,7 @@ import { civilizations, civById } from '../data/index.js';
 import { availableNations, unavailableReason } from '../engine/boards.js';
 import { claimSeat, createCivClient, createNetworkGame, fetchMyReports, realtimeSubscribe, resolutionNote, tokenFromInvite, type MyReport } from '../client/api.js';
 import { REPORT_CATEGORY } from '../report-meta.js';
-import { ActionList, AreaPeekProvider, Board, BoardPicker, CalamityModal, CombatModal, InfoView, MovementControls, ReportModal, StatusPanel, UpcomingCalamities, effectiveBoardPreset, legalAreas, nationFocusArea, phaseLabel, scrollBoardTo, useMovementPlanner, type View } from './App.js';
+import { ActionList, AreaPeekProvider, Board, BoardPicker, CalamityModal, CombatModal, InfoView, MovementControls, ReportModal, StatusPanel, UpcomingCalamities, effectiveBoardPreset, legalAreas, nationFocusArea, panelName, phaseLabel, scrollBoardTo, useMovementPlanner, type View } from './App.js';
 
 const API = ''; // same-origin; Vite proxies /api -> the GameServer host
 // Placeholder so the movement-planner hook can run before the game view loads.
@@ -77,6 +77,7 @@ export function Lobby() {
       ) : (
         <>
           <p>Game <code>{created.gameId}</code> created. Send each player their link; open one yourself to start.</p>
+          <p className="civ-lbl" style={{ color: '#ccc' }}>Every nation is played from its own link, and the game waits for whoever is on the clock — starting with choosing start areas. If a player hasn't opened their link yet, the game simply waits for them.</p>
           <table style={{ width: '100%', fontSize: 13 }}><tbody>
             {Object.entries(created.invites).map(([seat, url]) => (
               <tr key={seat}>
@@ -199,8 +200,15 @@ export function OnlineGame({ gameId, token }: { gameId: string; token: string })
             <>
               <UpcomingCalamities state={s} />
               <div className="civ-lbl" style={{ textAlign: 'center', padding: 8 }}>
-                Waiting for <b style={{ color: onClock ? civById.get(onClock)?.color : '#fff' }}>{onClock ? civById.get(onClock)?.name : '…'}</b> ({phaseLabel(s)})
+                Waiting for <b style={onClock ? panelName(onClock) : undefined}>{onClock ? civById.get(onClock)?.name : '…'}</b> ({phaseLabel(s)})
               </div>
+              {/* Computer seats choose at once, so a wait here is a person who
+                  may not have opened their invite link yet (report 7cac02a7). */}
+              {s.pendingStart && onClock && (
+                <div className="civ-lbl" style={{ textAlign: 'center', fontSize: 12, color: '#5a3410' }}>
+                  {civById.get(onClock)?.name} plays from its own invite link — the game continues as soon as that player opens it and picks a start area.
+                </div>
+              )}
             </>
           )}
         </div>

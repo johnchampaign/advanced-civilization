@@ -2727,7 +2727,7 @@ const nationName = (id: string) => id === '__barbarian__' ? 'Barbarians' : id ==
 const nationColor = (id: string) => id === '__barbarian__' ? '#b08' : id === '__pirate__' ? '#000' : civById.get(id)?.color ?? '#ccc';
 /** A nation's name on the tan panels: panel-brown text underlined in the nation's
  *  colour — Egypt's gold or Thrace's orange vanish as text there (report 94c787dc). */
-const panelName = (id: string): CSSProperties => ({ color: '#3a2207', fontWeight: 700, borderBottom: `3px solid ${nationColor(id)}` });
+export const panelName = (id: string): CSSProperties => ({ color: '#3a2207', fontWeight: 700, borderBottom: `3px solid ${nationColor(id)}` });
 
 /** Generic step-through overlay: pages through `pages` one at a time, each behind
  *  an Acknowledge button; the final page's Continue dismisses it (tracked by

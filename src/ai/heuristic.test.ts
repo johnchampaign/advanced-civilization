@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Rng } from 'digital-boardgame-framework';
 import { adapter, createGame, normalize } from '../engine/index.js';
 import { pieceConservationProblems } from '../engine/helpers.js';
-import { commodityById, pieceCounts } from '../data/index.js';
+import { advances, commodityById, pieceCounts } from '../data/index.js';
 import { availableNations, boardPresets } from '../engine/boards.js';
 import { HeuristicAI } from './heuristic.js';
 import type { GameState, PlayerId } from '../engine/types.js';
@@ -411,6 +411,23 @@ describe('heuristic AI: movement and advances (reports 341f4378 / 9b9885cd)', ()
     // would throw away ~50 points; the pooled purchase overpays by at most a few.
     const buy = t.log.find((e) => e.kind === 'advance.buy')!.payload as { cost: number; paid: number };
     expect(buy.paid - buy.cost).toBeLessThanOrEqual(4);
+  });
+  it('with cities to lose, prefers an advance that softens a calamity (Medicine over Coinage)', async () => {
+    // Everything else owned: Coinage nets 50 after credits, Medicine 80, and 80
+    // in treasury buys only one. On points per point paid Coinage wins; with
+    // three cities, Medicine's halved Epidemic losses (§30.61) tip it.
+    const pick = async (cities: string[]) => {
+      const s = at('acquireAdvances', { thebes: 2 });
+      for (const aid of cities) s.areas[aid] = { tokens: {}, city: 'egypt' };
+      const p = s.players['egypt']!;
+      p.citiesAvailable -= cities.length;
+      p.advances = advances.map((a) => a.id).filter((id) => id !== 'coinage' && id !== 'medicine');
+      p.hand = {}; p.treasury = 80; p.stock -= 80;
+      const action = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+      return action.type === 'buyAdvance' ? action.advance ?? action.advances : action.type;
+    };
+    expect(await pick([])).toBe('coinage');
+    expect(await pick(['memphis', 'tanis', 'sais'])).toBe('medicine');
   });
 });
 

@@ -626,13 +626,14 @@ const mentioned = (b: TradeBundle) => Object.keys({ ...bundleFace(b).guaranteed,
 
 /** Three+ cards to give away: a tradable calamity to offload (if held) plus the
  *  cheapest spares we aren't collecting, and optionally a wanted commodity. */
-function buildGive(me: { hand: Record<string, number> }, collect: string, wantToInclude?: string, allowCollect = false): TradeBundle | null {
+function buildGive(me: { hand: Record<string, number> }, collect: string, wantToInclude?: string, allowCollect = false, alsoWanted: string[] = []): TradeBundle | null {
   const cards: string[] = [];
   const committed: Record<string, number> = {};
   const take = (c: string) => { committed[c] = (committed[c] ?? 0) + 1; cards.push(c); };
   const cal = givable(me.hand).map(([c]) => c).find(isTradableCal);
   if (cal) take(cal);
   if (wantToInclude && !isCal(wantToInclude) && (allowCollect || wantToInclude !== collect) && (me.hand[wantToInclude] ?? 0) > (committed[wantToInclude] ?? 0)) take(wantToInclude);
+  for (const c of alsoWanted) take(c);
   for (const c of cheapCommodities(me.hand, new Set([collect]))) {
     if (cards.length >= 3) break;
     if ((me.hand[c] ?? 0) <= (committed[c] ?? 0)) continue;
@@ -646,6 +647,18 @@ function buildGive(me: { hand: Record<string, number> }, collect: string, wantTo
 function wantsByGain(hand: Record<string, number>): string[] {
   const gain = (c: string) => commoditySetValue(c, (hand[c] ?? 0) + 1) - commoditySetValue(c, hand[c] ?? 0);
   return Object.keys(hand).filter((c) => !isCal(c) && (hand[c] ?? 0) > 0).sort((a, b) => gain(b) - gain(a));
+}
+
+/** Other cards we'd take instead of `first` on an offer of `give`, as a player
+ *  at the table would ("Oil... or Salt, then"): ones we'd like about as much, that
+ *  the offer also pays fairly for and doesn't itself mention. */
+function alternateWants(hand: Record<string, number>, give: TradeBundle, first: string): string[] {
+  const gain = (c: string) => commoditySetValue(c, (hand[c] ?? 0) + 1) - commoditySetValue(c, hand[c] ?? 0);
+  const worth = Object.entries(give.actual).reduce((t, [c, k]) => t + (isCal(c) ? 0 : commValue(c) * k), 0);
+  const named = mentioned(give);
+  return wantsByGain(hand)
+    .filter((w) => w !== first && !named.includes(w) && 2 * gain(w) >= gain(first) && commValue(w) + 2 <= worth)
+    .slice(0, AI_ALTERNATE_WANTS);
 }
 
 /** A bundle to post when asking for `want`, worth at least what we ask in return:
@@ -701,6 +714,23 @@ function wantedWorthGiving(hand: Record<string, number>, o: { wants: string[]; g
     .sort((a, b) => partingCost(hand, a) - partingCost(hand, b))[0];
 }
 
+/** Wanted cards an answer of ours adds beyond `first`: the rest of what the offer
+ *  asks for that we can spare, while the offer's named cards still pay for them
+ *  all ("I want Salt and Grain" gets both when it can). */
+function alsoWantedSpares(hand: Record<string, number>, o: { wants: string[]; give: TradeBundle }, first: string, myWant: string | null): string[] {
+  let room = guaranteedWorth(o.give) - commValue(first);
+  const out: string[] = [];
+  for (const w of o.wants) {
+    if (w === first || w === myWant || isCal(w) || (hand[w] ?? 0) < 1 || commValue(w) > room) continue;
+    room -= commValue(w);
+    out.push(w);
+  }
+  return out;
+}
+
+/** Cards a computer player's offer may name beyond the one it wants most. */
+const AI_ALTERNATE_WANTS = 2;
+
 /** Offers a computer player posts per trade phase before it only answers others'. */
 const AI_OFFERS_PER_PHASE = 3;
 
@@ -734,7 +764,7 @@ function planTradeTurn(state: GameState, actor: PlayerId, _rng: { pick<T>(a: rea
   if (!mine && (n.posted?.[actor] ?? 0) < AI_OFFERS_PER_PHASE && totalGivable(me.hand) >= 3) {
     for (const want of wantsByGain(me.hand)) {
       const give = buildFairGive(me, want, myWant ?? want);
-      if (give) return { type: 'postOffer', give, wants: [want] };
+      if (give) return { type: 'postOffer', give, wants: [want, ...alternateWants(me.hand, give, want)] };
     }
     // No fair offer, but a calamity to offload: still put up the cheap bundle —
     // asking for the cheapest commodity it doesn't already mention, so it reads
@@ -762,8 +792,8 @@ function planTradeTurn(state: GameState, actor: PlayerId, _rng: { pick<T>(a: rea
     const worthIt = wantedWorthGiving(me.hand, o);
     const spare = o.wants.find((w) => !isCal(w) && w !== myWant && (me.hand[w] ?? 0) >= 1);
     const haveCal = givable(me.hand).some(([c]) => isTradableCal(c));
-    const give = worthIt ? buildGive(me, myWant ?? '', worthIt, true)
-      : spare && (grows || haveCal) ? buildGive(me, myWant ?? '', spare)
+    const give = worthIt ? buildGive(me, myWant ?? '', worthIt, true, alsoWantedSpares(me.hand, o, worthIt, myWant))
+      : spare && (grows || haveCal) ? buildGive(me, myWant ?? '', spare, false, alsoWantedSpares(me.hand, o, spare, myWant))
       : grows || haveCal ? buildWorthGive(me, guaranteedWorth(o.give), new Set([myWant ?? '']))
       : null;
     if (give) return { type: 'respondOffer', offerId: o.id, give };

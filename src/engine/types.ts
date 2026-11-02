@@ -166,6 +166,11 @@ export interface TradeStacks {
   /** Stack number (1-9) -> ordered list of card refs (commodity id or
    *  "calamity:<id>"). Drawn from the top (end of array). */
   stacks: Record<number, string[]>;
+  /** Stack number -> cards ever drawn or bought from it (public: draws are made
+   *  in the open). Absent on games saved before the stack chart. */
+  drawn?: Record<number, number>;
+  /** Stack number -> cards ever returned to its bottom (public: §31.71, §29.7). */
+  returned?: Record<number, number>;
 }
 
 /** A pending secondary-victim allocation (§29.64): the primary victim of Famine /

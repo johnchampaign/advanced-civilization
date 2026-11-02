@@ -817,6 +817,20 @@ function closeNinthWindow(s: GameState): void {
   s.ninthStack.at += 1;
 }
 
+/** Take the top card of a stack, keeping the public draw count. */
+function takeFromStack(s: GameState, stack: number): string {
+  const drawn = (s.trade.drawn ??= {});
+  drawn[stack] = (drawn[stack] ?? 0) + 1;
+  return s.trade.stacks[stack]!.pop()!;
+}
+
+/** Put a card on the bottom of a stack, keeping the public return count. */
+function returnToStack(s: GameState, stack: number, card: string): void {
+  const returned = (s.trade.returned ??= {});
+  returned[stack] = (returned[stack] ?? 0) + 1;
+  s.trade.stacks[stack]!.unshift(card);
+}
+
 /** §27.1: a player draws one card from each of stacks 1..N, where N is the
  *  number of cities on the board. A city-less player draws nothing — building
  *  your first city is what starts the flow of trade cards. */
@@ -827,7 +841,7 @@ function drawTradeCards(s: GameState, id: PlayerId): void {
   for (let stack = 1; stack <= cities; stack++) {
     const pile = s.trade.stacks[stack];
     if (!pile || pile.length === 0) continue;
-    const card = pile.pop()!;
+    const card = takeFromStack(s, stack);
     // Both commodity and calamity cards go into the hand; calamities as
     // `calamity:<id>` so tradable ones can be passed during the trade phase
     // and non-tradable ones are simply retained (§27.3).
@@ -1015,7 +1029,7 @@ function capCalamitiesPerPlayer(s: GameState, rng: Rng): void {
       hand[card] = (hand[card] ?? 0) - 1;
       if (hand[card]! <= 0) delete hand[card];
       const lvl = calamityById.get(card.slice('calamity:'.length))?.level;
-      if (lvl && s.trade.stacks[lvl]) s.trade.stacks[lvl]!.unshift(card);
+      if (lvl && s.trade.stacks[lvl]) returnToStack(s, lvl, card);
     }
     const names = dropped.map((c) => calamityById.get(c.slice('calamity:'.length))?.name ?? c);
     log(s, 'calamity.disregarded', id, `${id} holds ${held.length} calamities; only two may strike (§29.5) — ${names.join(' and ')} ${dropped.length === 1 ? 'is' : 'are'} drawn out at random and returned to the stack.`, { calamities: dropped.map((c) => c.slice('calamity:'.length)), held: held.length, rule: '29.5' });
@@ -1034,7 +1048,7 @@ function runCalamity(s: GameState): void {
     delete player(s, holder).hand[`calamity:${calamityId}`];
     s.calamityQueue = heldCalamities(s); // what's still to come after this one (§29.3: all revealed)
     const lvl = calamityById.get(calamityId)?.level;
-    if (lvl && s.trade.stacks[lvl]) s.trade.stacks[lvl]!.unshift(`calamity:${calamityId}`);
+    if (lvl && s.trade.stacks[lvl]) returnToStack(s, lvl, `calamity:${calamityId}`);
     if (startPrimary(s, calamityId, holder, before, overviewBefore, rng)) { s.rngState = rng.serialize(); return; }
     if (finishPrimary(s, calamityId, holder, before, overviewBefore, false)) { s.rngState = rng.serialize(); return; }
   }
@@ -1069,7 +1083,7 @@ function applyDiscard(s: GameState, holder: PlayerId, cards: string[]): void {
     p.hand[c] = (p.hand[c] ?? 0) - 1;
     if ((p.hand[c] ?? 0) <= 0) delete p.hand[c];
     const stack = commodityById.get(c)?.stack;
-    if (stack && s.trade.stacks[stack]) s.trade.stacks[stack]!.unshift(c);
+    if (stack && s.trade.stacks[stack]) returnToStack(s, stack, c);
   }
   log(s, 'hand.discard', holder, `${holder} discards ${cards.length} surplus commodity card${cards.length === 1 ? '' : 's'}, keeping 8 (§31.71).`, { count: cards.length });
 }
@@ -2650,7 +2664,7 @@ function applyBuyAdvance(s: GameState, actor: PlayerId, advanceIds: string[], sp
     p.hand[cid] = (p.hand[cid] ?? 0) - n;
     if (p.hand[cid]! <= 0) delete p.hand[cid];
     const stack = commodityById.get(cid)?.stack;
-    if (stack) for (let i = 0; i < n; i++) s.trade.stacks[stack]!.unshift(cid);
+    if (stack) for (let i = 0; i < n; i++) returnToStack(s, stack, cid);
   }
   // Treasury tokens spent on advances return to stock (§11.1: no piece is ever
   // permanently removed from the game).
@@ -2697,7 +2711,7 @@ function applyPostOffer(s: GameState, actor: PlayerId, a: { give: TradeBundle; w
   n.posted = { ...n.posted, [actor]: (n.posted?.[actor] ?? 0) + 1 };
   n.actions = (n.actions ?? 0) + 1;
   n.passStreak = 0;
-  log(s, 'trade.offer', actor, `${actor} posts a trade offer (gives ${bundleSize(a.give.actual)}, wants ${wants.map(commodityName).join(' or ')}).`, { gives: bundleSize(a.give.actual), wants });
+  log(s, 'trade.offer', actor, `${actor} posts a trade offer (gives ${bundleSize(a.give.actual)}, wants ${wants.map(commodityName).join(' and/or ')}).`, { gives: bundleSize(a.give.actual), wants });
 }
 
 /** Attach or replace the actor's counter-give to another player's open offer. */
@@ -2767,7 +2781,7 @@ function applyBuyTradeCard(s: GameState, actor: PlayerId, count: number): void {
   const pile = s.trade.stacks[9] ?? [];
   if (pile.length < count) throw new Error('not enough cards in the ninth stack');
   for (let i = 0; i < count; i++) {
-    const card = pile.pop()!;
+    const card = takeFromStack(s, 9);
     p.hand[card] = (p.hand[card] ?? 0) + 1;
     if (isCalamityCard(card)) s.calamityTradedFrom[calamityIdOf(card)] = actor;
   }

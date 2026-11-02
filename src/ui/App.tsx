@@ -988,6 +988,7 @@ function CensusView({ state }: { state: GameState }) {
           </tr>
         ))}
       </tbody></table>
+      <StackChart state={state} />
       {/* Where every nation's ships are, so seapower can be gauged without
           hunting the map (report 605b96e6). */}
       {rows.some((r) => r.ships > 0) && (
@@ -2072,6 +2073,47 @@ export function UpcomingCalamities({ state }: { state: GameState }) {
   );
 }
 
+/** Every stack's public count: what a player at the table could keep track of
+ *  (report c6f3f282). Draws are made in the open, returned cards are shown first
+ *  (§31.71), and the calamities each stack holds are printed in the rules. */
+function StackChart({ state }: { state: GameState }) {
+  const cell: CSSProperties = { padding: '3px 12px 3px 0', textAlign: 'right' };
+  const head: CSSProperties = { ...cell, fontWeight: 700, color: '#cdc4ad' };
+  const stacks = Object.keys(state.trade.stacks).map(Number).sort((a, b) => a - b);
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div className="civ-lbl" style={{ color: '#cdc4ad', fontWeight: 700 }}>Trade card stacks</div>
+      <table style={{ fontSize: 13, borderCollapse: 'collapse' }}><tbody>
+        <tr>
+          <th style={{ ...head, textAlign: 'left' }}>Stack</th><th style={{ ...head, textAlign: 'left' }}>Holds</th>
+          <th style={head}>Started</th><th style={head} title="Cards drawn or bought so far">Drawn</th><th style={head} title="Cards put back on the bottom so far">Returned</th>
+          <th style={head}>In stack</th><th style={head} title="Cards from the original stack still to come, before any returned card">New left</th>
+        </tr>
+        {stacks.map((n) => {
+          const goods = [...commodityById.values()].filter((c) => c.stack === n);
+          const cals = [...calamityById.values()].filter((c) => c.level === n);
+          const started = goods.reduce((t, c) => t + c.count, 0) + cals.length;
+          const left = state.trade.stacks[n]!.length;
+          const returned = state.trade.returned?.[n] ?? 0;
+          // A game saved before this chart has no draw count: infer what it can.
+          const drawn = Math.max(state.trade.drawn?.[n] ?? 0, started + returned - left);
+          return (
+            <tr key={n} style={{ borderTop: '1px solid #333' }}>
+              <td style={{ ...cell, textAlign: 'left' }}>{n}</td>
+              <td style={{ ...cell, textAlign: 'left' }}>{goods.map((c) => c.name).join(', ')}{cals.length > 0 && <span style={{ color: '#ffb0b0' }}> + {cals.map((c) => c.name).join(', ')}</span>}</td>
+              <td style={cell}>{started}</td><td style={cell}>{drawn}</td><td style={cell}>{returned}</td><td style={cell}>{left}</td>
+              <td style={cell}>{Math.max(0, started - drawn)}</td>
+            </tr>
+          );
+        })}
+      </tbody></table>
+      <div className="civ-lbl" style={{ color: '#b9ad8e', marginTop: 6, maxWidth: 640 }}>
+        Returned cards go to the bottom, so they can't come up again until "New left" runs out. A calamity that has already struck is one of them.
+      </div>
+    </div>
+  );
+}
+
 /** §27.51: right after collecting your trade cards, buy Gold/Ivory from the
  *  ninth stack (18 treasury each) — before the next player draws — or skip. */
 function NinthStackControls({ state, legal, onApply, actor }: { state: GameState; legal: Action[]; onApply: (a: Action) => void; actor: PlayerId }) {
@@ -2500,7 +2542,7 @@ function OfferBuilder({ me, submitLabel, onSubmit, wantPicker, receive }: {
       )}
       {wantPicker && (
         <div>
-          <span className="civ-lbl">You want (1–5): {wants.map(cName).join(' or ') || '—'}</span>
+          <span className="civ-lbl">You want (1–5, any or all of them): {wants.map(cName).join(' and/or ') || '—'}</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 2 }}>
             {COMMODITY_ORDER.map((c) => <button key={c} className={`civ-btn ${wants.includes(c) ? 'on' : ''}`} style={{ padding: '0 6px', fontSize: 11 }} onClick={() => toggleWant(c)}>{commodityById.get(c)?.name}</button>)}
           </div>
@@ -2584,7 +2626,7 @@ function TradeControls({ state, actor, onApply }: { state: GameState; actor: Pla
       {/* Your standing offer, with responses to accept. */}
       {myOffer ? (
         <div style={{ border: '2px solid #ffd23f', borderRadius: 4, padding: 6 }}>
-          <div className="civ-lbl">Your offer — you give {chips(myOffer.give.actual)}; others see {describe(myOffer.give)}; wants {myOffer.wants.map(cName).join(' or ')}.</div>
+          <div className="civ-lbl">Your offer — you give {chips(myOffer.give.actual)}; others see {describe(myOffer.give)}; wants {myOffer.wants.map(cName).join(' and/or ')}.</div>
           {myOffer.responses.length === 0 ? <div className="civ-lbl">Waiting for responses…</div> : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 3 }}>
               <span className="civ-lbl">Responses — value is your hand-value gain <i>if their claims are true</i> (named cards are guaranteed):</span>
@@ -2621,7 +2663,7 @@ function TradeControls({ state, actor, onApply }: { state: GameState; actor: Pla
         {otherOffers.length === 0 && <div className="civ-lbl">(none yet)</div>}
         {otherOffers.map((o) => (
           <div key={o.id} style={{ border: '1px solid #7a4a18', borderRadius: 4, padding: 6, marginTop: 3 }}>
-            <div style={{ fontSize: 12 }}><b style={{ color: civById.get(o.from)?.color }}>{civById.get(o.from)?.name}</b> gives {describe(o.give)} · wants <b>{o.wants.map(cName).join(' or ')}</b></div>
+            <div style={{ fontSize: 12 }}><b style={{ color: civById.get(o.from)?.color }}>{civById.get(o.from)?.name}</b> gives {describe(o.give)} · wants <b>{o.wants.map(cName).join(' and/or ')}</b></div>
             {/* A response can be sweetened or replaced until the deal is struck,
                 as at the table (report 015ed31d) — a new one replaces the old. */}
             {respondTo === o.id

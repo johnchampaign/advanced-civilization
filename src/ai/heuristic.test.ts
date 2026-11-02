@@ -65,6 +65,31 @@ describe('AI trade negotiation (open-offer board)', () => {
     expect(action.give.declared['wine']).toBe(1); // the best card is named (binding)
   });
 
+  it('names other cards it would take as well as its favourite (report c53fa825)', async () => {
+    // Its favourite and a card it likes nearly as much; hides would barely help.
+    const s = tradeState({ egypt: { spices: 1, oil: 1, grain: 2, wine: 1, cloth: 1, ochre: 3, hides: 1 }, babylon: {} });
+    const action = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+    expect(action.type).toBe('postOffer');
+    if (action.type !== 'postOffer') return;
+    expect(action.wants.length).toBeGreaterThan(1);
+    expect(action.wants).not.toContain('hides');
+    for (const w of action.wants) expect(action.give.actual[w] ?? 0).toBe(0);
+  });
+
+  it('answers with both cards when an offer pays for both (report 59c76b15)', async () => {
+    const s = tradeState({ egypt: { wine: 2, ochre: 1 }, babylon: { salt: 1, grain: 1, wine: 1, hides: 1, ochre: 1 } });
+    s.negotiation.offers = [{
+      id: 1, from: 'egypt', wants: ['salt', 'grain'], responses: [],
+      give: { actual: { wine: 2, ochre: 1 }, declared: { wine: 2 }, count: 3, claimed: { ochre: 1 } },
+    }];
+    s.negotiation.turnPointer = 1;
+    s.negotiation.posted = { babylon: 3 }; // it has posted its own, so it answers
+    const action = await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) });
+    expect(action.type).toBe('respondOffer');
+    if (action.type !== 'respondOffer') return;
+    expect(action.give.declared).toEqual({ salt: 1, grain: 1 }); // named, so binding
+  });
+
   it('never lowballs, nor pays a better card for a worse one, when spares fall short', async () => {
     const s = tradeState({ egypt: { gold: 1, salt: 1, ochre: 2, hides: 1 }, babylon: {} });
     const action = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
@@ -246,6 +271,7 @@ describe('heuristic AI', () => {
 
   it('builds cities and buys advances over a game (makes real progress)', async () => {
     let s = createGame({ players: ['egypt', 'babylon'], seed: 4, maxTurns: 40 });
+    const started = Object.fromEntries(Object.entries(s.trade.stacks).map(([n, pile]) => [n, pile.length]));
     const ai = new HeuristicAI();
     const rng = new Rng(4);
     let steps = 0;
@@ -256,6 +282,12 @@ describe('heuristic AI', () => {
     }
     const totalAdvances = Object.values(s.players).reduce((n, p) => n + p.advances.length, 0);
     expect(totalAdvances).toBeGreaterThan(0);
+    // The public stack counts add up to what's really in each stack.
+    expect(Object.keys(s.trade.returned ?? {}).length).toBeGreaterThan(0);
+    for (const [n, pile] of Object.entries(s.trade.stacks)) {
+      const k = Number(n);
+      expect(pile.length).toBe(started[n]! - (s.trade.drawn?.[k] ?? 0) + (s.trade.returned?.[k] ?? 0));
+    }
   });
 });
 

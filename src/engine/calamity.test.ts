@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adapter, createGame, floodPlainOf } from './index.js';
+import { adapter, createGame, floodPlainOf, FLOOD_SAFE_SITES } from './index.js';
 import { areas, adjacency, areaById, civById, pieceCounts } from '../data/index.js';
 import { cityCount, pieceConservationProblems, populationCount } from './helpers.js';
 import type { Action, GameState, PlayerId } from './types.js';
@@ -618,6 +618,48 @@ describe('Flood & Volcano geography (§30.51 / §30.21)', () => {
     s = resolve(s);
     expect(s.areas['rubicon']?.tokens['babylon'] ?? 0).toBe(0); // same plain: hit
     expect(s.areas['gaul']?.tokens['babylon']).toBe(5);        // different plain: untouched
+  });
+
+  it('Cities on black sites survive Flood; white sites do not (§30.511)', () => {
+    // Susa is a black site on the Tigris-Euphrates plain, Ur a white one.
+    let s = scenario({ tokens: { egypt: { mesopotamia: 2, gaza: 8 } }, cities: { egypt: ['susa', 'ur'] }, hands: { egypt: { 'calamity:flood': 1 } } });
+    s = resolve(s);
+    expect(s.areas['susa']?.city).toBe('egypt');
+    expect(s.areas['ur']?.city).toBeUndefined();
+    expect(s.areas['mesopotamia']?.tokens['egypt'] ?? 0).toBe(0);
+  });
+
+  it('The black flood-plain sites are real flood-plain city sites (§4.43)', () => {
+    expect([...FLOOD_SAFE_SITES].sort()).toEqual(['moesia', 'pura', 'shahi-tumo', 'susa']);
+    for (const aid of FLOOD_SAFE_SITES) {
+      expect(areaById.get(aid)?.isCitySite).toBe(true);
+      expect(floodPlainOf.has(aid)).toBe(true);
+    }
+  });
+
+  it('A primary with only a safe city on the plain loses nothing, and no coastal city, but rivals there still flood (§30.511/.512/.514)', () => {
+    const dry = coastal.find((a) => !a.isFloodplain)!.id;
+    const support = land.find((a) => !a.isFloodplain && a.id !== dry)!.id;
+    let s = scenario({
+      tokens: { egypt: { [support]: 8 }, babylon: { ur: 4 } },
+      cities: { egypt: ['susa', dry] },
+      hands: { egypt: { 'calamity:flood': 1 } },
+    });
+    s = resolve(s);
+    expect(s.areas['susa']?.city).toBe('egypt');
+    expect(s.areas[dry]?.city).toBe('egypt');
+    expect(s.areas['ur']?.tokens['babylon'] ?? 0).toBe(0);
+  });
+
+  it('A rival whose only unit on the plain is a safe city is not a secondary victim (§30.511/.512)', () => {
+    let s = scenario({
+      tokens: { egypt: { ur: 3 }, babylon: { gaza: 4 } },
+      cities: { babylon: ['susa'] },
+      hands: { egypt: { 'calamity:flood': 1 } },
+    });
+    s = resolve(s);
+    expect(s.areas['susa']?.city).toBe('babylon');
+    expect(s.areas['ur']?.tokens['egypt'] ?? 0).toBe(0);
   });
 
   it('Flood with no flood-plain units eliminates a coastal city (§30.514)', () => {

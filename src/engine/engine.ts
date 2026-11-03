@@ -980,8 +980,13 @@ function startPrimary(s: GameState, calId: string, holder: PlayerId, before: Ret
   if (calId === 'flood') {
     const region = bestFloodRegion(s, holder);
     if (region) {
-      const pts = Math.min(has(p, 'engineering') ? 7 : 17, unitPointsInAreas(s, holder, region));
+      const pts = Math.min(has(p, 'engineering') ? 7 : 17, floodLossPoints(s, holder, region));
       if (pts > 0) { s.pendingUnitLoss = { calamityId: 'flood', holder, points: pts, cityWorth: 5, mode: 'remove', areas: region, before, overviewBefore }; return true; }
+      // Only cities on black sites here (§30.511): the primary loses nothing, but
+      // the plain still floods, so the secondary loss stands (§30.512).
+      log(s, 'calamity.flood', holder, `${holder}'s cities on this flood plain stand on safe black city sites and survive the Flood (§30.511).`, { calamity: 'flood', noEffect: true });
+      const spec = floodAllocationSpec(s, holder, region);
+      if (spec) { s.pendingAllocation = { ...spec, areas: region, before, overviewBefore }; return true; }
       return false;
     }
     return startFloodCity(s, holder, before, overviewBefore); // §30.514: the victim picks a coastal city
@@ -1216,7 +1221,7 @@ function startNextSecondary(s: GameState): void {
       const n = Math.min(head.amount, cityCount(s, head.victim));
       if (n > 0) { s.pendingCityChoice = { calamityId: ps.calamityId, holder: head.victim, count: n, before: ps.before, overviewBefore: ps.overviewBefore }; return; }
     } else {
-      const avail = head.areas ? unitPointsInAreas(s, head.victim, head.areas) : boardUnitPoints(s, head.victim);
+      const avail = head.areas ? floodLossPoints(s, head.victim, head.areas) : boardUnitPoints(s, head.victim);
       const points = Math.min(head.amount, avail);
       if (points > 0) { s.pendingUnitLoss = { calamityId: ps.calamityId, holder: head.victim, points, cityWorth: head.cityWorth, mode: 'remove', areas: head.areas, before: ps.before, overviewBefore: ps.overviewBefore }; return; }
     }
@@ -1239,7 +1244,7 @@ function unitInventory(s: GameState, holder: PlayerId, areas?: string[]): { toke
   const ids = areas ?? Object.keys(s.areas);
   const tokens: Record<string, number> = {};
   const cities: string[] = [];
-  for (const aid of ids) { const a = s.areas[aid]; if (!a) continue; if ((a.tokens[holder] ?? 0) > 0) tokens[aid] = a.tokens[holder]!; if (a.city === holder) cities.push(aid); }
+  for (const aid of ids) { const a = s.areas[aid]; if (!a) continue; if ((a.tokens[holder] ?? 0) > 0) tokens[aid] = a.tokens[holder]!; if (a.city === holder && !(areas && FLOOD_SAFE_SITES.has(aid))) cities.push(aid); }
   return { tokens, cities };
 }
 
@@ -1420,6 +1425,10 @@ const FLOOD_PLAINS: readonly (readonly string[])[] = [
   ['herat', 'pura', 'artacona'],
   ['seistan-superior'],
 ];
+/** §30.511: "Cities on black city sites are safe" from Flood; only white sites
+ *  and cities built off-site are vulnerable. Almost every flood-plain site on the
+ *  art is white; these four are the black ones (read from the board SVGs). */
+export const FLOOD_SAFE_SITES: ReadonlySet<string> = new Set(['moesia', 'pura', 'shahi-tumo', 'susa']);
 export const floodPlainOf: ReadonlyMap<string, number> = new Map(FLOOD_PLAINS.flatMap((plain, i) => plain.map((a) => [a, i] as const)));
 
 /** Flood-plain regions in play: each plain of FLOOD_PLAINS, split further
@@ -1446,6 +1455,14 @@ function floodRegions(s: GameState): string[][] {
 function unitPointsInAreas(s: GameState, owner: PlayerId, areaIds: readonly string[]): number {
   let pts = 0;
   for (const aid of areaIds) { const a = s.areas[aid]; if (!a) continue; pts += a.tokens[owner] ?? 0; if (a.city === owner) pts += 5; }
+  return pts;
+}
+
+/** What Flood can actually take from a player on a plain: its tokens and any
+ *  cities not on a safe black site (§30.511). */
+function floodLossPoints(s: GameState, owner: PlayerId, areaIds: readonly string[]): number {
+  let pts = 0;
+  for (const aid of areaIds) { const a = s.areas[aid]; if (!a) continue; pts += a.tokens[owner] ?? 0; if (a.city === owner && !FLOOD_SAFE_SITES.has(aid)) pts += 5; }
   return pts;
 }
 
@@ -1566,7 +1583,7 @@ function floodAllocationSpec(s: GameState, holder: PlayerId, region: string[]): 
   const caps: Record<PlayerId, number> = {};
   for (const v of s.seating) {
     if (v === holder || v === trader) continue;
-    const onPlain = unitPointsInAreas(s, v, region);
+    const onPlain = floodLossPoints(s, v, region);
     if (onPlain <= 0) continue;
     caps[v] = Math.min(onPlain, has(player(s, v), 'engineering') ? 7 : 10);
   }

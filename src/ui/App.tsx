@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties } from 'react';
 import { Rng, recordPlay, recordFinish } from 'digital-boardgame-framework';
-import { adapter, createGame, victoryScore, astRank, areaLimitFor } from '../engine/index.js';
+import { adapter, createGame, victoryScore, astRank, areaLimitFor, FLOOD_SAFE_SITES } from '../engine/index.js';
 import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent, TradeBundle } from '../engine/index.js';
 import { advanceById, advances as ALL_ADVANCES, adjacency, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, playAreas, shipNeighbors, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
@@ -744,7 +744,7 @@ function AreaTooltip({ areaId, state, zoomed }: { areaId: string; state: GameSta
   const ships = Object.entries(a?.ships ?? {}).filter(([, n]) => n > 0);
   const cityOwner = a?.city;
   const right = an.x > BOARD_VIEWBOX.w * 0.75; // flip to the left near the east edge
-  const flags = [meta?.isCitySite && 'city site', meta?.isFloodplain && 'floodplain', meta?.isVolcanoSite && 'volcano', meta?.isOpenSea && 'open sea'].filter(Boolean).join(' · ');
+  const flags = [meta?.isCitySite && 'city site', meta?.isFloodplain && (FLOOD_SAFE_SITES.has(areaId) ? 'floodplain (city here is flood-safe)' : 'floodplain'), meta?.isVolcanoSite && 'volcano', meta?.isOpenSea && 'open sea'].filter(Boolean).join(' · ');
   const nameOf = (o: string) => (o === BARB ? 'Barbarians' : o === PIRATE ? 'Pirates' : civById.get(o)?.name ?? o);
   return (
     <div style={{
@@ -1828,7 +1828,8 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
   const scope = u.areas ?? Object.keys(state.areas);
   const inv = scope.map((aid) => {
     const tokens = state.areas[aid]?.tokens[u.holder] ?? 0;
-    const city = state.areas[aid]?.city === u.holder;
+    // u.areas is a flood plain: cities on its black sites can't be lost (§30.511).
+    const city = state.areas[aid]?.city === u.holder && !(u.areas && FLOOD_SAFE_SITES.has(aid));
     return { aid, tokens, city, removable: epidemic ? Math.max(0, tokens - 1) : tokens };
   }).filter((x) => x.removable > 0 || x.city);
   // Start with NO pre-selection (reporters disliked the auto-picked default); a

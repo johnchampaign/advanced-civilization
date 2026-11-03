@@ -218,9 +218,9 @@ function supportReduction(state: GameState, actor: PlayerId): string {
   return [...sup.candidates].sort((x, y) => ends(x) - ends(y) || order(x, y))[0]!;
 }
 
-/** Tokens an area holds after next turn's growth (§20): one token becomes two,
- *  two or more gain two, up to the limit; an empty area stays empty. */
-const regrown = (k: number, limit: number) => (k === 0 ? 0 : Math.min(limit, k + (k === 1 ? 1 : 2)));
+/** Tokens an area holds after next turn's growth (§20.1): one token becomes two,
+ *  two or more gain two, even past the limit; an empty area stays empty. */
+const regrown = (k: number) => k + (k === 0 ? 0 : k === 1 ? 1 : 2);
 
 /** §29.62/.63: how to give up `u.points` of units. Tokens alone keep every city
  *  if enough remain to support them, but when they wouldn't, the shortfall
@@ -262,7 +262,7 @@ function planUnitLoss(state: GameState, actor: PlayerId, u: PendingUnitLoss, gra
   const tokens: Record<string, number> = {};
   const after = { ...held };
   /** The token growth misses least, from an area that can spare one. */
-  const cheapest = () => Object.keys(after).filter((aid) => after[aid]! > floor).map((aid) => ({ aid, cost: regrown(after[aid]!, limit(aid)) - regrown(after[aid]! - 1, limit(aid)) }))
+  const cheapest = () => Object.keys(after).filter((aid) => after[aid]! > floor).map((aid) => ({ aid, cost: regrown(after[aid]!) - regrown(after[aid]! - 1) }))
     .sort((x, y) => x.cost - y.cost || after[y.aid]! - after[x.aid]!)[0];
   const take = (aid: string) => { after[aid]!--; tokens[aid] = (tokens[aid] ?? 0) + 1; };
   let owed = need - best.give * u.cityWorth;
@@ -272,7 +272,7 @@ function planUnitLoss(state: GameState, actor: PlayerId, u: PendingUnitLoss, gra
   // would replace for ones that hold the site.
   for (const aid of cities) {
     while (cityKeep[aid]! < limit(aid)) {
-      const gain = regrown(cityKeep[aid]! + 1, limit(aid)) - regrown(cityKeep[aid]!, limit(aid));
+      const gain = regrown(cityKeep[aid]! + 1) - regrown(cityKeep[aid]!);
       if (owed < 0) { owed++; cityKeep[aid]!++; continue; }
       const c = cheapest();
       if (!c || c.cost >= gain) break;

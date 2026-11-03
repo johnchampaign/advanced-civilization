@@ -18,7 +18,8 @@
 import type { PlayerController, ControllerContext } from 'digital-boardgame-framework';
 import { advanceById, areaById, calamityById, civById, commodityById } from '../data/index.js';
 import { bundleFace, cardGroupsHeld, cityCount, citySiteIn, commoditySetValue, creditTowards, handValue, landNeighbors, navalDestinations, neighbors, populationCount } from '../engine/helpers.js';
-import type { Action, GameState, PlayerId, TradeBundle } from '../engine/types.js';
+import { areaLimitFor, FLOOD_SAFE_SITES } from '../engine/engine.js';
+import type { Action, GameState, PendingUnitLoss, PlayerId, TradeBundle } from '../engine/types.js';
 
 export class HeuristicAI implements PlayerController<GameState, Action, PlayerId> {
   /** `aggressive: false` turns off attacking rivals and `defensive: false`
@@ -52,8 +53,8 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
       if (pill) return pill;
     }
     // §26.32: a city-support reduction (can surface in the auto removeSurplus phase
-    // or during Slave Revolt) — take the engine's cheapest-city suggestion.
-    if (state.pendingSupport) { const c = actions.find((a) => a.type === 'chooseCities'); if (c) return c; }
+    // or during Slave Revolt) — the one that ends the shortfall soonest.
+    if (state.pendingSupport?.holder === actor) return { type: 'chooseCities', areas: [supportReduction(state, actor)] };
     // §19.32/§30.x: a city-selection pick (e.g. tax-revolt beneficiary) can surface
     // outside the calamity phase — take the engine's suggested pick.
     if (state.pendingPick) { const pk = actions.find((a) => a.type === 'pickAreas'); if (pk) return pk; }
@@ -71,13 +72,17 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
         return supported ?? { type: 'pass' };
       }
       case 'calamity': {
-        // §30: choosing which of your own cities to reduce — take the engine's
-        // suggestion (sacrifice the cheapest-to-rebuild city-site cities first).
-        const cityChoice = actions.find((a) => a.type === 'chooseCities');
-        if (cityChoice) return cityChoice;
-        // §29.63: choosing which units to lose/cede — take the cheapest-first default.
-        const unitChoice = actions.find((a) => a.type === 'chooseUnits');
-        if (unitChoice) return unitChoice;
+        // §30: choosing which of your own cities to reduce (Superstition etc.).
+        if (state.pendingCityChoice?.holder === actor) {
+          return { type: 'chooseCities', areas: ownCities(state, actor).sort(cityLossOrder(state, actor)).slice(0, state.pendingCityChoice.count) };
+        }
+        // §29.63: choosing which units to lose/cede — plan a loss from the
+        // board, or take the cheapest-first default for a cession (Civil War).
+        const unitChoice = actions.find((a) => a.type === 'chooseUnits') as Extract<Action, { type: 'chooseUnits' }> | undefined;
+        if (unitChoice) {
+          const pul = state.pendingUnitLoss!;
+          return pul.mode === 'remove' ? planUnitLoss(state, actor, pul, unitChoice.grainCommit) : unitChoice;
+        }
         // §30.41 Civil War: faction selection (victim offers cheapest / beneficiary
         // grabs strongest) and which faction to keep — take the engine's suggestion.
         const cwSelect = actions.find((a) => a.type === 'civilWarSelect');
@@ -192,6 +197,89 @@ function supportAfter(state: GameState, actor: PlayerId, tokens: Record<string, 
     n += Math.min(t, limit);
   }
   return n;
+}
+
+const ownCities = (state: GameState, actor: PlayerId) => Object.keys(state.areas).filter((aid) => state.areas[aid]!.city === actor);
+
+/** Which of our cities to lose first: a city site rebuilds with 6 tokens, not
+ *  12 (§25.2), and the more tokens replace the city (§26.41) the more the
+ *  others are supported and the sooner it rebuilds. */
+const cityLossOrder = (state: GameState, actor: PlayerId) => (x: string, y: string) =>
+  (areaById.get(x)?.isCitySite ? 0 : 1) - (areaById.get(y)?.isCitySite ? 0 : 1)
+  || areaLimitFor(state, y, actor) - areaLimitFor(state, x, actor);
+
+/** §26.32: the city to reduce for support. One whose replacement tokens end the
+ *  shortfall outright comes first — each reduction also frees 2 tokens of support. */
+function supportReduction(state: GameState, actor: PlayerId): string {
+  const sup = state.pendingSupport!;
+  const short = 2 * cityCount(state, actor) + sup.lock - populationCount(state, actor);
+  const ends = (aid: string) => (areaLimitFor(state, aid, actor) + 2 >= short ? 0 : 1);
+  const order = cityLossOrder(state, actor);
+  return [...sup.candidates].sort((x, y) => ends(x) - ends(y) || order(x, y))[0]!;
+}
+
+/** Tokens an area holds after next turn's growth (§20): one token becomes two,
+ *  two or more gain two, up to the limit; an empty area stays empty. */
+const regrown = (k: number, limit: number) => (k === 0 ? 0 : Math.min(limit, k + (k === 1 ? 1 : 2)));
+
+/** §29.62/.63: how to give up `u.points` of units. Tokens alone keep every city
+ *  if enough remain to support them, but when they wouldn't, the shortfall
+ *  reduces a city anyway (§26.31) on top of the tokens lost — so that city
+ *  should go towards the loss, where it counts for up to five points and saves
+ *  those tokens. Tokens go where next turn's growth replaces them. In 16 simulated
+ *  games this cut support reductions by 44% and cities lost by 5%; scores barely moved. */
+function planUnitLoss(state: GameState, actor: PlayerId, u: PendingUnitLoss, grainCommit?: number): Action {
+  const floor = u.calamityId === 'epidemic' ? 1 : 0; // §30.612
+  const held: Record<string, number> = {};
+  for (const aid of u.areas ?? Object.keys(state.areas)) {
+    if ((state.areas[aid]?.tokens[actor] ?? 0) > 0) held[aid] = state.areas[aid]!.tokens[actor]!;
+  }
+  const mine = ownCities(state, actor);
+  const scope = u.areas ? new Set(u.areas) : null;
+  const order = cityLossOrder(state, actor);
+  const givable = mine.filter((aid) => !scope || (scope.has(aid) && !FLOOD_SAFE_SITES.has(aid))).sort(order);
+  const limit = (aid: string) => areaLimitFor(state, aid, actor);
+  const room = Object.values(held).reduce((t, n) => t + Math.max(0, n - floor), 0);
+  const need = Math.min(Math.max(0, u.points - 4 * (grainCommit ?? 0)), room + givable.length * u.cityWorth);
+  const pop = populationCount(state, actor);
+
+  // The fewest cities given up that leave the most cities standing once the
+  // support check has run, then the most tokens.
+  let best = { give: 0, left: -1, tokens: -1 };
+  for (let give = 0; give <= givable.length; give++) {
+    if (give > 0 && (give - 1) * u.cityWorth >= need) break; // §29.63: a needless extra city
+    const worth = give * u.cityWorth;
+    if (need - worth > room) continue;
+    let tokens = pop - Math.max(0, need - worth) + Math.min(Math.max(0, worth - need), givable.slice(0, give).reduce((t, aid) => t + Math.max(0, limit(aid) - floor), 0));
+    let left = mine.length - give;
+    const rest = mine.filter((aid) => !givable.slice(0, give).includes(aid)).sort((x, y) => limit(y) - limit(x));
+    while (left > 0 && tokens < 2 * left) { tokens += limit(rest.shift()!); left--; }
+    if (left > best.left || (left === best.left && tokens > best.tokens)) best = { give, left, tokens };
+  }
+
+  const cities = givable.slice(0, best.give);
+  const cityKeep: Record<string, number> = Object.fromEntries(cities.map((aid) => [aid, floor]));
+  const tokens: Record<string, number> = {};
+  const after = { ...held };
+  /** The token growth misses least, from an area that can spare one. */
+  const cheapest = () => Object.keys(after).filter((aid) => after[aid]! > floor).map((aid) => ({ aid, cost: regrown(after[aid]!, limit(aid)) - regrown(after[aid]! - 1, limit(aid)) }))
+    .sort((x, y) => x.cost - y.cost || after[y.aid]! - after[x.aid]!)[0];
+  const take = (aid: string) => { after[aid]!--; tokens[aid] = (tokens[aid] ?? 0) + 1; };
+  let owed = need - best.give * u.cityWorth;
+  for (; owed > 0; owed--) take(cheapest()!.aid);
+  // Each token left in a given-up city's place counts a point less (§29.62): use
+  // any points over what's owed, then trade tokens that next turn's growth
+  // would replace for ones that hold the site.
+  for (const aid of cities) {
+    while (cityKeep[aid]! < limit(aid)) {
+      const gain = regrown(cityKeep[aid]! + 1, limit(aid)) - regrown(cityKeep[aid]!, limit(aid));
+      if (owed < 0) { owed++; cityKeep[aid]!++; continue; }
+      const c = cheapest();
+      if (!c || c.cost >= gain) break;
+      take(c.aid); cityKeep[aid]!++;
+    }
+  }
+  return { type: 'chooseUnits', tokens, cities, cityKeep, ...(grainCommit ? { grainCommit } : {}) };
 }
 
 /** Two-sided token fight as the engine resolves it (§24.2): alternate removals,

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Rng } from 'digital-boardgame-framework';
 import { adapter, createGame, normalize } from '../engine/index.js';
 import { pieceConservationProblems } from '../engine/helpers.js';
-import { advances, commodityById, pieceCounts } from '../data/index.js';
+import { advances, areaById, commodityById, pieceCounts } from '../data/index.js';
 import { availableNations, boardPresets } from '../engine/boards.js';
 import { HeuristicAI } from './heuristic.js';
 import type { GameState, PlayerId } from '../engine/types.js';
@@ -526,3 +526,71 @@ describe('heuristic AI: start areas (§16.3)', () => {
   });
 });
 
+describe('heuristic AI: taking calamity losses', () => {
+  const players = availableNations(boardPresets(8)[0]!.config).slice(0, 8);
+  const me = players[0]!;
+  const newGame = () => createGame({ players, seed: 1, maxTurns: 60, boardPreset: 'raw-8p' });
+  const land = [...areaById.values()].filter((a) => !a.isWater);
+  const sites = (n: number, sustains?: number) => land.filter((a) => a.isCitySite && (sustains === undefined || a.sustains === sustains)).slice(0, n).map((a) => a.id);
+
+  /** One nation alone on the board with these cities and tokens, at a Famine loss. */
+  function lossState(cities: string[], tokens: Record<string, number>, points = 10): GameState {
+    const s = newGame();
+    s.areas = {};
+    for (const c of cities) s.areas[c] = { tokens: {}, city: me };
+    for (const [aid, n] of Object.entries(tokens)) s.areas[aid] = { tokens: { [me]: n } };
+    s.phase = 'calamity';
+    s.pendingUnitLoss = { calamityId: 'famine', holder: me, points, cityWorth: 5, mode: 'remove', before: {}, overviewBefore: '' };
+    return s;
+  }
+  /** Fill open land to its limit until there are `want` tokens. */
+  function fill(want: number, skip: string[]): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const a of land) {
+      if (want <= 0) break;
+      if (a.sustains < 2 || skip.includes(a.id)) continue;
+      out[a.id] = Math.min(a.sustains, want);
+      want -= out[a.id]!;
+    }
+    return out;
+  }
+  const choose = async (s: GameState) => {
+    const act = await ai.selectAction({ state: s, actor: me, adapter, rng: new Rng(1) });
+    if (act.type !== 'chooseUnits') throw new Error(`expected chooseUnits, got ${act.type}`);
+    return act;
+  };
+
+  it('keeps its cities when enough tokens remain to support them, and holds its land', async () => {
+    const cities = sites(3);
+    const tokens = fill(24, cities);
+    const act = await choose(lossState(cities, tokens));
+    expect(act.cities).toEqual([]);
+    expect(Object.values(act.tokens).reduce((t, n) => t + n, 0)).toBe(10);
+    // Tokens come from stacks that growth refills, so no area is emptied.
+    for (const [aid, n] of Object.entries(act.tokens)) expect(n).toBeLessThan(tokens[aid]!);
+  });
+
+  it('gives up a city towards the loss when losing tokens would cost it anyway', async () => {
+    const cities = sites(3);
+    const s = lossState(cities, fill(11, cities));
+    const act = await choose(s);
+    // Ten tokens would leave one, so support would take cities as well. A city
+    // given up counts for five, saving five tokens — which support the other two.
+    expect(act.cities).toHaveLength(1);
+    expect(Object.values(act.tokens).reduce((t, n) => t + n, 0) - (act.cityKeep?.[act.cities[0]!] ?? 0)).toBe(5);
+    const next = adapter.applyAction(s, act, me);
+    expect(Object.values(next.areas).filter((a) => a.city === me)).toHaveLength(2);
+  });
+
+  it('reduces the city whose replacement tokens end a support shortfall', async () => {
+    const small = sites(1, 2)[0]!, big = sites(1, 4)[0]!;
+    const third = sites(3).find((c) => c !== small && c !== big)!;
+    const s = lossState([small, big, third], fill(1, [small, big, third]));
+    s.pendingUnitLoss = undefined;
+    // Three cities on one token is five short. Reducing a city frees two and adds
+    // the tokens that replace it, so only the larger area covers that at once.
+    s.pendingSupport = { holder: me, candidates: [small, big], lock: 0, mode: 'support' };
+    const act = await ai.selectAction({ state: s, actor: me, adapter, rng: new Rng(1) });
+    expect(act).toEqual({ type: 'chooseCities', areas: [big] });
+  });
+});

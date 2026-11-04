@@ -527,10 +527,15 @@ function planMovement(state: GameState, actor: PlayerId, aggressive: boolean, de
   // top up our own areas that are below their limit. Surplus left where it is
   // goes back to stock at surplus removal (§26.1), and next turn's tax is paid
   // from stock, 2 a city (§19.1), before anything else refills it — unpaid
-  // cities revolt to a rival (§19.31). So spread only what stock can spare.
+  // cities revolt to a rival (§19.31). So spread only what stock can spare,
+  // counting from treasury only what the ninth stack is sure to turn back into
+  // stock (18 a card, §27.51): an advance may be out of reach. With all 8 nations
+  // playing it, over 8 seeds, this and the over-limit buy below took revolted cities
+  // from 164 to 64; counting no treasury at all cost points (2279 vs 2341).
+  const refillable = (state.trade.stacks[9]?.length ?? 0) > 0 ? 18 * Math.floor(p.treasury / 18) : 0;
   const surplusNow = Object.keys(after).reduce((t, aid) =>
     t + (targets.has(aid) || state.areas[aid]?.city ? 0 : Math.max(0, (after[aid] ?? 0) - sustains(aid))), 0);
-  let spreadable = Math.max(0, p.stock + 6 * targets.size + p.treasury + surplusNow - 2 * (cities + targets.size) - 2);
+  let spreadable = Math.max(0, p.stock + 6 * targets.size + refillable + surplusNow - 2 * (cities + targets.size) - 2);
   const spread = (from: string, to: string, k: number) => { const n = Math.min(k, spreadable); if (n > 0) { shift(from, to, n); spreadable -= n; } };
   for (const pass of ['seed', 'march', 'fill'] as const) {
     for (const aid of Object.keys(free)) {
@@ -552,12 +557,13 @@ function planMovement(state: GameState, actor: PlayerId, aggressive: boolean, de
 // ---- Ninth stack -----------------------------------------------------------
 
 /** Buy Gold/Ivory from the ninth stack (§27.51). Treasury piles up once the
- *  cheap advances are bought, and with 55 tokens in all a big treasury starves
- *  stock — next turn's tax (2 a city from stock, §19.1) then falls short and
- *  cities revolt to a rival (§19.31-.32). Each card bought puts 18 tokens back
- *  in stock. So buy enough to cover that tax, and otherwise one card to grow a
- *  Gold or Ivory set already in hand (sets score n² × 9; a lone random card is
- *  worth only 9 of the 18 paid) — never past the 8-card hand limit (§31.71). */
+ *  cheap advances are bought, and with 47 or 55 tokens in all a big treasury
+ *  starves stock — next turn's tax (2 a city from stock, §19.1) then falls short
+ *  and cities revolt to a rival (§19.31-.32). Each card bought puts 18 tokens
+ *  back in stock. So buy enough to cover that tax, even past the 8-card hand
+ *  limit (§31.71, only applied after advances, and a discard costs less than a
+ *  city); otherwise one card to grow a Gold or Ivory set already in hand (sets
+ *  score n² × 9; a lone random card is worth only 9 of the 18 paid), within it. */
 function planNinthStack(state: GameState, actor: PlayerId, actions: Action[]): Action {
   const p = state.players[actor]!;
   const offered = actions.filter((a) => a.type === 'buyTradeCard') as Extract<Action, { type: 'buyTradeCard' }>[];
@@ -567,7 +573,7 @@ function planNinthStack(state: GameState, actor: PlayerId, actions: Action[]): A
   const taxShort = Math.max(0, 2 * cityCount(state, actor) - p.stock);
   const growing = (p.hand['gold'] ?? 0) + (p.hand['ivory'] ?? 0) > 0;
   const want = taxShort > 0 ? Math.ceil(taxShort / 18) : growing && p.treasury >= 18 ? 1 : 0;
-  const count = Math.min(want, most, room);
+  const count = Math.min(want, most, taxShort > 0 ? most : room);
   return count > 0 ? { type: 'buyTradeCard', count } : { type: 'pass' };
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Rng } from 'digital-boardgame-framework';
 import { adapter, createGame, normalize } from '../engine/index.js';
-import { pieceConservationProblems } from '../engine/helpers.js';
+import { landNeighbors, pieceConservationProblems } from '../engine/helpers.js';
 import { advances, areaById, commodityById, pieceCounts } from '../data/index.js';
 import { availableNations, boardPresets } from '../engine/boards.js';
 import { HeuristicAI } from './heuristic.js';
@@ -487,6 +487,36 @@ describe('heuristic AI: treasury, stock and tax (report ba6a5bda)', () => {
   it('buys one when next turn’s tax would leave stock short (§19.31)', async () => {
     // 20 in treasury and 34 on the board leaves 1 in stock: not enough for 2 tax.
     expect(await pick(atNinth(20, 34))).toEqual({ type: 'buyTradeCard', count: 1 });
+  });
+
+  it('buys past the hand limit only to save a city from revolting (§31.71)', async () => {
+    const full = (s: GameState) => { s.players['egypt']!.hand = { ochre: 8, gold: 1 }; return s; };
+    expect(await pick(full(atNinth(20, 34)))).toEqual({ type: 'buyTradeCard', count: 1 });
+    expect(await pick(full(atNinth(40, 5)))).toEqual({ type: 'pass' }); // stock covers tax: no room, no buy
+  });
+
+  it('spreads surplus only as far as treasury can really refill stock', async () => {
+    // One city, stock empty, 4 tokens of surplus beside land we hold below its
+    // limit: all of it is owed to next turn's tax unless the ninth stack can
+    // turn treasury back into stock.
+    const around = (id: string) => landNeighbors(null, id).map((n) => areaById.get(n)!);
+    const a = [...areaById.values()].find((x) => !x.isWater && !x.isCitySite && x.sustains >= 1 && around(x.id).length > 0
+      && around(x.id).every((n) => !n.isCitySite && n.sustains >= 1 && n.sustains <= 2) && around(x.id).some((n) => n.sustains === 2))!;
+    const fromSurplus = async (treasury: number, stack9 = true) => {
+      const s = createGame({ players: ['egypt', 'babylon'], seed: 11, maxTurns: 60 });
+      s.areas = { thebes: { tokens: {}, city: 'egypt' }, [a.id]: { tokens: { egypt: a.sustains + 4 } } };
+      for (const n of around(a.id)) s.areas[n.id] = { tokens: { egypt: 1 } };
+      const p = s.players['egypt']!;
+      p.stock = 0; p.treasury = treasury; p.citiesAvailable -= 1;
+      if (!stack9) s.trade.stacks[9] = [];
+      s.phase = 'movement'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+      normalize(s);
+      const act = await pick(s);
+      return act.type === 'move' ? act.moves.filter((m) => m.from === a.id).reduce((n, m) => n + m.count, 0) : 0;
+    };
+    expect(await fromSurplus(17)).toBe(0); // no card in reach: the surplus stays to pay tax
+    expect(await fromSurplus(18)).toBeGreaterThan(0); // a Gold/Ivory card brings 18 back
+    expect(await fromSurplus(18, false)).toBe(0); // ...unless the ninth stack is empty
   });
 });
 

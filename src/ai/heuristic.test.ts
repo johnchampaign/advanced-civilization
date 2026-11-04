@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Rng } from 'digital-boardgame-framework';
 import { adapter, createGame, normalize } from '../engine/index.js';
-import { landNeighbors, pieceConservationProblems } from '../engine/helpers.js';
+import { landNeighbors, navalDestinations, pieceConservationProblems } from '../engine/helpers.js';
 import { advances, areaById, commodityById, pieceCounts } from '../data/index.js';
 import { availableNations, boardPresets } from '../engine/boards.js';
 import { HeuristicAI } from './heuristic.js';
@@ -517,6 +517,25 @@ describe('heuristic AI: treasury, stock and tax (report ba6a5bda)', () => {
     expect(await fromSurplus(17)).toBe(0); // no card in reach: the surplus stays to pay tax
     expect(await fromSurplus(18)).toBeGreaterThan(0); // a Gold/Ivory card brings 18 back
     expect(await fromSurplus(18, false)).toBe(0); // ...unless the ninth stack is empty
+  });
+});
+
+describe('heuristic AI: building overseas (§23.51)', () => {
+  it('sails tokens to finish a city on a site it holds across the water', async () => {
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 11, maxTurns: 60 });
+    const land = [...areaById.values()].filter((a) => !a.isWater);
+    const pair = land.flatMap((x) => [...navalDestinations(s, x.id, 4, false)].map((to) => [x, areaById.get(to)!] as const))
+      .find(([x, to]) => x.sustains >= 2 && !to.isWater && to.isCitySite && !landNeighbors(s, to.id).includes(x.id))!;
+    const [from, site] = pair;
+    s.areas = { [from.id]: { tokens: { egypt: 12 }, ships: { egypt: 1 } }, [site.id]: { tokens: { egypt: 1 } } };
+    s.players['egypt']!.citiesAvailable = 9;
+    s.phase = 'movement'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    normalize(s);
+    const act = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+    if (act.type !== 'move') throw new Error(`expected a move, got ${act.type}`);
+    expect(act.moves).toContainEqual({ from: from.id, to: site.id, count: 5, byShip: true });
+    expect(act.moves.filter((m) => m.byShip && m.from === from.id)).toHaveLength(1); // one voyage a turn
+    adapter.applyAction(s, act, 'egypt');
   });
 });
 

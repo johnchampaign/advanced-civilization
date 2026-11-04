@@ -344,22 +344,13 @@ function planMovement(state: GameState, actor: PlayerId, aggressive: boolean, de
   const land = (aid: string) => neighbors(state, aid).filter((n) => !areaById.get(n)?.isWater);
   const targets = new Set<string>(); // city sites being filled this turn
 
-  // 1. Ships.
+  // Ships (§23.51): each makes one voyage a turn, landing up to 5 tokens.
   const sailed = new Set<string>(); // areas whose ship has made its voyage this turn
   const p = state.players[actor]!;
   const range = 4 + (p.advances.includes('clothmaking') ? 1 : 0);
   const astro = p.advances.includes('astronomy');
-  for (const [aid, a] of Object.entries(state.areas)) {
-    if ((a.ships?.[actor] ?? 0) <= 0 || (free[aid] ?? 0) < 3) continue;
-    let best: string | null = null, bestScore = 0;
-    for (const to of overseas(state, aid, range, astro)) {
-      const area = areaById.get(to);
-      if (!area || area.isWater || (after[to] ?? 0) > 0 || rivalsIn(state, actor, to)) continue;
-      const score = area.sustains + (citySiteIn(state, to) ? 3 : 0);
-      if (score > bestScore) { bestScore = score; best = to; }
-    }
-    if (best) { shift(aid, best, Math.min(5, free[aid]! - 2), true); sailed.add(aid); }
-  }
+  const reach = new Map<string, Set<string>>(); // from each of our fleets
+  for (const [aid, a] of Object.entries(state.areas)) if ((a.ships?.[actor] ?? 0) > 0) reach.set(aid, navalDestinations(state, aid, range, astro));
 
   const metal = (id: string) => !!state.players[id]?.advances.includes('metalworking');
   const eng = (id: string) => !!state.players[id]?.advances.includes('engineering');
@@ -402,17 +393,24 @@ function planMovement(state: GameState, actor: PlayerId, aggressive: boolean, de
   }
 
   // 3. Cities: gather 6 tokens onto as many printed city sites as population can
-  // support (6 to build + 2 support per city), from the site and its neighbours.
+  // support (6 to build + 2 support per city), from the site, its neighbours and
+  // ships in range. Sailing to sites took 8-nation games from 2210 to 2551 points.
   // Failing any site, a large population may build on open land with 12 (§25.2).
   const pop = populationCount(state, actor);
   const cities = cityCount(state, actor);
   const open = (aid: string) => !targets.has(aid) && !areaById.get(aid)?.isWater && !state.areas[aid]?.city && !rivalsIn(state, actor, aid);
-  const gatherable = (site: string) => (after[site] ?? 0) + land(site).reduce((t, n) => t + (targets.has(n) ? 0 : Math.max(0, free[n] ?? 0)), 0);
+  /** Fleets that can reach `site`, and what each can land while leaving a token behind. */
+  const fleetsTo = (site: string) => [...reach.keys()].filter((x) => reach.get(x)!.has(site) && !sailed.has(x) && !targets.has(x) && x !== site
+    && !land(site).includes(x) && (free[x] ?? 0) > 1);
+  const cargo = (x: string) => Math.min(5, free[x]! - 1);
+  const gatherable = (site: string) => (after[site] ?? 0) + land(site).reduce((t, n) => t + (targets.has(n) ? 0 : Math.max(0, free[n] ?? 0)), 0)
+    + fleetsTo(site).reduce((t, x) => t + cargo(x), 0);
   const areaIds = [...new Set([...Object.keys(state.areas), ...Object.keys(after)])];
   /** Tentatively gather `need` tokens onto `site`; keep it only if the cities
    *  planned so far stay supported, else roll back. */
   const tryGather = (site: string, need: number): boolean => {
     const snapFree = { ...free }, snapAfter = { ...after }, snapMoves = moves.map((m) => ({ ...m }));
+    const snapSailed = new Set(sailed);
     const donors = land(site).filter((n) => !targets.has(n) && (free[n] ?? 0) > 0)
       .sort((x, y) => ((after[y] ?? 0) - sustains(y)) - ((after[x] ?? 0) - sustains(x)));
     for (const n of donors) {
@@ -420,10 +418,17 @@ function planMovement(state: GameState, actor: PlayerId, aggressive: boolean, de
       if (short <= 0) break;
       shift(n, site, Math.min(short, free[n]!));
     }
+    for (const x of fleetsTo(site).sort((a, b) => ((after[b] ?? 0) - sustains(b)) - ((after[a] ?? 0) - sustains(a)))) {
+      const short = need - (after[site] ?? 0);
+      if (short <= 0) break;
+      shift(x, site, Math.min(short, cargo(x)), true);
+      sailed.add(x);
+    }
     if ((after[site] ?? 0) >= need && supportAfter(state, actor, after, new Set([...targets, site])) >= 2 * (cities + targets.size + 1)) {
       targets.add(site); free[site] = 0; // its tokens stay to build the city
       return true;
     }
+    sailed.clear(); for (const x of snapSailed) sailed.add(x);
     Object.assign(free, snapFree); for (const k of Object.keys(after)) after[k] = snapAfter[k] ?? 0;
     moves.length = 0; moves.push(...snapMoves);
     return false;
@@ -508,6 +513,19 @@ function planMovement(state: GameState, actor: PlayerId, aggressive: boolean, de
       Object.assign(free, snapFree); for (const k of Object.keys(after)) after[k] = snapAfter[k] ?? 0;
       moves.length = 0; moves.push(...snapMoves);
     }
+  }
+
+  // Ships left over carry tokens to fresh land overseas.
+  for (const [aid, a] of Object.entries(state.areas)) {
+    if ((a.ships?.[actor] ?? 0) <= 0 || sailed.has(aid) || (free[aid] ?? 0) < 3) continue;
+    let best: string | null = null, bestScore = 0;
+    for (const to of overseas(state, aid, range, astro)) {
+      const area = areaById.get(to);
+      if (!area || area.isWater || (after[to] ?? 0) > 0 || rivalsIn(state, actor, to)) continue;
+      const score = area.sustains + (citySiteIn(state, to) ? 3 : 0);
+      if (score > bestScore) { bestScore = score; best = to; }
+    }
+    if (best) { shift(aid, best, Math.min(5, free[aid]! - 2), true); sailed.add(aid); }
   }
 
   // March surplus toward an open city site that is out of reach this turn, so

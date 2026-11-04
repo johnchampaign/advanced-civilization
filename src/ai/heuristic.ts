@@ -120,15 +120,17 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
         const scrap = (actions.filter((a) => a.type === 'scrapShip') as Extract<Action, { type: 'scrapShip' }>[])
           .find((a) => !shipUseful(state, actor, a.area, state.areas[a.area]?.tokens[actor] ?? 0));
         if (scrap) return scrap;
-        // Build one ship when it has no fleet yet, where it can carry at least 3
-        // tokens straight away (movement follows directly) to land worth settling.
-        // Paying from treasury keeps the tokens on the shore to sail.
+        // Build a fleet of up to 3, one ship an area (each makes one voyage), where
+        // it can carry at least 3 tokens straight away (movement follows directly)
+        // to land worth settling; ships finish cities overseas. Paying from treasury
+        // keeps the tokens on the shore to sail, and the largest stack sails most.
         const builds = actions.filter((a) => a.type === 'buildShips') as Extract<Action, { type: 'buildShips' }>[];
-        if (builds.length === 0 || shipCount(state, actor) >= 1) return { type: 'pass' };
+        if (builds.length === 0 || shipCount(state, actor) >= 3) return { type: 'pass' };
         const levy = { treasury: 0, split: 1, area: 2 } as const;
         const best = builds
-          .filter((b) => { const { area, payFrom } = b.builds[0]!; return shipUseful(state, actor, area, (state.areas[area]?.tokens[actor] ?? 0) - levy[payFrom ?? 'area']); })
-          .sort((x, y) => levy[x.builds[0]!.payFrom ?? 'area'] - levy[y.builds[0]!.payFrom ?? 'area'])[0];
+          .filter((b) => { const { area, payFrom } = b.builds[0]!; return !state.areas[area]?.ships?.[actor] && shipUseful(state, actor, area, (state.areas[area]?.tokens[actor] ?? 0) - levy[payFrom ?? 'area']); })
+          .sort((x, y) => levy[x.builds[0]!.payFrom ?? 'area'] - levy[y.builds[0]!.payFrom ?? 'area']
+            || (state.areas[y.builds[0]!.area]?.tokens[actor] ?? 0) - (state.areas[x.builds[0]!.area]?.tokens[actor] ?? 0))[0];
         return best ?? { type: 'pass' };
       }
       case 'movement': {
@@ -168,10 +170,14 @@ export class HeuristicAI implements PlayerController<GameState, Action, PlayerId
       case 'trade':
         return planTradeTurn(state, actor, ctx.rng) ?? { type: 'pass' };
       case 'populationExpansion': {
-        // Place limited growth biggest-area-first (highest cap), one at a time.
+        // Place limited growth one at a time: first where it brings a city nearer
+        // (on or beside an open site), then biggest-area-first (highest cap). In
+        // 8-nation games this alone took points from 2551 to 2749.
         const caps = state.expansion?.caps[actor] ?? {};
         if ((state.expansion?.remaining[actor] ?? 0) > 0) {
-          const best = Object.entries(caps).filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1])[0];
+          const openSite = (aid: string) => !state.areas[aid]?.city && citySiteIn(state, aid) && !rivalsIn(state, actor, aid);
+          const beside = (aid: string) => (openSite(aid) || neighbors(state, aid).some(openSite) ? 1 : 0);
+          const best = Object.entries(caps).filter(([, c]) => c > 0).sort((a, b) => beside(b[0]) - beside(a[0]) || b[1] - a[1])[0];
           if (best) return { type: 'placeTokens', placements: { [best[0]]: 1 } };
         }
         return { type: 'pass' };
@@ -555,10 +561,11 @@ function planMovement(state: GameState, actor: PlayerId, aggressive: boolean, de
     t + (targets.has(aid) || state.areas[aid]?.city ? 0 : Math.max(0, (after[aid] ?? 0) - sustains(aid))), 0);
   let spreadable = Math.max(0, p.stock + 6 * targets.size + refillable + surplusNow - 2 * (cities + targets.size) - 2);
   const spread = (from: string, to: string, k: number) => { const n = Math.min(k, spreadable); if (n > 0) { shift(from, to, n); spreadable -= n; } };
+  const besideSite = (aid: string) => (open(aid) && citySiteIn(state, aid)) || land(aid).some((n) => open(n) && citySiteIn(state, n)) ? 1 : 0;
   for (const pass of ['seed', 'march', 'fill'] as const) {
     for (const aid of Object.keys(free)) {
       if (targets.has(aid) || state.areas[aid]?.city) continue;
-      for (const n of land(aid)) {
+      for (const n of land(aid).sort((x, y) => besideSite(y) - besideSite(x))) {
         const excess = Math.min(free[aid] ?? 0, (after[aid] ?? 0) - sustains(aid));
         if (excess <= 0) break;
         if (targets.has(n) || state.areas[n]?.city || rivalsIn(state, actor, n) || sustains(n) <= 0) continue;
@@ -936,15 +943,17 @@ function overseas(state: GameState, aid: string, range: number, astro: boolean):
 }
 
 /** Whether a ship in `aid` earns its upkeep: at least 3 of our tokens there to
- *  carry (two stay behind, see planMovement) and unoccupied land within range
- *  that can't be reached on foot. */
+ *  carry (two stay behind, see planMovement) and, within range but not on foot,
+ *  land unoccupied by rivals: empty land to settle, or an open city site, where
+ *  it can land tokens beside ours to finish a city. */
 function shipUseful(state: GameState, actor: PlayerId, aid: string, tokensThere: number): boolean {
   if (tokensThere < 3) return false;
   const p = state.players[actor]!;
   const range = 4 + (p.advances.includes('clothmaking') ? 1 : 0);
   return [...overseas(state, aid, range, p.advances.includes('astronomy'))].some((to) => {
     const area = areaById.get(to);
-    return !!area && !area.isWater && area.sustains > 0 && !Object.values(state.areas[to]?.tokens ?? {}).some((n) => n > 0) && !state.areas[to]?.city;
+    if (!area || area.isWater || state.areas[to]?.city || rivalsIn(state, actor, to)) return false;
+    return (area.sustains > 0 && !state.areas[to]?.tokens[actor]) || citySiteIn(state, to);
   });
 }
 

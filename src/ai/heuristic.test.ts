@@ -537,6 +537,73 @@ describe('heuristic AI: building overseas (§23.51)', () => {
     expect(act.moves.filter((m) => m.byShip && m.from === from.id)).toHaveLength(1); // one voyage a turn
     adapter.applyAction(s, act, 'egypt');
   });
+
+  /** Two shores with free land only a ship can reach. */
+  function shores() {
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 11, maxTurns: 60 });
+    const shore = [...areaById.values()].filter((x) => !x.isWater && x.sustains >= 2
+      && [...navalDestinations(s, x.id, 4, false)].some((to) => !areaById.get(to)!.isWater && !landNeighbors(s, x.id).includes(to)));
+    return { s, big: shore[0]!, small: shore[1]!, third: shore[2]!, fourth: shore[3]! };
+  }
+  const shipPhase = (s: GameState) => {
+    s.players['egypt']!.treasury = 10;
+    s.phase = 'shipConstruction'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    s.shipMaintOwed = { egypt: 0, babylon: 0 }; s.shipsBuiltThisPhase = {}; s.shipSteps = {};
+    return s;
+  };
+
+  it('adds a ship on a shore without one, the largest stack first', async () => {
+    const { s, big, small, third } = shores();
+    s.areas = { [third.id]: { tokens: { egypt: 8 }, ships: { egypt: 1 } }, [small.id]: { tokens: { egypt: 4 } }, [big.id]: { tokens: { egypt: 7 } } };
+    s.players['egypt']!.shipsAvailable -= 1;
+    const act = await ai.selectAction({ state: shipPhase(s), actor: 'egypt', adapter, rng: new Rng(1) });
+    if (act.type !== 'buildShips') throw new Error(`expected buildShips, got ${act.type}`);
+    expect(act.builds[0]!.area).toBe(big.id);
+  });
+
+  it('stops at a fleet of three', async () => {
+    const { s, big, small, third, fourth } = shores();
+    s.areas = { [big.id]: { tokens: { egypt: 8 }, ships: { egypt: 1 } }, [small.id]: { tokens: { egypt: 8 }, ships: { egypt: 1 } }, [third.id]: { tokens: { egypt: 8 }, ships: { egypt: 1 } }, [fourth.id]: { tokens: { egypt: 8 } } };
+    s.players['egypt']!.shipsAvailable -= 3;
+    const act = await ai.selectAction({ state: shipPhase(s), actor: 'egypt', adapter, rng: new Rng(1) });
+    expect(act.type).not.toBe('buildShips');
+  });
+});
+
+describe('heuristic AI: tokens head for open city sites', () => {
+  const land = [...areaById.values()].filter((a) => !a.isWater);
+  const nearSite = (id: string) => [id, ...landNeighbors(null, id)].some((n) => areaById.get(n)!.isCitySite);
+
+  it('places limited growth beside an open site before bigger land elsewhere', async () => {
+    const big = land.find((a) => a.sustains >= 2 && !nearSite(a.id))!;
+    const site = land.find((a) => a.isCitySite && a.id !== big.id)!;
+    const near = landNeighbors(null, site.id).find((n) => !areaById.get(n)!.isWater)!;
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 11, maxTurns: 60 });
+    s.areas = { [big.id]: { tokens: { egypt: 3 } }, [near]: { tokens: { egypt: 1 } } };
+    s.players['egypt']!.stock = 1;
+    s.phase = 'populationExpansion'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    s.expansion = { remaining: { egypt: 1 }, caps: { egypt: { [big.id]: 2, [near]: 1 } }, placed: {} };
+    const act = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+    expect(act).toEqual({ type: 'placeTokens', placements: { [near]: 1 } });
+  });
+
+  it('spreads surplus onto land beside an open site first', async () => {
+    const from = land.find((a) => {
+      if (a.isCitySite || a.sustains < 1 || nearSite(a.id)) return false;
+      const ns = landNeighbors(null, a.id).map((n) => areaById.get(n)!).filter((n) => n.sustains >= 1);
+      const bySite = (id: string) => landNeighbors(null, id).some((m) => areaById.get(m)!.isCitySite);
+      return ns.length >= 2 && !bySite(ns[0]!.id) && ns.some((n) => bySite(n.id)); // map order alone would pick wrong
+    })!;
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 11, maxTurns: 60 });
+    s.areas = { [from.id]: { tokens: { egypt: from.sustains + 1 } } };
+    s.players['egypt']!.stock = 30;
+    s.phase = 'movement'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    normalize(s);
+    const act = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+    if (act.type !== 'move') throw new Error(`expected a move, got ${act.type}`);
+    expect(act.moves).toHaveLength(1);
+    expect(landNeighbors(null, act.moves[0]!.to).some((m) => areaById.get(m)!.isCitySite)).toBe(true);
+  });
 });
 
 describe('heuristic AI: start areas (§16.3)', () => {

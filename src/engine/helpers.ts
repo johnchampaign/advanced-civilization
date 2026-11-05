@@ -274,13 +274,13 @@ export function pieceConservationProblems(
 }
 
 /** Check the trade-card deck is conserved: every commodity (114 total) and every
- *  calamity (12) is always somewhere — in a stack or a hand — never created or
- *  destroyed (cards spent on advances or resolved as calamities return to the
- *  bottom of their stack, §31/§29.7). Returns violations (empty = ok). */
+ *  calamity (12) is always somewhere — in a stack, a hand or set aside to return
+ *  to one — never created or destroyed (§31.81, §29.7). Returns violations (empty = ok). */
 export function cardConservationProblems(state: GameState): string[] {
   const counts: Record<string, number> = {};
   const bump = (card: string, n: number) => { counts[card] = (counts[card] ?? 0) + n; };
   for (const pile of Object.values(state.trade.stacks)) for (const c of pile) bump(c, 1);
+  for (const pile of Object.values(state.trade.returning ?? {})) for (const c of pile) bump(c, 1);
   for (const p of Object.values(state.players)) for (const [c, n] of Object.entries(p.hand)) bump(c, n);
   const problems: string[] = [];
   for (const c of COMMODITIES) {

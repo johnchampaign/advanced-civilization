@@ -824,11 +824,26 @@ function takeFromStack(s: GameState, stack: number): string {
   return s.trade.stacks[stack]!.pop()!;
 }
 
-/** Put a card on the bottom of a stack, keeping the public return count. */
-function returnToStack(s: GameState, stack: number, card: string): void {
+/** Set a spent, surplus or resolved card aside until restacking (§29.7, §31.81). */
+function setAsideForStack(s: GameState, stack: number, card: string): void {
+  ((s.trade.returning ??= {})[stack] ??= []).push(card);
+}
+
+/** §31.81-.82: once every player has bought advances, each stack's returned cards
+ *  and tradable calamities are shuffled together and go on the bottom, with its
+ *  non-tradable calamity beneath them. */
+function restackReturnedCards(s: GameState): void {
+  if (!s.trade.returning) return;
+  const rng = Rng.fromState(s.rngState);
   const returned = (s.trade.returned ??= {});
-  returned[stack] = (returned[stack] ?? 0) + 1;
-  s.trade.stacks[stack]!.unshift(card);
+  for (const [n, cards] of Object.entries(s.trade.returning)) {
+    const stack = Number(n);
+    const nonTradable = cards.filter((c) => !isGivable(c));
+    s.trade.stacks[stack] = [...nonTradable, ...rng.shuffle(cards.filter(isGivable)), ...s.trade.stacks[stack]!];
+    returned[stack] = (returned[stack] ?? 0) + cards.length;
+  }
+  s.trade.returning = undefined;
+  s.rngState = rng.serialize();
 }
 
 /** §27.1: a player draws one card from each of stacks 1..N, where N is the
@@ -1034,7 +1049,7 @@ function capCalamitiesPerPlayer(s: GameState, rng: Rng): void {
       hand[card] = (hand[card] ?? 0) - 1;
       if (hand[card]! <= 0) delete hand[card];
       const lvl = calamityById.get(card.slice('calamity:'.length))?.level;
-      if (lvl && s.trade.stacks[lvl]) returnToStack(s, lvl, card);
+      if (lvl && s.trade.stacks[lvl]) setAsideForStack(s, lvl, card);
     }
     const names = dropped.map((c) => calamityById.get(c.slice('calamity:'.length))?.name ?? c);
     log(s, 'calamity.disregarded', id, `${id} holds ${held.length} calamities; only two may strike (§29.5) — ${names.join(' and ')} ${dropped.length === 1 ? 'is' : 'are'} drawn out at random and returned to the stack.`, { calamities: dropped.map((c) => c.slice('calamity:'.length)), held: held.length, rule: '29.5' });
@@ -1049,11 +1064,11 @@ function runCalamity(s: GameState): void {
     const { calamityId, holder } = next;
     const before = snapAreas(s);
     const overviewBefore = boardOverview(s);
-    // §29.7: the card leaves the hand and returns to the bottom of its stack.
+    // §29.7: the card leaves the hand and is put to one side until restacking.
     delete player(s, holder).hand[`calamity:${calamityId}`];
     s.calamityQueue = heldCalamities(s); // what's still to come after this one (§29.3: all revealed)
     const lvl = calamityById.get(calamityId)?.level;
-    if (lvl && s.trade.stacks[lvl]) returnToStack(s, lvl, `calamity:${calamityId}`);
+    if (lvl && s.trade.stacks[lvl]) setAsideForStack(s, lvl, `calamity:${calamityId}`);
     if (startPrimary(s, calamityId, holder, before, overviewBefore, rng)) { s.rngState = rng.serialize(); return; }
     if (finishPrimary(s, calamityId, holder, before, overviewBefore, false)) { s.rngState = rng.serialize(); return; }
   }
@@ -1081,14 +1096,14 @@ function suggestDiscard(s: GameState, holder: PlayerId, count: number): string[]
   return cards.slice(0, count);
 }
 
-/** Surrender the chosen commodity cards to the bottom of their stacks. */
+/** Surrender the chosen commodity cards, to go to the bottom of their stacks (§31.81). */
 function applyDiscard(s: GameState, holder: PlayerId, cards: string[]): void {
   const p = player(s, holder);
   for (const c of cards) {
     p.hand[c] = (p.hand[c] ?? 0) - 1;
     if ((p.hand[c] ?? 0) <= 0) delete p.hand[c];
     const stack = commodityById.get(c)?.stack;
-    if (stack && s.trade.stacks[stack]) returnToStack(s, stack, c);
+    if (stack && s.trade.stacks[stack]) setAsideForStack(s, stack, c);
   }
   log(s, 'hand.discard', holder, `${holder} discards ${cards.length} surplus commodity card${cards.length === 1 ? '' : 's'}, keeping 8 (§31.71).`, { count: cards.length });
 }
@@ -1107,6 +1122,7 @@ function enforceHandLimit(s: GameState): boolean {
 
 function runAstAdjustment(s: GameState): void {
   if (enforceHandLimit(s)) return; // §31.71: pause for any over-limit discard choice first
+  restackReturnedCards(s); // §31.81: every purchase and discard is in
   for (const id of s.seating) {
     const p = player(s, id);
     const cities = cityCount(s, id);
@@ -2681,7 +2697,7 @@ function applyBuyAdvance(s: GameState, actor: PlayerId, advanceIds: string[], sp
     p.hand[cid] = (p.hand[cid] ?? 0) - n;
     if (p.hand[cid]! <= 0) delete p.hand[cid];
     const stack = commodityById.get(cid)?.stack;
-    if (stack) for (let i = 0; i < n; i++) returnToStack(s, stack, cid);
+    if (stack) for (let i = 0; i < n; i++) setAsideForStack(s, stack, cid);
   }
   // Treasury tokens spent on advances return to stock (§11.1: no piece is ever
   // permanently removed from the game).

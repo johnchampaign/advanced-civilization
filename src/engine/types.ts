@@ -171,6 +171,9 @@ export interface TradeStacks {
   drawn?: Record<number, number>;
   /** Stack number -> cards ever returned to its bottom (public: §31.71, §29.7). */
   returned?: Record<number, number>;
+  /** Stack number -> spent, surplus and resolved cards set aside until every
+   *  player has bought advances (§29.7, §31.81). */
+  returning?: Record<number, string[]>;
 }
 
 /** A pending secondary-victim allocation (§29.64): the primary victim of Famine /

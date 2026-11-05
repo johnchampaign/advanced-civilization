@@ -815,7 +815,7 @@ describe('§29.5 at most two calamities per primary victim', () => {
       tokens: { egypt: { [land[0]!.id]: 30 }, babylon: { [land[1]!.id]: 30 } },
       hands: { egypt: Object.fromEntries(cards.map((c) => [c, 1])) },
     });
-    const inStacks = (st: GameState, c: string) => Object.values(st.trade.stacks).flat().filter((x) => x === c).length;
+    const inStacks = (st: GameState, c: string) => [...Object.values(st.trade.stacks), ...Object.values(st.trade.returning ?? {})].flat().filter((x) => x === c).length;
     const before = cards.map((c) => inStacks(s, c));
     s = resolve(s);
     const struck = new Set((s.lastCalamities ?? []).filter((e) => e.holder === 'egypt').map((e) => e.calamityId));

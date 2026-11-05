@@ -331,7 +331,7 @@ export default function App() {
                 {state.seating.map((id) => ({ id, score: victoryScore(state, id) })).sort((a, b) => b.score - a.score).map((r, i) => (
                   <tr key={r.id} style={{ fontWeight: result.winners.includes(r.id) ? 800 : 400 }}>
                     <td style={{ padding: '1px 8px', textAlign: 'right', color: '#9a8d6a' }}>{i + 1}.</td>
-                    <td style={{ padding: '1px 8px', color: civById.get(r.id)?.color }}>{civById.get(r.id)?.name}{result.winners.includes(r.id) ? ' 👑' : ''}</td>
+                    <td style={{ padding: '1px 8px' }}><span style={{ ...panelName(r.id), fontWeight: 'inherit' }}>{civById.get(r.id)?.name}</span>{result.winners.includes(r.id) ? ' 👑' : ''}</td>
                     <td style={{ padding: '1px 8px', textAlign: 'right', fontWeight: 700 }}>{r.score}</td>
                   </tr>
                 ))}
@@ -341,7 +341,7 @@ export default function App() {
           ) : (
             <>
               <div className="civ-msg" style={{ padding: '6px 10px', textAlign: 'center' }}>
-                {actor ? <><b style={{ color: civById.get(actor)?.color }}>{civById.get(actor)?.name}</b> — {state.pendingStart ? 'is choosing a start area' : state.ninthStack?.awaiting ? 'may buy Gold/Ivory' : messageFor(state.phase)}</> : 'Resolving…'}
+                {actor ? <><b style={panelName(actor)}>{civById.get(actor)?.name}</b> — {state.pendingStart ? 'is choosing a start area' : state.ninthStack?.awaiting ? 'may buy Gold/Ivory' : messageFor(state.phase)}</> : 'Resolving…'}
               </div>
               {rejected && (
                 <div className="civ-msg" style={{ padding: '6px 10px', background: 'rgba(120,42,42,0.5)', border: '1px solid #c66', display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -2068,7 +2068,7 @@ export function UpcomingCalamities({ state }: { state: GameState }) {
   return (
     <div className="civ-msg" style={{ padding: '4px 8px', fontSize: 12, background: 'rgba(120,42,42,0.35)' }}>
       ⚠ Still to resolve this turn: {q.map((c, i) => (
-        <span key={i}>{i ? ' · ' : ''}<b>{calamityById.get(c.calamity)?.name ?? c.calamity}</b> → <span style={{ color: civById.get(c.holder)?.color }}>{civById.get(c.holder)?.name ?? c.holder}</span></span>
+        <span key={i}>{i ? ' · ' : ''}<b>{calamityById.get(c.calamity)?.name ?? c.calamity}</b> → <span style={panelName(c.holder)}>{civById.get(c.holder)?.name ?? c.holder}</span></span>
       ))} <span className="civ-lbl">(all calamities are revealed once trading ends, §29.3)</span>
     </div>
   );
@@ -2618,7 +2618,7 @@ function TradeControls({ state, actor, onApply }: { state: GameState; actor: Pla
         const claimedSomething = Object.keys(face.claimed).length > 0;
         return (
           <div key={i} className="civ-msg" style={{ padding: 6, fontSize: 12 }}>
-            ✅ Trade with <b style={{ color: civById.get(partner)?.color }}>{civById.get(partner)?.name}</b>: you gave {chips(gave.actual)}; you received <b>{chips(got.actual)}</b>.
+            ✅ Trade with <b style={panelName(partner)}>{civById.get(partner)?.name}</b>: you gave {chips(gave.actual)}; you received <b>{chips(got.actual)}</b>.
             {Object.keys(bluff).length > 0 && <> <span style={{ color: '#8a3b12' }}>({civById.get(partner)?.name} {claimedSomething ? 'bluffed — the unnamed cards included' : 'left unnamed'} {chips(bluff)}{claimedSomething ? '!' : ''})</span></>}
           </div>
         );
@@ -2641,7 +2641,7 @@ function TradeControls({ state, actor, onApply }: { state: GameState; actor: Pla
                 const gain = handValue(after) - handValue(me.hand);
                 return (
                   <div key={r.from} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                    <span style={{ flex: 1 }}><b style={{ color: civById.get(r.from)?.color }}>{civById.get(r.from)?.name}</b> offers {describe(r.give)}</span>
+                    <span style={{ flex: 1 }}><b style={panelName(r.from)}>{civById.get(r.from)?.name}</b> offers {describe(r.give)}</span>
                     <b style={{ color: gain >= 0 ? '#2e6b3a' : '#8a3b12', minWidth: 38, textAlign: 'right' }}>{gain >= 0 ? '+' : ''}{gain}</b>
                     <button className="civ-btn" onClick={() => onApply({ type: 'acceptResponse', offerId: myOffer.id, responder: r.from })}>Accept</button>
                   </div>
@@ -2664,7 +2664,7 @@ function TradeControls({ state, actor, onApply }: { state: GameState; actor: Pla
         {otherOffers.length === 0 && <div className="civ-lbl">(none yet)</div>}
         {otherOffers.map((o) => (
           <div key={o.id} style={{ border: '1px solid #7a4a18', borderRadius: 4, padding: 6, marginTop: 3 }}>
-            <div style={{ fontSize: 12 }}><b style={{ color: civById.get(o.from)?.color }}>{civById.get(o.from)?.name}</b> gives {describe(o.give)} · wants <b>{o.wants.map(cName).join(' and/or ')}</b></div>
+            <div style={{ fontSize: 12 }}><b style={panelName(o.from)}>{civById.get(o.from)?.name}</b> gives {describe(o.give)} · wants <b>{o.wants.map(cName).join(' and/or ')}</b></div>
             {/* A response can be sweetened or replaced until the deal is struck,
                 as at the table (report 015ed31d) — a new one replaces the old. */}
             {respondTo === o.id

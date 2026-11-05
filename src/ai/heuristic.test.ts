@@ -208,10 +208,10 @@ describe('AI trade negotiation (open-offer board)', () => {
   });
 
   it('declines a junk answer to its own offer but takes one naming the card it asked for', async () => {
-    const s = tradeState({ egypt: { ochre: 2, hides: 1, gems: 1 }, babylon: { bronze: 2, ochre: 1, wine: 1 } });
+    const s = tradeState({ egypt: { ochre: 2, hides: 1, gems: 1 }, babylon: { iron: 1, salt: 1, ochre: 1, gems: 1 } });
     const offer = {
       id: 2, from: 'babylon' as PlayerId, wants: ['gems'],
-      give: { actual: { bronze: 2, ochre: 1 }, declared: { bronze: 2 }, count: 3, claimed: { ochre: 1 } },
+      give: { actual: { iron: 1, salt: 1, ochre: 1 }, declared: { iron: 1, salt: 1 }, count: 3, claimed: { ochre: 1 } },
     };
     const junk = { from: 'egypt' as PlayerId, give: { actual: { ochre: 2, hides: 1 }, declared: { ochre: 2 }, count: 3, claimed: { hides: 1 } } };
     s.negotiation.offers = [{ ...offer, responses: [junk] }];
@@ -222,6 +222,24 @@ describe('AI trade negotiation (open-offer board)', () => {
     s.negotiation.offers = [{ ...offer, responses: [real] }];
     const taken = await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) });
     expect(taken.type).toBe('acceptResponse');
+  });
+
+  it('declines an answer that names the card it asked for if the swap costs it a set', async () => {
+    const reply = { from: 'egypt' as PlayerId, give: { actual: { gems: 1, ochre: 2 }, declared: { gems: 1, ochre: 1 }, count: 3, claimed: { ochre: 1 } } };
+    const s = tradeState({ egypt: { ochre: 2, hides: 1, gems: 1 }, babylon: { bronze: 2, ochre: 1, wine: 1 } });
+    s.negotiation.offers = [{
+      id: 2, from: 'babylon', wants: ['gems'], responses: [reply],
+      give: { actual: { bronze: 2, ochre: 1 }, declared: { bronze: 2 }, count: 3, claimed: { ochre: 1 } },
+    }];
+    s.negotiation.turnPointer = 1;
+    expect((await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) })).type).not.toBe('acceptResponse');
+    // The same swap is worth it when it also gets a calamity off its hands.
+    s.players['babylon']!.hand = { bronze: 2, wine: 1, 'calamity:epidemic': 1 };
+    s.negotiation.offers = [{
+      id: 2, from: 'babylon', wants: ['gems'], responses: [reply],
+      give: { actual: { bronze: 2, 'calamity:epidemic': 1 }, declared: { bronze: 2 }, count: 3, claimed: {} },
+    }];
+    expect((await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) })).type).toBe('acceptResponse');
   });
 
   it('builds a ship from a coastal foothold with spare tokens', async () => {

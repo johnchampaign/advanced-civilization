@@ -847,6 +847,22 @@ function alsoWantedSpares(hand: Record<string, number>, o: { wants: string[]; gi
   return out;
 }
 
+/** What we count each card of a reply for when it isn't named: it may be a bluff. */
+const UNNAMED_CARD_WORTH = 2;
+
+/** Whether swapping `give` for a reply's named cards (plus its unnamed ones at
+ *  UNNAMED_CARD_WORTH) keeps our hand's set value. Offloading a calamity pays for
+ *  itself. */
+function dealPaysUs(hand: Record<string, number>, give: TradeBundle, reply: TradeBundle): boolean {
+  if (Object.keys(give.actual).some(isCal)) return true;
+  const after = { ...hand };
+  for (const [c, k] of Object.entries(give.actual)) after[c] = (after[c] ?? 0) - k;
+  const face = bundleFace(reply);
+  let unnamed = face.count;
+  for (const [c, k] of Object.entries(face.guaranteed)) { after[c] = (after[c] ?? 0) + k; unnamed -= k; }
+  return handValue(after) + UNNAMED_CARD_WORTH * Math.max(0, unnamed) >= handValue(hand);
+}
+
 /** Cards a computer player's offer may name beyond the one it wants most. */
 const AI_ALTERNATE_WANTS = 2;
 
@@ -865,12 +881,13 @@ function planTradeTurn(state: GameState, actor: PlayerId, _rng: { pick<T>(a: rea
   // (a) Accept a response to our own offer (judged on its declared cards) — but
   // only a fair one: it names a card we asked for, or names cards worth what we
   // named. Taking any answer made a reply of cheap cards with a hidden calamity
-  // pure profit for the responder.
+  // pure profit for the responder. And it must leave our own hand no worse off:
+  // a fair-looking deal could still break up our sets (report f0b85dae).
   const mine = n.offers.find((o) => o.from === actor);
   if (mine && mine.responses.length) {
     const fair = (r: { give: TradeBundle }) =>
       mine.wants.some((w) => (bundleFace(r.give).guaranteed[w] ?? 0) > 0) || guaranteedWorth(r.give) >= guaranteedWorth(mine.give);
-    const ok = mine.responses.filter(fair);
+    const ok = mine.responses.filter((r) => fair(r) && dealPaysUs(me.hand, mine.give, r.give));
     const good = ok.find((r) => mentioned(r.give).some((c) => !isCal(c) && (mine.wants.includes(c) || (me.hand[c] ?? 0) >= 1))) ?? ok[0];
     if (good) return { type: 'acceptResponse', offerId: mine.id, responder: good.from };
   }

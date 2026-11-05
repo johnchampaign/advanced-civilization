@@ -72,16 +72,17 @@ export function buildTradeStacks(rng: Rng, numPlayers: number): TradeStacks {
   for (let s = 1; s <= 9; s++) {
     const shuffled = rng.shuffle(commodities[s]!);
     if (s === 1) { stacks[1] = shuffled; continue; } // first stack: no calamity, no buffer
-    // §15.2: deal `numPlayers` commodities off the top as a buffer, place the
-    // stack's calamities directly beneath it, then the buffer back on top — so
-    // the calamity surfaces on the (numPlayers+1)th draw, not buried at the
-    // bottom. Both tradable and non-tradable calamities sit in this band.
+    // §15.2: deal `numPlayers` commodities off the top as a buffer, shuffle the
+    // stack's tradable calamities into the rest, put its non-tradable calamity at
+    // the very bottom, then the buffer back on top.
     const buffer = shuffled.slice(0, numPlayers); // drawn first (kept on top)
-    const rest = shuffled.slice(numPlayers);
-    const cals = rng.shuffle(ALL_CALAMITIES.filter((c) => c.level === s).map((c) => `calamity:${c.id}`));
-    // bottom (index 0) → top (end): rest, calamities, buffer.  pop() draws from
-    // the end: buffer first, then the calamities, then the remaining commodities.
-    stacks[s] = [...rest, ...cals, ...buffer];
+    const cals = ALL_CALAMITIES.filter((c) => c.level === s);
+    const tradables = cals.filter((c) => c.tradable).map((c) => `calamity:${c.id}`);
+    const nonTradables = cals.filter((c) => !c.tradable).map((c) => `calamity:${c.id}`);
+    const rest = rng.shuffle([...shuffled.slice(numPlayers), ...tradables]);
+    // bottom (index 0) → top (end): non-tradables, the rest, buffer.  pop() draws
+    // from the end.
+    stacks[s] = [...nonTradables, ...rest, ...buffer];
   }
   return { stacks };
 }

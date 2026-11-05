@@ -25,14 +25,25 @@ describe('trade-stack construction (§15.2)', () => {
     }
   });
 
-  it('places every calamity just beneath the buffer (drawn on the numPlayers+1th draw, §15.2)', () => {
-    for (const cal of calamities) {
-      const stack = ts.stacks[cal.level]!;
-      const calsAtLevel = calamities.filter((c) => c.level === cal.level).length;
-      // The band directly below the top-of-stack buffer holds this level's calamities.
-      const band = stack.slice(-(numPlayers + calsAtLevel), stack.length - numPlayers);
-      expect(band, `stack ${cal.level} calamity band`).toContain(`calamity:${cal.id}`);
+  it('puts non-tradable calamities at the very bottom and shuffles tradables through the rest (§15.2)', () => {
+    let shallow = 0, deep = 0;
+    for (let seed = 1; seed <= 20; seed++) {
+      const st = buildTradeStacks(new Rng(seed), numPlayers).stacks;
+      for (let s = 2; s <= 9; s++) {
+        const stack = st[s]!;
+        const cals = calamities.filter((c) => c.level === s);
+        const nonTradable = cals.filter((c) => !c.tradable).map((c) => `calamity:${c.id}`);
+        expect(stack.slice(0, nonTradable.length).sort(), `stack ${s} bottom`).toEqual(nonTradable.sort());
+        for (const c of cals.filter((c) => c.tradable)) {
+          const depth = stack.length - 1 - stack.indexOf(`calamity:${c.id}`);
+          expect(depth, `stack ${s} ${c.id}`).toBeGreaterThanOrEqual(numPlayers);
+          if (depth < stack.length / 2) shallow++; else deep++;
+        }
+      }
     }
+    // Shuffled in, not banded under the buffer: some land in each half.
+    expect(shallow).toBeGreaterThan(0);
+    expect(deep).toBeGreaterThan(0);
   });
 });
 

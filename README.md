@@ -65,9 +65,8 @@ Engine-first build (correctness prioritized), local hotseat + heuristic AI.
   the official game (it replaces Italy on the West map), overriding the fan
   module's outlier `iberia` strip.
 - ✅ Trade-stack delivery (§15.2/§29.7): stacks built with a top buffer of
-  `numPlayers` commodities and the stack's calamities directly beneath it (stack 1
-  has none; this starting placement departs from §15.2, which shuffles tradables
-  through the rest and puts non-tradables at the bottom). The whole 126-card deck
+  `numPlayers` commodities, tradable calamities shuffled into the rest, and
+  non-tradable calamities at the bottom (stack 1 has none). The whole 126-card deck
   circulates and is conserved: resolved calamities (§29.7) and cards spent on
   advances or discarded (§31.81-.82) are set aside until every player has bought,
   then go to the bottom of their stack, tradables shuffled with the returned cards

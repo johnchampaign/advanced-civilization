@@ -73,7 +73,9 @@ export function creditTowards(owned: string[], targetId: string): number {
       }
     }
   }
-  return credit;
+  // §31.58: credits beyond a card's own price are lost, not carried over to the
+  // other cards bought alongside it.
+  return Math.min(credit, target.cost);
 }
 
 /** Net cost to buy `targetId` after credits (never below 0). */

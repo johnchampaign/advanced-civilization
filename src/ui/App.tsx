@@ -1842,8 +1842,7 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
   const [keep, setKeep] = useState<Record<string, number>>({});
   const keepMin = epidemic ? 1 : 0;
   const keepMax = (aid: string) => Math.max(keepMin, (areaById.get(aid)?.sustains ?? 0) + (state.players[u.holder]!.advances.includes('agriculture') ? 1 : 0));
-  const keepOf = (aid: string) => Math.max(keepMin, Math.min(keepMax(aid), keep[aid] ?? keepMin));
-  const cityPts = (aid: string) => u.cityWorth - (keepOf(aid) - keepMin);
+  const chosenKeep = (aid: string) => Math.max(keepMin, Math.min(keepMax(aid), keep[aid] ?? keepMin));
   const peek = useAreaPeek();
   // §30.312: a Pottery holder MAY commit Grain to soften Famine (−4 each, locks it).
   const holderP = state.players[u.holder]!;
@@ -1853,7 +1852,15 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
   const reducedPoints = u.calamityId === 'famine' ? Math.max(0, u.points - 4 * g) : u.points;
   const avail = inv.reduce((t, x) => t + x.removable + (x.city ? u.cityWorth : 0), 0);
   const target = Math.min(reducedPoints, avail);
-  const total = Object.values(tok).reduce((t, n) => t + n, 0) + cities.reduce((t, aid) => t + cityPts(aid), 0);
+  // §29.63: a city given up past what's owed leaves the overshoot standing as
+  // tokens in its place (as the engine applies it), so the loss comes out exact.
+  const tokTotal = Object.values(tok).reduce((t, n) => t + n, 0);
+  let over = tokTotal + cities.reduce((t, aid) => t + u.cityWorth - (chosenKeep(aid) - keepMin), 0) - target;
+  const autoKeep: Record<string, number> = {};
+  for (const aid of cities) { const add = Math.max(0, Math.min(over, keepMax(aid) - chosenKeep(aid))); autoKeep[aid] = chosenKeep(aid) + add; over -= add; }
+  const keepOf = (aid: string) => autoKeep[aid] ?? chosenKeep(aid);
+  const cityPts = (aid: string) => u.cityWorth - (keepOf(aid) - keepMin);
+  const total = tokTotal + cities.reduce((t, aid) => t + cityPts(aid), 0);
   const remaining = Math.max(0, target - total);
   const ok = total >= target && total - target < u.cityWorth;
   const setT = (aid: string, max: number, d: number) => setTok((s) => ({ ...s, [aid]: Math.max(0, Math.min(max, (s[aid] ?? 0) + d)) }));

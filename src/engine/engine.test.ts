@@ -119,6 +119,16 @@ describe('advance credits', () => {
     // deliberate overpay), and the 4 points of card value over the top are lost.
     expect(p.treasury).toBe(19);
   });
+  it('credit past a card\'s own price is lost, not spent on its basket-mates (§31.58)', () => {
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 1, maxTurns: 60 });
+    s.phase = 'acquireAdvances'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];
+    const p = s.players['egypt']!;
+    // Five Crafts cards: 50 credit toward Cloth Making (45). Mysticism gets none.
+    p.advances = ['pottery', 'metalworking', 'agriculture', 'mining', 'roadbuilding']; p.hand = {}; p.treasury = 100;
+    expect(creditTowards(p.advances, 'clothmaking')).toBe(45); // capped at its price
+    const after = adapter.applyAction(s, { type: 'buyAdvance', advances: ['clothmaking', 'mysticism'], spendCommodities: {}, spendTreasury: 100 }, 'egypt');
+    expect(after.players['egypt']!.treasury).toBe(50); // Mysticism paid in full
+  });
   it('gives no basket-mate discount inside one transaction (§31.53)', () => {
     const s = createGame({ players: ['egypt', 'babylon'], seed: 1, maxTurns: 60 });
     s.phase = 'acquireAdvances'; s.activeOrder = ['egypt', 'babylon']; s.actedThisPhase = [];

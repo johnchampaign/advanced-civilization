@@ -745,7 +745,7 @@ const mentioned = (b: TradeBundle) => Object.keys({ ...bundleFace(b).guaranteed,
 
 /** Three+ cards to give away: a tradable calamity to offload (if held) plus the
  *  cheapest spares we aren't collecting, and optionally a wanted commodity. */
-function buildGive(me: { hand: Record<string, number> }, collect: string, wantToInclude?: string, allowCollect = false, alsoWanted: string[] = []): TradeBundle | null {
+function buildGive(me: { hand: Record<string, number> }, collect: string, wantToInclude?: string, allowCollect = false, alsoWanted: string[] = [], keep: ReadonlySet<string> = new Set()): TradeBundle | null {
   const cards: string[] = [];
   const committed: Record<string, number> = {};
   const take = (c: string) => { committed[c] = (committed[c] ?? 0) + 1; cards.push(c); };
@@ -753,7 +753,7 @@ function buildGive(me: { hand: Record<string, number> }, collect: string, wantTo
   if (cal) take(cal);
   if (wantToInclude && !isCal(wantToInclude) && (allowCollect || wantToInclude !== collect) && (me.hand[wantToInclude] ?? 0) > (committed[wantToInclude] ?? 0)) take(wantToInclude);
   for (const c of alsoWanted) take(c);
-  for (const c of cheapCommodities(me.hand, new Set([collect]))) {
+  for (const c of cheapCommodities(me.hand, new Set([collect, ...keep]))) {
     if (cards.length >= 3) break;
     if ((me.hand[c] ?? 0) <= (committed[c] ?? 0)) continue;
     take(c);
@@ -928,10 +928,15 @@ function planTradeTurn(state: GameState, actor: PlayerId, _rng: { pick<T>(a: rea
     const worthIt = wantedWorthGiving(me.hand, o);
     const spare = o.wants.find((w) => !isCal(w) && w !== myWant && (me.hand[w] ?? 0) >= 1);
     const haveCal = givable(me.hand).some(([c]) => isTradableCal(c));
-    const give = worthIt ? buildGive(me, myWant ?? '', worthIt, true, alsoWantedSpares(me.hand, o, worthIt, myWant))
-      : spare && (grows || haveCal) ? buildGive(me, myWant ?? '', spare, false, alsoWantedSpares(me.hand, o, spare, myWant))
-      : grows || haveCal ? buildWorthGive(me, guaranteedWorth(o.give), new Set([myWant ?? '']))
+    // Rather not pad the answer with the goods the offer names as given —
+    // answering a Grain offer with Grain looks like no trade at all (report
+    // d382881b) — unless no other spares can make an answer.
+    const named = Object.keys(bundleFace(o.give).guaranteed).filter((c) => !isCal(c));
+    const answer = (offered: ReadonlySet<string>) => worthIt ? buildGive(me, myWant ?? '', worthIt, true, alsoWantedSpares(me.hand, o, worthIt, myWant), offered)
+      : spare && (grows || haveCal) ? buildGive(me, myWant ?? '', spare, false, alsoWantedSpares(me.hand, o, spare, myWant), offered)
+      : grows || haveCal ? buildWorthGive(me, guaranteedWorth(o.give), new Set([myWant ?? '', ...offered]))
       : null;
+    const give = answer(new Set(named)) ?? answer(new Set());
     if (give) return { type: 'respondOffer', offerId: o.id, give };
   }
 

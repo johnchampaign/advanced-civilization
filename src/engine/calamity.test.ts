@@ -246,6 +246,16 @@ describe('§29.62 cities given up to a calamity', () => {
     expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
   });
 
+  it('a city given up past what is owed leaves the overshoot as tokens — the loss is exact (§29.63)', () => {
+    let s = scenario({ tokens: { egypt: { [land[0]!.id]: 6 } }, cities: { egypt: [sus2] }, hands: { egypt: { 'calamity:famine': 1 } } });
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    // 6 tokens + the city (5) = 11 against 10 owed: the site keeps 1 token.
+    s = adapter.applyAction(s, { type: 'chooseUnits', tokens: { [land[0]!.id]: 6 }, cities: [sus2], cityKeep: { [sus2]: 0 } }, 'egypt');
+    expect(s.areas[sus2]?.city).toBeUndefined();
+    expect(s.areas[sus2]?.tokens['egypt']).toBe(1);
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
+  });
+
   it('Epidemic: a city may leave more than its one mandatory token (§30.612)', () => {
     let s = scenario({ tokens: { egypt: { [land[0]!.id]: 16 } }, cities: { egypt: [sus2] }, hands: { egypt: { 'calamity:epidemic': 1 } } });
     while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);

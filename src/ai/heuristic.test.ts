@@ -194,6 +194,21 @@ describe('AI trade negotiation (open-offer board)', () => {
     expect(worth).toBeGreaterThanOrEqual(12);
   });
 
+  it('does not pad an answer with the very goods the offer names (report d382881b)', async () => {
+    // egypt names Grain; babylon collects Grain, but answering with its own Grain is no trade.
+    const s = tradeState({
+      egypt: { grain: 2, ochre: 1 },
+      babylon: { grain: 1, ochre: 1, hides: 1, salt: 1, timber: 1 },
+    });
+    s.negotiation.offers = [{
+      id: 1, from: 'egypt', wants: ['gems'], responses: [],
+      give: { actual: { grain: 2, ochre: 1 }, declared: { grain: 2 }, count: 3, claimed: { ochre: 1 } },
+    }, ownOffer()];
+    s.negotiation.turnPointer = 1;
+    const respond = await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) });
+    if (respond.type === 'respondOffer') expect(respond.give.actual['grain'] ?? 0).toBe(0);
+  });
+
   it('does not answer an offer just to slip a calamity into junk cards', async () => {
     // Nothing egypt names or wants is in babylon's hand; only the calamity would
     // tempt it, and an ochre-and-hides reply is no answer at all.

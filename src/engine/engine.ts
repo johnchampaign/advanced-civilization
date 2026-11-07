@@ -1332,6 +1332,23 @@ function validateUnits(s: GameState, u: PendingUnitLoss, choice: { tokens: Recor
   if (sum - need >= u.cityWorth) throw new Error(`giving up more than required — §29.63`);
 }
 
+/** §29.63: losses are met by the exact amount when possible. A city given up
+ *  past what's owed (5 points against a loss of 4) leaves the overshoot standing
+ *  as tokens in its place (§29.62) rather than losing the whole site. */
+function exactCityKeep<C extends { tokens: Record<string, number>; cities: string[]; cityKeep?: Record<string, number> }>(s: GameState, u: PendingUnitLoss, choice: C): C {
+  if (u.mode !== 'remove' || choice.cities.length === 0) return choice;
+  let over = -maxUnitLoss(s, u);
+  for (const n of Object.values(choice.tokens)) if (n > 0) over += n;
+  for (const aid of choice.cities) over += cityLossWorth(u, cityKeep(u, choice, aid));
+  if (over <= 0) return choice;
+  const keep: Record<string, number> = Object.fromEntries(choice.cities.map((aid) => [aid, cityKeep(u, choice, aid)]));
+  for (const aid of choice.cities) {
+    const add = Math.min(over, Math.max(0, areaLimitFor(s, aid, u.holder) - keep[aid]!));
+    keep[aid]! += add; over -= add;
+  }
+  return { ...choice, cityKeep: keep };
+}
+
 /** Apply the chosen sacrifice: remove (→ stock, cities reduced/substituted) or
  *  cede (→ beneficiary), then the per-calamity follow-up (Flood secondary,
  *  Military Civil-War bloodshed). */
@@ -3109,7 +3126,7 @@ export class CivAdapter implements GameAdapter<GameState, Action, PlayerId> {
           }
         }
         validateUnits(s, eff, action);
-        applyChosenUnits(s, eff, action);
+        applyChosenUnits(s, eff, exactCityKeep(s, eff, action));
         const { calamityId, holder, before, overviewBefore, areas } = u;
         s.pendingUnitLoss = undefined;
         // A secondary victim (Famine/Epidemic/Flood §30.311/.611/.512) just chose

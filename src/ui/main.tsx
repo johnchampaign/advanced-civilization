@@ -44,11 +44,14 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
  *  filed has been resolved with a note (one pop per reply, tracked in storage). */
 function ReportResponseModal({ r, onDismiss }: { r: MyReport; onDismiss: () => void }) {
   return (
-    <div onClick={onDismiss} style={{ position: 'fixed', inset: 0, background: 'rgba(8,6,3,0.78)', display: 'grid', placeItems: 'center', zIndex: 200 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: '#211c14', color: '#eee', padding: 22, borderRadius: 12, border: '2px solid #ffd23f', width: 460, maxWidth: '92vw', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 8px 40px #000' }}>
+    // Only the button closes it: a stray click beside the box used to dismiss a
+    // reply mid-read, and a dismissed reply never pops again (report de35396a).
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(8,6,3,0.78)', display: 'grid', placeItems: 'center', zIndex: 200 }}>
+      <div style={{ background: '#211c14', color: '#eee', padding: 22, borderRadius: 12, border: '2px solid #ffd23f', width: 460, maxWidth: '92vw', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 8px 40px #000' }}>
         <div style={{ fontSize: 12, color: '#ffd23f', fontWeight: 800, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Reply to your problem report</div>
         <div style={{ fontSize: 14, color: '#ece4d2', lineHeight: 1.55, whiteSpace: 'pre-wrap', marginBottom: 16 }}>{resolutionNote(r.resolution)}</div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 12, color: '#9a8d6a' }}>Every reply stays listed under "Report a problem" in the game.</span>
           <button className="civ-btn" onClick={onDismiss} style={{ padding: '8px 18px', fontWeight: 700 }}>Thanks</button>
         </div>
       </div>

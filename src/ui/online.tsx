@@ -5,7 +5,7 @@ import type { LogEntry } from 'digital-boardgame-framework';
 import { adapter } from '../engine/index.js';
 import type { Action, GameState, PlayerId } from '../engine/index.js';
 import { civilizations, civById } from '../data/index.js';
-import { availableNations, unavailableReason } from '../engine/boards.js';
+import { availableNations, seatOnBoard, unavailableReason } from '../engine/boards.js';
 import { claimSeat, createCivClient, createNetworkGame, fetchMyReports, realtimeSubscribe, resolutionNote, tokenFromInvite, type MyReport } from '../client/api.js';
 import { REPORT_CATEGORY } from '../report-meta.js';
 import { ActionList, AreaPeekProvider, Board, BoardPicker, CalamityModal, CombatModal, InfoView, MovementControls, ReportModal, StatusPanel, UpcomingCalamities, effectiveBoardPreset, legalAreas, nationFocusArea, panelName, phaseLabel, scrollBoardTo, useMovementPlanner, type View } from './App.js';
@@ -26,6 +26,10 @@ export function Lobby() {
   const preset = effectiveBoardPreset(picked.length, presetId);
   // §16.6-16.8/§16.12: only these nations may be seated on the chosen board.
   const avail = new Set(availableNations(preset.config));
+  // Italy/Iberia follow the board: the pick swaps to whichever the board fields.
+  useEffect(() => {
+    setPicked((p) => { const n = [...new Set(p.map((x) => seatOnBoard(preset.config, x)))]; return n.length === p.length && n.every((x, i) => x === p[i]) ? p : n; });
+  }, [preset]);
   const invalid = picked.filter((id) => !avail.has(id));
   const ok = picked.length >= 2 && picked.length <= 6 && invalid.length === 0;
 

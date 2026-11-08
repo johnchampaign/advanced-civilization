@@ -4,7 +4,7 @@ import { adapter, createGame, victoryScore, astRank, areaLimitFor, FLOOD_SAFE_SI
 import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent, TradeBundle } from '../engine/index.js';
 import { advanceById, advances as ALL_ADVANCES, adjacency, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, playAreas, shipNeighbors, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
-import { availableNations, boardPresets, unavailableReason, type BoardPreset } from '../engine/boards.js';
+import { availableNations, boardPresets, seatOnBoard, unavailableReason, type BoardPreset } from '../engine/boards.js';
 import { bundleFace, handValue, miningAvailable, creditTowards, commoditySetValue, advancesFaceValue, outOfPlay, citySiteIn, civilWarSelectionOk } from '../engine/helpers.js';
 import { submitStandaloneReport, fetchMyReports, resolutionNote, type MyReport } from '../client/api.js';
 import { REPORT_CATEGORY } from '../report-meta.js';
@@ -87,6 +87,12 @@ function CivSetup({ onStart, initial }: { onStart: (human: PlayerId, opponents: 
   const preset = effectiveBoardPreset(numPlayers, presetId);
   // §16.6-16.8/§16.12: only these nations may be seated on the chosen board.
   const avail = useMemo(() => new Set(availableNations(preset.config)), [preset]);
+  // Italy/Iberia follow the board: the pick swaps to whichever the board fields.
+  useEffect(() => {
+    const h = seatOnBoard(preset.config, human);
+    if (h !== human) setHuman(h);
+    setOpps((o) => { const n = [...new Set(o.map((x) => seatOnBoard(preset.config, x)))].filter((x) => x !== h); return n.length === o.length && n.every((x, i) => x === o[i]) ? o : n; });
+  }, [preset, human]);
   const pickHuman = (id: PlayerId) => { setHuman(id); setOpps((o) => o.filter((x) => x !== id)); };
   // §16.1: two to eight players, so up to seven AI opponents.
   const toggleOpp = (id: PlayerId) => setOpps((o) => (o.includes(id) ? o.filter((x) => x !== id) : o.length < 7 ? [...o, id] : o));
@@ -1767,9 +1773,31 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
     // §32.631 Architecture: treasury may make up to half of ONE city per turn.
     const archReady = p.advances.includes('architecture') && !p.builtWithTreasuryThisTurn;
     const anyUnsupported = builds.some((b) => supportAfter(b.area) < 2 * (cities + 1));
+    // Building EVERY offered site at once, as the last of several builds can tip
+    // support over (report a4a9c043): what's left to support them (§26.31), and
+    // what stock holds for next turn's tax, 2 a city — the minimum 1 with
+    // Coinage — where unpaid cities revolt to a rival (§19.31, report 9ea9f295).
+    // Tokens not kept on the board (built-on, in cities, over the limit) go to stock.
+    const allSites = [...new Set(builds.map((b) => b.area))];
+    const keptIfAll = Object.entries(state.areas)
+      .filter(([aid]) => !allSites.includes(aid))
+      .reduce((sum, [aid, a]) => sum + Math.min(a.tokens[actor] ?? 0, a.city ? 0 : areaLimitFor(state, aid, actor)), 0);
+    const onBoard = Object.values(state.areas).reduce((sum, a) => sum + (a.tokens[actor] ?? 0), 0);
+    const citiesIfAll = cities + allSites.length;
+    const stockIfAll = p.stock + onBoard - keptIfAll;
+    const rate = p.advances.includes('coinage') ? 1 : 2;
+    const unsupportedIfAll = Math.max(0, Math.ceil((2 * citiesIfAll - keptIfAll) / 2));
+    const revoltIfAll = p.advances.includes('democracy') ? 0 : Math.max(0, citiesIfAll - Math.floor(stockIfAll / rate));
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {builds.length === 0 && <span className="civ-lbl">No city can be built (need 6 tokens on a city site{archReady ? ', or 3 with Architecture and 3 treasury' : ''}).</span>}
+        {allSites.length > 0 && (
+          <span className="civ-lbl" style={unsupportedIfAll || revoltIfAll ? { color: '#f2a0a0' } : undefined}>
+            If you build {allSites.length === 1 ? 'this city' : `all ${allSites.length}`}, you'll have {citiesIfAll} cities:
+            {' '}{keptIfAll} supporting tokens for the {2 * citiesIfAll} needed {unsupportedIfAll ? `⚠ — about ${unsupportedIfAll} of this turn's new cities would be reduced (you pick which, §26.32)` : '✓'};
+            {' '}{stockIfAll} tokens in stock for next turn's tax of {rate * citiesIfAll}{rate === 1 ? ' (at rate 1)' : ''} {revoltIfAll ? `⚠ — ${revoltIfAll} cit${revoltIfAll === 1 ? 'y' : 'ies'} would revolt (§19.31), unless calamities or treasury spending put tokens back in stock first` : '✓'}.
+          </span>
+        )}
         {builds.length > 0 && !anyUnsupported
           ? <span className="civ-lbl">✓ You have enough supporting tokens elsewhere for any one of these cities (§26.31: 2 per city).</span>
           : <span className="civ-lbl">A city needs <b>2 supporting tokens elsewhere</b> on the board (§26.31) — tokens left in the city's own area are returned to stock.{anyUnsupported ? ' Builds marked ⚠ would be lost for lack of support.' : ''}</span>}
@@ -1780,8 +1808,8 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
             const fromTreasury = b.useTreasury ?? 0;
             return (
               <button className="civ-btn" key={i} style={unsupported ? { borderColor: '#c0392b' } : undefined} {...peek(b.area)}
-                title={unsupported ? 'You lack 2 supporting tokens elsewhere — this city would be reduced immediately (§26.31).' : ''}
-                onClick={() => { if (!unsupported || confirm(`You don't have 2 supporting tokens elsewhere, so the city in ${areaById.get(b.area)?.name} will be lost immediately (§26.31). Build anyway?`)) onApply(b); }}>
+                title={unsupported ? "You lack 2 supporting tokens elsewhere — one of this turn's new cities would be reduced (§26.32)." : ''}
+                onClick={() => { if (!unsupported || confirm(`You don't have 2 supporting tokens elsewhere for a city in ${areaById.get(b.area)?.name}: when city building ends you'll have to reduce one of this turn's new cities (§26.32). Build anyway?`)) onApply(b); }}>
                 Build city in {areaById.get(b.area)?.name}{fromTreasury > 0 ? ` (Architecture: ${fromTreasury} from treasury)` : ''}{unsupported ? ' ⚠' : ''}
               </button>
             );
@@ -2707,8 +2735,10 @@ export function ReportModal({ mine, onSend, onDownload, onClose }: { mine: MyRep
     finally { setSending(false); }
   };
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(8,6,3,0.8)', display: 'grid', placeItems: 'center', zIndex: 150 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: '#211c14', color: '#eee', padding: 22, borderRadius: 12, border: '2px solid #c79a3a', width: 500, maxWidth: '92vw', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 8px 40px #000' }}>
+    // Closed by its Close button only — a stray click beside the box would drop a
+    // half-typed report or a reply being read (report de35396a).
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(8,6,3,0.8)', display: 'grid', placeItems: 'center', zIndex: 150 }}>
+      <div style={{ background: '#211c14', color: '#eee', padding: 22, borderRadius: 12, border: '2px solid #c79a3a', width: 500, maxWidth: '92vw', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 8px 40px #000' }}>
         <div style={{ fontSize: 12, color: '#ffd23f', fontWeight: 800, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Report a problem</div>
         <div className="civ-lbl" style={{ color: '#cfc7b4', marginBottom: 8 }}>Spotted a bug, a rules mistake, or have feedback? Tell us — it really helps.</div>
         <select value={severity} onChange={(e) => setSeverity(e.target.value as typeof severity)} style={{ fontSize: 13, marginBottom: 8 }}>

@@ -155,6 +155,15 @@ export function availableNations(cfg: BoardConfig): string[] {
     .map((c) => c.id);
 }
 
+/** Italy and Iberia are one player-race (see availableNations): a pick of the
+ *  one the chosen board retires becomes the one it fields, so switching the
+ *  board doesn't strand the setup screen on an unplayable nation. */
+export function seatOnBoard(cfg: BoardConfig, civId: string): string {
+  const twin = civId === 'italy' ? 'iberia' : civId === 'iberia' ? 'italy' : null;
+  const avail = availableNations(cfg);
+  return twin && !avail.includes(civId) && avail.includes(twin) ? twin : civId;
+}
+
 /** Why a nation can't be seated under this configuration (undefined = it can).
  *  For setup-screen tooltips. */
 export function unavailableReason(cfg: BoardConfig, civId: string): string | undefined {

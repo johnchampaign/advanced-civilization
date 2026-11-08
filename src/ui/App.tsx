@@ -1193,6 +1193,10 @@ export interface MovementPlanner {
   /** Areas where, as planned, tokens would be thrown away as surplus population
    *  at the end of the turn (§26.1) — shown as a confirm step before finishing. */
   surplusWarnings: { area: string; name: string; tokens: number; keep: number; lost: number; canBuild: boolean }[];
+  /** What building a city on every site the plan fills would leave: supporting
+   *  tokens against the 2 a city needs (§26.31) and stock for next turn's tax
+   *  (§19.31). Null when the plan fills no city site. */
+  cityOutlook: { builds: number; cities: number; support: number; short: number; stock: number; tax: number; revolt: number } | null;
   onBoardClick: (area: string | null) => void;
   setCount: (n: number) => void;
   removeQueued: (i: number) => void;
@@ -1483,13 +1487,42 @@ export function useMovementPlanner(
     return out.sort((x, y) => y.lost - x.lost);
   }, [active, actor, state, previewState]);
 
-  return { active, origin, count, queued, highlight, available, destinations, embarkHint, surplusWarnings, onBoardClick, setCount, removeQueued, undoLast, commit, pass, previewState, moved,
+  // The city-building outlook, while tokens can still be moved: six tokens on
+  // each of four sites builds four cities but leaves nothing to support them
+  // (report a4a9c043). Tokens on the sites become cities; the rest stay up to
+  // each area's limit, and everything else goes to stock.
+  const cityOutlook = useMemo(() => {
+    if (!active || !actor) return null;
+    const p = state.players[actor];
+    if (!p) return null;
+    const agriculture = p.advances.includes('agriculture');
+    let builds = 0, support = 0, onBoard = 0;
+    for (const [aid, a] of Object.entries(previewState.areas)) {
+      const tokens = a.tokens[actor] ?? 0;
+      onBoard += tokens;
+      const meta = areaById.get(aid);
+      if (tokens <= 0 || !meta || meta.isWater) continue;
+      const contested = (!!a.city && a.city !== actor) || Object.entries(a.tokens).some(([o, n]) => o !== actor && (n ?? 0) > 0);
+      if (!contested && !a.city && builds < p.citiesAvailable && tokens >= (citySiteIn(previewState, aid) ? 6 : 12)) { builds++; continue; }
+      support += a.city ? 0 : Math.min(tokens, meta.sustains + (agriculture ? 1 : 0));
+    }
+    if (builds === 0) return null;
+    const cities = builds + Object.values(state.areas).filter((a) => a.city === actor).length;
+    const stock = p.stock + onBoard - support;
+    const rate = p.advances.includes('coinage') ? 1 : 2;
+    return {
+      builds, cities, support, short: Math.min(cities, Math.max(0, Math.ceil((2 * cities - support) / 2))),
+      stock, tax: rate * cities, revolt: p.advances.includes('democracy') ? 0 : Math.max(0, cities - Math.floor(stock / rate)),
+    };
+  }, [active, actor, state, previewState]);
+
+  return { active, origin, count, queued, highlight, available, destinations, embarkHint, surplusWarnings, cityOutlook, onBoardClick, setCount, removeQueued, undoLast, commit, pass, previewState, moved,
     voyage, voyageInfo, startVoyage, cancelVoyage, undoStop, finishVoyage, setStopLoad, setStopUnload, queuedVoyages, removeQueuedVoyage,
     shipsAt: shipsLeft };
 }
 
 export function MovementControls({ planner }: { planner: MovementPlanner }) {
-  const { origin, count, queued, available, setCount, removeQueued, undoLast, commit, pass, surplusWarnings } = planner;
+  const { origin, count, queued, available, setCount, removeQueued, undoLast, commit, pass, surplusWarnings, cityOutlook } = planner;
   const cap = origin ? available(origin) : 0;
   const name = (a: string) => areaById.get(a)?.name ?? a;
   // "Are you sure?" step before finishing, when the plan would throw tokens away
@@ -1497,7 +1530,7 @@ export function MovementControls({ planner }: { planner: MovementPlanner }) {
   const [confirming, setConfirming] = useState(false);
   useEffect(() => { setConfirming(false); }, [queued]);
   const finish = () => {
-    if (surplusWarnings.length && !confirming) { setConfirming(true); return; }
+    if ((surplusWarnings.length || cityOutlook?.short) && !confirming) { setConfirming(true); return; }
     if (queued.length || planner.queuedVoyages.length) commit(); else pass();
   };
   const voyage = planner.voyage, vInfo = planner.voyageInfo;
@@ -1633,15 +1666,27 @@ export function MovementControls({ planner }: { planner: MovementPlanner }) {
         </div>
       )}
 
+      {cityOutlook && (
+        <span className="civ-lbl" style={cityOutlook.short || cityOutlook.revolt ? { color: '#9b1c1c' } : undefined}>
+          As planned, you could build {cityOutlook.builds === 1 ? '1 city' : `${cityOutlook.builds} cities`}, for {cityOutlook.cities} in all:
+          {' '}{cityOutlook.support} supporting tokens left for the {2 * cityOutlook.cities} needed {cityOutlook.short ? `⚠ — about ${cityOutlook.short} cit${cityOutlook.short === 1 ? 'y' : 'ies'} would be reduced (§26.31)` : '✓'};
+          {' '}{cityOutlook.stock} tokens in stock for next turn's tax of {cityOutlook.tax} {cityOutlook.revolt ? `⚠ — ${cityOutlook.revolt} cit${cityOutlook.revolt === 1 ? 'y' : 'ies'} would revolt (§19.31)` : '✓'}.
+          {' '}(Before any fighting.)
+        </span>
+      )}
+
       {confirming && (
         <div className="civ-msg" style={{ padding: '6px 10px', border: '1px solid #c9a24a', background: 'rgba(120,90,30,0.35)', fontSize: 12, display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <b style={{ color: '#ffd98a' }}>⚠ Surplus population — tokens would be thrown away</b>
+          {surplusWarnings.length > 0 && <b style={{ color: '#ffd98a' }}>⚠ Surplus population — tokens would be thrown away</b>}
           {surplusWarnings.map((w) => (
             <span key={w.area}>
               <b>{w.name}</b>: {w.tokens} token{w.tokens === 1 ? '' : 's'}, but only {w.keep} {w.canBuild ? `are needed to build the city` : `can stay (population limit)`} — <b style={{ color: '#ffb0b0' }}>{w.lost} lost</b>.
             </span>
           ))}
-          <span className="civ-lbl">Move them somewhere they can live, or finish anyway.</span>
+          {!!cityOutlook?.short && (
+            <span><b style={{ color: '#ffd98a' }}>⚠ Too few supporting tokens</b>: building every city you've set up would leave {cityOutlook.support} tokens to support {cityOutlook.cities} cities, which need {2 * cityOutlook.cities} — about {cityOutlook.short} would be reduced.</span>
+          )}
+          <span className="civ-lbl">{surplusWarnings.length ? 'Move them somewhere they can live' : 'Spread tokens out to support the new cities, or plan to build fewer'}, or finish anyway.</span>
         </div>
       )}
 
@@ -1792,7 +1837,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {builds.length === 0 && <span className="civ-lbl">No city can be built (need 6 tokens on a city site{archReady ? ', or 3 with Architecture and 3 treasury' : ''}).</span>}
         {allSites.length > 0 && (
-          <span className="civ-lbl" style={unsupportedIfAll || revoltIfAll ? { color: '#f2a0a0' } : undefined}>
+          <span className="civ-lbl" style={unsupportedIfAll || revoltIfAll ? { color: '#9b1c1c' } : undefined}>
             If you build {allSites.length === 1 ? 'this city' : `all ${allSites.length}`}, you'll have {citiesIfAll} cities:
             {' '}{keptIfAll} supporting tokens for the {2 * citiesIfAll} needed {unsupportedIfAll ? `⚠ — about ${unsupportedIfAll} of this turn's new cities would be reduced (you pick which, §26.32)` : '✓'};
             {' '}{stockIfAll} tokens in stock for next turn's tax of {rate * citiesIfAll}{rate === 1 ? ' (at rate 1)' : ''} {revoltIfAll ? `⚠ — ${revoltIfAll} cit${revoltIfAll === 1 ? 'y' : 'ies'} would revolt (§19.31), unless calamities or treasury spending put tokens back in stock first` : '✓'}.

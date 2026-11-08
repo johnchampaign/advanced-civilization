@@ -477,6 +477,18 @@ describe('heuristic AI: movement and advances (reports 341f4378 / 9b9885cd)', ()
     const buy = t.log.find((e) => e.kind === 'advance.buy')!.payload as { cost: number; paid: number };
     expect(buy.paid - buy.cost).toBeLessThanOrEqual(4);
   });
+  it('counts each new colour group, so two-colour Mysticism beats Pottery (reports 2542b4ad, 06164e25)', async () => {
+    // A fresh nation with 55 in treasury affords one of them, not both.
+    const s = at('acquireAdvances', { thebes: 2 });
+    const p = s.players['egypt']!;
+    p.hand = {}; p.treasury = 55; p.stock -= 55;
+    const action = await ai.selectAction({ state: s, actor: 'egypt', adapter, rng: new Rng(1) });
+    expect(action.type).toBe('buyAdvance');
+    if (action.type !== 'buyAdvance') return;
+    const bought = action.advances ?? [action.advance];
+    expect(bought).toContain('mysticism');
+    expect(bought).not.toContain('pottery');
+  });
   it('with cities to lose, prefers an advance that softens a calamity (Medicine over Coinage)', async () => {
     // Everything else owned: Coinage nets 50 after credits, Medicine 80, and 80
     // in treasury buys only one. On points per point paid Coinage wins; with

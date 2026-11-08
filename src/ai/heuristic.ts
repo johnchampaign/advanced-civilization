@@ -634,8 +634,10 @@ function planAdvancePurchase(p: { advances: string[]; advancesThisTurn?: string[
   const net = (id: string) => Math.max(0, (advanceById.get(id)?.cost ?? Infinity) - creditTowards(eligible, id));
   const budget = handValue(hand) + p.treasury;
 
-  // Basket: best first — a new colour group (A.S.T. entry needs them, §33),
-  // then the most face value per point actually paid — while the budget lasts.
+  // Basket: best first — the most new colour groups (A.S.T. entry needs them,
+  // §33; two-colour Mysticism beats one-colour Pottery, reports 2542b4ad and
+  // 06164e25), then the most face value per point actually paid — while the
+  // budget lasts.
   const basket: string[] = [];
   const groups = cardGroupsHeld(p.advances);
   let need = 0;
@@ -651,7 +653,7 @@ function planAdvancePurchase(p: { advances: string[]; advancesThisTurn?: string[
     const adv = advanceById.get(id)!;
     // Deism adds nothing once Enlightenment is held (§30.322: not cumulative).
     const guard = id === 'deism' && p.advances.includes('enlightenment') ? 0 : CALAMITY_GUARD[id] ?? 0;
-    return (adv.groups.some((g) => !groups.has(g)) ? 1000 : 0) + adv.cost / Math.max(1, net(id)) + (ADVANCE_BONUS[id] ?? 0)
+    return 1000 * adv.groups.filter((g) => !groups.has(g)).length + adv.cost / Math.max(1, net(id)) + (ADVANCE_BONUS[id] ?? 0)
       + guard * Math.min(1, cities / 3);
   }
   if (basket.length === 0) return null;

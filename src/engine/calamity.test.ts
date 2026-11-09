@@ -764,6 +764,24 @@ describe('§30.52 Barbarian Hordes', () => {
     expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
   });
 
+  it('a march tie right after a landing tie asks again, with fresh choices (report d0b9451d)', () => {
+    // Thebes and Upper Egypt tie for the landing; from Thebes, Buhen and
+    // Ptolemais tie for the march.
+    let s = scenario({
+      tokens: { egypt: { thebes: 3, 'upper-egypt': 3, buhen: 2, ptolemais: 2 } },
+      hands: { egypt: { 'calamity:barbarianhordes': 1 } },
+    });
+    while (s.phase === 'trade') s = adapter.applyAction(s, { type: 'pass' }, adapter.currentActor(s)!);
+    s = adapter.applyAction(s, { type: 'pickAreas', areas: ['thebes'] }, 'babylon');
+    expect(s.pendingPick?.stage).toBe('barbarian');
+    expect(s.pendingPick?.march?.here).toBe('thebes');
+    expect(new Set(s.pendingPick?.candidates)).toEqual(new Set(['buhen', 'ptolemais']));
+    expect(adapter.tryApplyAction(s, { type: 'pickAreas', areas: ['thebes'] }, 'babylon').ok).toBe(false);
+    s = adapter.applyAction(s, { type: 'pickAreas', areas: ['buhen'] }, 'babylon');
+    expect(s.pendingPick).toBeUndefined();
+    expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
+  });
+
   it('cross a water boundary to reach the victim, but never enter the sea (§30.5233)', () => {
     // Africa's only units: one token in Tunisia (a start area, so the horde lands
     // there) and one in Palermo on Sicily, which is cut off from Africa by water —

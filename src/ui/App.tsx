@@ -1713,7 +1713,10 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
   if (state.pendingDiscard?.holder === actor) return <DiscardControls state={state} onApply={onApply} />;
   if (state.pendingPillage?.length && state.pendingPillage[0]!.attacker === actor) return <PillageControls state={state} legal={legal} onApply={onApply} />;
   if (state.pendingSupport?.holder === actor) return <SupportControls state={state} legal={legal} onApply={onApply} />;
-  if (state.pendingPick?.chooser === actor) return <PickControls key={state.pendingPick.stage} state={state} legal={legal} onApply={onApply} />;
+  // Keyed on the whole choice, not just its stage: a Barbarian horde that ties
+  // again on its march is a second 'barbarian' pick, and reusing the first one's
+  // selection left the player stuck on the landing area (report d0b9451d).
+  if (state.pendingPick?.chooser === actor) { const pk = state.pendingPick; return <PickControls key={`${pk.stage}|${pk.victim}|${pk.march?.here ?? ''}|${pk.candidates.join(',')}`} state={state} legal={legal} onApply={onApply} />; }
   if (phase === 'taxation') {
     const rates = legal.filter((a) => a.type === 'setTaxRate') as Extract<Action, { type: 'setTaxRate' }>[];
     const cities = Object.values(state.areas).filter((a) => a.city === actor).length;
@@ -2250,9 +2253,12 @@ function PickControls({ state, legal, onApply }: { state: GameState; legal: Acti
   const peek = useAreaPeek();
   const suggested = (legal.find((a) => a.type === 'pickAreas') as Extract<Action, { type: 'pickAreas' }> | undefined)?.areas ?? [];
   const need = suggested.length;
-  const [sel, setSel] = useState<string[]>([]);
+  const [picked, setSel] = useState<string[]>([]);
+  // Only areas still on offer count — never a leftover from an earlier choice.
+  const sel = picked.filter((aid) => pk.candidates.includes(aid));
   const ownerOf = (aid: string) => state.areas[aid]?.city as string | undefined;
-  const toggle = (aid: string) => setSel((s) => {
+  const toggle = (aid: string) => setSel((prev) => {
+    const s = prev.filter((x) => pk.candidates.includes(x));
     if (s.includes(aid)) return s.filter((x) => x !== aid);
     if (s.length >= need) return s;
     // §30.912: at most one city per owner for the Piracy secondary step.

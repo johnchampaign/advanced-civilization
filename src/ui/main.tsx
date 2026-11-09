@@ -40,6 +40,16 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   }
 }
 
+/** The player's own report text, without the hidden reporter tag. */
+function reportText(message: string): string {
+  return message.replace(/<!--\s*reporter:[^>]*-->/g, '').trim();
+}
+/** " on 8 Nov" style suffix for when the report was filed ('' if unknown). */
+function reportDate(createdAt: string): string {
+  const d = new Date(createdAt);
+  return isNaN(d.getTime()) ? '' : ` on ${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+}
+
 /** "Reply to your problem report" — pops on game open when a report this device
  *  filed has been resolved with a note (one pop per reply, tracked in storage). */
 function ReportResponseModal({ r, onDismiss }: { r: MyReport; onDismiss: () => void }) {
@@ -49,6 +59,11 @@ function ReportResponseModal({ r, onDismiss }: { r: MyReport; onDismiss: () => v
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(8,6,3,0.78)', display: 'grid', placeItems: 'center', zIndex: 200 }}>
       <div style={{ background: '#211c14', color: '#eee', padding: 22, borderRadius: 12, border: '2px solid #ffd23f', width: 460, maxWidth: '92vw', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 8px 40px #000' }}>
         <div style={{ fontSize: 12, color: '#ffd23f', fontWeight: 800, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Reply to your problem report</div>
+        {/* Quote the report being answered — with several open, a bare reply
+            didn't say which one it was for (report 2801a936). */}
+        <div style={{ fontSize: 12, color: '#9a8d6a', marginBottom: 4 }}>You wrote{reportDate(r.createdAt)}:</div>
+        <div style={{ fontSize: 13, color: '#cfc7b4', fontStyle: 'italic', lineHeight: 1.45, whiteSpace: 'pre-wrap', borderLeft: '3px solid #7a4a18', paddingLeft: 10, marginBottom: 12, maxHeight: '22vh', overflowY: 'auto' }}>{reportText(r.message)}</div>
+        <div style={{ fontSize: 12, color: '#9a8d6a', marginBottom: 4 }}>Our reply:</div>
         <div style={{ fontSize: 14, color: '#ece4d2', lineHeight: 1.55, whiteSpace: 'pre-wrap', marginBottom: 16 }}>{resolutionNote(r.resolution)}</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 12, color: '#9a8d6a' }}>Every reply stays listed under "Report a problem" in the game.</span>

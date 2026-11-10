@@ -2531,6 +2531,8 @@ function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: Pla
   );
 }
 
+const TRADE_STEP: CSSProperties = { padding: '1px 10px', fontSize: 17, fontWeight: 700, lineHeight: 1.1 };
+
 /** Build a give bundle the §28.3 way: pick cards from your hand (the real
  *  `actual`), NAME at least two of them — named cards are guaranteed, so they
  *  must be ones you're really giving — and for the rest either say nothing or
@@ -2606,9 +2608,10 @@ function OfferBuilder({ me, submitLabel, onSubmit, wantPicker, receive }: {
               <div key={c} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, flexWrap: 'wrap' }}>
                 <span style={{ minWidth: 70 }}>{cName(c)} ×{n}</span>
                 <span className="civ-lbl">named:</span>
-                <button className="civ-btn" style={{ padding: '0 6px' }} disabled={g <= 0} onClick={() => bumpGuar(c, -1)}>−</button>
-                <b>{g}</b>
-                <button className="civ-btn" style={{ padding: '0 6px' }} disabled={g >= n} onClick={() => bumpGuar(c, 1)}>+</button>
+                {/* Larger steppers and count — small ones were hard to read (report 720557e9). */}
+                <button className="civ-btn" style={TRADE_STEP} disabled={g <= 0} onClick={() => bumpGuar(c, -1)}>−</button>
+                <b style={{ fontSize: 16, minWidth: 14, textAlign: 'center' }}>{g}</b>
+                <button className="civ-btn" style={TRADE_STEP} disabled={g >= n} onClick={() => bumpGuar(c, 1)}>+</button>
                 {n - g > 0 && (
                   <>
                     <span className="civ-lbl">{g > 0 ? 'the other' : 'these'} {n - g}:</span>
@@ -2636,7 +2639,7 @@ function OfferBuilder({ me, submitLabel, onSubmit, wantPicker, receive }: {
         </div>
       )}
       {gain !== null && (
-        <span className="civ-lbl">Value of this deal to you <i>if their claims are true</i>: <b style={{ color: gain >= 0 ? '#2e6b3a' : '#8a3b12' }}>{gain >= 0 ? '+' : ''}{gain}</b></span>
+        <span className="civ-lbl">Value of this deal to you <i>if their claims are true</i>: <b style={{ color: gain >= 0 ? '#2e6b3a' : '#8a3b12', fontSize: 17 }}>{gain >= 0 ? '+' : ''}{gain}</b></span>
       )}
       {hint && <span className="civ-lbl" style={{ color: '#8a3b12' }}>{hint}</span>}
       <button className="civ-btn" disabled={!ok} onClick={submit}>{submitLabel}</button>
@@ -2728,7 +2731,7 @@ function TradeControls({ state, actor, onApply }: { state: GameState; actor: Pla
                 return (
                   <div key={r.from} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
                     <span style={{ flex: 1 }}><b style={panelName(r.from)}>{civById.get(r.from)?.name}</b> offers {describe(r.give)}</span>
-                    <b style={{ color: gain >= 0 ? '#2e6b3a' : '#8a3b12', minWidth: 38, textAlign: 'right' }}>{gain >= 0 ? '+' : ''}{gain}</b>
+                    <b style={{ color: gain >= 0 ? '#2e6b3a' : '#8a3b12', minWidth: 44, textAlign: 'right', fontSize: 17 }}>{gain >= 0 ? '+' : ''}{gain}</b>
                     <button className="civ-btn" onClick={() => onApply({ type: 'acceptResponse', offerId: myOffer.id, responder: r.from })}>Accept</button>
                   </div>
                 );

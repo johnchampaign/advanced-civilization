@@ -2001,6 +2001,9 @@ function UnitLossControls({ state, legal, onApply }: { state: GameState; legal: 
 /** §30.41 Civil War: the multi-step split. Two selection steps (the victim picks
  *  its share of the first faction, then the beneficiary seizes more of the
  *  victim's units), then the victim chooses which faction to keep. */
+// The point target (usually 15) and running tally were too small to read (report ddd5b470).
+const CW_BIG: CSSProperties = { fontSize: 18, fontWeight: 700 };
+
 function CivilWarControls({ state, legal, onApply }: { state: GameState; legal: Action[]; onApply: (a: Action) => void }) {
   const cw = state.pendingCivilWar!;
   const factionDesc = (f: { tokens: Record<string, number>; cities: string[] }) => {
@@ -2055,8 +2058,8 @@ function CivilWarControls({ state, legal, onApply }: { state: GameState; legal: 
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <span className="civ-lbl">⚔ Civil War (§30.41){victimSelect ? '' : ` — you are ${nationName(cw.beneficiary)}, the beneficiary`}</span>
       <span className="civ-lbl">{victimSelect
-        ? <>Select <b>{target}</b> unit points of your own to form the first faction (§30.4121). Keep your weakest here — you'll choose which faction to keep at the end.</>
-        : <>Seize <b>{target}</b> of <b style={panelName(cw.victim)}>{nationName(cw.victim)}</b>'s units to complete the first faction (§30.4123) — take their strongest.</>}</span>
+        ? <>Select <b style={CW_BIG}>{target}</b> unit points of your own to form the first faction (§30.4121). Keep your weakest here — you'll choose which faction to keep at the end.</>
+        : <>Seize <b style={CW_BIG}>{target}</b> of <b style={panelName(cw.victim)}>{nationName(cw.victim)}</b>'s units to complete the first faction (§30.4123) — take their strongest.</>}</span>
       {/* Units the victim already put into the first faction aren't listed below;
           say what they were so a missing city isn't a mystery (report 7e1ef278). */}
       {!victimSelect && fpts(cw.faction1) > 0 && (
@@ -2069,9 +2072,9 @@ function CivilWarControls({ state, legal, onApply }: { state: GameState; legal: 
           <div key={x.aid + (x.city ? ':c' : '')} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 110, color: '#3a2207', fontWeight: 700, borderLeft: `5px solid ${nationColor(cw.victim)}`, paddingLeft: 6 }}>{areaById.get(x.aid)?.name ?? x.aid}</span>
             {!x.city && <>
-              <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setT(x.aid, x.tokens, -1)}>−</button>
-              <b style={{ width: 36, textAlign: 'center' }}>{tok[x.aid] ?? 0}/{x.tokens}</b>
-              <button className="civ-btn" style={{ padding: '0 7px' }} onClick={() => setT(x.aid, x.tokens, +1)}>+</button>
+              <button className="civ-btn" style={TRADE_STEP} onClick={() => setT(x.aid, x.tokens, -1)}>−</button>
+              <b style={{ width: 44, textAlign: 'center', fontSize: 16 }}>{tok[x.aid] ?? 0}/{x.tokens}</b>
+              <button className="civ-btn" style={TRADE_STEP} onClick={() => setT(x.aid, x.tokens, +1)}>+</button>
               <span className="civ-lbl" style={{ color: '#5a3410' }}>tokens</span>
             </>}
             {x.city && <button className={`civ-btn ${cities.includes(x.aid) ? 'on' : ''}`} style={{ fontSize: 11 }} onClick={() => setCities((c) => c.includes(x.aid) ? c.filter((y) => y !== x.aid) : [...c, x.aid])}>{cities.includes(x.aid) ? '✓ ' : ''}city (5)</button>}
@@ -2079,7 +2082,7 @@ function CivilWarControls({ state, legal, onApply }: { state: GameState; legal: 
         ))}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-        <span className="civ-lbl" style={{ color: ok ? '#7caa6a' : '#caa05a' }}>{total} / {target} points</span>
+        <span className="civ-lbl" style={{ color: ok ? '#7caa6a' : '#caa05a' }}><b style={CW_BIG}>{total} / {target}</b> points</span>
         <div style={{ display: 'flex', gap: 4 }}>
           {sugg && <button className="civ-btn" style={{ fontSize: 11 }} onClick={() => { setTok({ ...sugg.tokens }); setCities([...(sugg.cities ?? [])]); }}>Suggest</button>}
           <button className="civ-btn" disabled={!ok} onClick={() => onApply({ type: 'civilWarSelect', tokens: tok, cities })}>Confirm faction</button>

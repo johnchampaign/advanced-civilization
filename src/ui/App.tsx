@@ -1735,11 +1735,12 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
     const reset = legal.find((a) => a.type === 'resetPlacement');
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {/* The 10px label was too small to read here (report 4421db66). */}
         {rem > 0
-          ? <span className="civ-lbl">Not enough tokens in stock for full growth — you choose <b>where</b> your last <b>{rem}</b> token{rem === 1 ? '' : 's'} go, but growth may not be curtailed, so all of them must be placed (§20.2): <b>click a highlighted area on the map</b> to add one, or use a button below.</span>
-          : <span className="civ-lbl">All your tokens are placed. Click <b>Done placing</b> to confirm, or <b>Reset placement</b> to start over.</span>}
+          ? <span className="civ-lbl" style={{ fontSize: 14 }}>Not enough tokens in stock for full growth — you choose <b>where</b> your last <b style={CW_BIG}>{rem}</b> token{rem === 1 ? '' : 's'} go, but growth may not be curtailed, so all of them must be placed (§20.2): <b>click a highlighted area on the map</b> to add one, or use a button below.</span>
+          : <span className="civ-lbl" style={{ fontSize: 14 }}>All your tokens are placed. Click <b>Done placing</b> to confirm, or <b>Reset placement</b> to start over.</span>}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {places.map((b, i) => { const aid = Object.keys(b.placements)[0]!; return <button className="civ-btn" key={i} {...peek(aid)} onClick={() => onApply(b)}>+1 {areaById.get(aid)?.name}</button>; })}
+          {places.map((b, i) => { const aid = Object.keys(b.placements)[0]!; return <button className="civ-btn" key={i} style={{ fontSize: 14 }} {...peek(aid)} onClick={() => onApply(b)}>+1 {areaById.get(aid)?.name}</button>; })}
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
           {reset && <button className="civ-btn" title="Take back every token you've placed this phase and place them again" onClick={() => onApply(reset)}>↺ Reset placement</button>}

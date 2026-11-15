@@ -920,8 +920,11 @@ function planTradeTurn(state: GameState, actor: PlayerId, _rng: { pick<T>(a: rea
   // off our hands) and we haven't answered. The answer carries a card the offer
   // asks for, or else is worth at least what the offer guarantees: a reply of
   // ochre, hides and a hidden calamity to an offer of good cards just looked
-  // like junk (report 11132aca).
-  for (const o of n.offers) {
+  // like junk (report 11132aca). Least-answered offers first: walking the board
+  // oldest-first left a newly posted offer (often the human's) unanswered until
+  // every older one had been dealt with (report 43513804).
+  const byFewestReplies = n.offers.map((o, i) => ({ o, i })).sort((a, b) => a.o.responses.length - b.o.responses.length || a.i - b.i).map((x) => x.o);
+  for (const o of byFewestReplies) {
     if (o.from === actor || o.responses.some((r) => r.from === actor)) continue;
     const grows = mentioned(o.give).some((c) => !isCal(c) && (me.hand[c] ?? 0) >= 1);
     // A wanted card we'll part with even if it's one we're collecting, when the

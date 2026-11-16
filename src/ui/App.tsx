@@ -2025,6 +2025,9 @@ function CivilWarControls({ state, legal, onApply }: { state: GameState; legal: 
   // (unused there). Selection state for the two faction-selection steps.
   const [tok, setTok] = useState<Record<string, number>>({});
   const [cities, setCities] = useState<string[]>([]);
+  // Keeping a faction can't be undone, and the two buttons sit close together:
+  // a quick click kept the small faction by mistake (report d207ebc3). Pick, then confirm.
+  const [keep, setKeep] = useState<1 | 2 | null>(null);
 
   // ---- Final step: choose which faction to keep (§30.415) ----
   if (cw.stage === 'victimKeep') {
@@ -2032,8 +2035,11 @@ function CivilWarControls({ state, legal, onApply }: { state: GameState; legal: 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <span className="civ-lbl">Your nation has split in two (§30.415). Choose which faction to <b>keep playing</b>; <b style={panelName(cw.beneficiary)}>{nationName(cw.beneficiary)}</b> annexes the other:</span>
-        <button className="civ-btn" {...peek(factionAreas(cw.faction1))} onClick={() => onApply({ type: 'civilWarKeep', faction: 1 })}>Keep the first faction — <b>{f1} pts</b> ({factionDesc(cw.faction1)})</button>
-        <button className="civ-btn" {...peek(factionAreas(cw.faction2!))} onClick={() => onApply({ type: 'civilWarKeep', faction: 2 })}>Keep the second faction — <b>{f2} pts</b> ({factionDesc(cw.faction2!)})</button>
+        <button className={`civ-btn${keep === 1 ? ' on' : ''}`} aria-pressed={keep === 1} {...peek(factionAreas(cw.faction1))} onClick={() => setKeep(1)}>{keep === 1 ? '✔ ' : ''}Keep the first faction — <b>{f1} pts</b> ({factionDesc(cw.faction1)})</button>
+        <button className={`civ-btn${keep === 2 ? ' on' : ''}`} aria-pressed={keep === 2} {...peek(factionAreas(cw.faction2!))} onClick={() => setKeep(2)}>{keep === 2 ? '✔ ' : ''}Keep the second faction — <b>{f2} pts</b> ({factionDesc(cw.faction2!)})</button>
+        <button className="civ-btn" disabled={keep === null} onClick={() => keep && onApply({ type: 'civilWarKeep', faction: keep })}>
+          {keep === null ? 'Pick a faction above, then confirm' : <>Confirm: keep the {keep === 1 ? 'first' : 'second'} faction (<b>{keep === 1 ? f1 : f2} pts</b>)</>}
+        </button>
       </div>
     );
   }

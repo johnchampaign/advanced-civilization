@@ -941,8 +941,13 @@ function planTradeTurn(state: GameState, actor: PlayerId, _rng: { pick<T>(a: rea
       : spare && (grows || haveCal) ? buildGive(me, myWant ?? '', spare, false, alsoWantedSpares(me.hand, o, spare, myWant), offered)
       : grows || haveCal ? buildWorthGive(me, guaranteedWorth(o.give), new Set([myWant ?? '', ...offered]))
       : null;
+    // And, as when accepting replies to our own offers, only a deal that keeps
+    // our hand's set value: answering whatever mentioned a card we hold gave a
+    // quarter of answers away at a loss, often for a hidden calamity, and a
+    // player picking the best answer off the board took the gain (reports
+    // e97fe3be, 2ee47c26). In 32 mixed 8-nation games this won 3236 to 3041.
     const give = answer(new Set(named)) ?? answer(new Set());
-    if (give) return { type: 'respondOffer', offerId: o.id, give };
+    if (give && dealPaysUs(me.hand, give, o.give)) return { type: 'respondOffer', offerId: o.id, give };
   }
 
   // Nothing to do this turn — but while we hold three cards and anyone else is

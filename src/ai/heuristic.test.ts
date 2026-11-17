@@ -171,8 +171,8 @@ describe('AI trade negotiation (open-offer board)', () => {
     }, ownOffer()];
     s.negotiation.turnPointer = 1;
     const respond = await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) });
-    expect(respond.type).toBe('respondOffer'); // it still answers (it holds ochre) …
-    if (respond.type === 'respondOffer') expect(respond.give.actual['gold'] ?? 0).toBe(0); // … but keeps the gold
+    // Any answer keeps the gold (and one that would cost set value isn't made at all).
+    if (respond.type === 'respondOffer') expect(respond.give.actual['gold'] ?? 0).toBe(0);
   });
 
   it('answers an offer without the asked-for card with cards worth what it names, not ochre and hides (report 11132aca)', async () => {
@@ -216,6 +216,20 @@ describe('AI trade negotiation (open-offer board)', () => {
     s.negotiation.offers = [{
       id: 1, from: 'egypt', wants: ['gems'], responses: [],
       give: { actual: { bronze: 2, ochre: 1 }, declared: { bronze: 2 }, count: 3, claimed: { ochre: 1 } },
+    }, ownOffer()];
+    s.negotiation.turnPointer = 1;
+    const respond = await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) });
+    expect(respond.type).not.toBe('respondOffer');
+  });
+
+  it('does not hand over good cards for an offer that leaves its hand worse off (reports e97fe3be, 2ee47c26)', async () => {
+    // egypt names only a hides and a papyrus (its third card is a hidden
+    // Treachery) and asks for iron. babylon collects salt, so its iron pair
+    // looked spare — but breaking it up and two ochre for that is a loss.
+    const s = tradeState({ egypt: { hides: 1, papyrus: 1, 'calamity:treachery': 1 }, babylon: { iron: 2, salt: 3, ochre: 2, hides: 1 } });
+    s.negotiation.offers = [{
+      id: 1, from: 'egypt', wants: ['iron'], responses: [],
+      give: { actual: { 'calamity:treachery': 1, hides: 1, papyrus: 1 }, declared: { hides: 1, papyrus: 1 }, count: 3, claimed: { ochre: 1 } },
     }, ownOffer()];
     s.negotiation.turnPointer = 1;
     const respond = await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) });

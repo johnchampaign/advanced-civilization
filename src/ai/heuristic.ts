@@ -947,7 +947,13 @@ function planTradeTurn(state: GameState, actor: PlayerId, _rng: { pick<T>(a: rea
     // player picking the best answer off the board took the gain (reports
     // e97fe3be, 2ee47c26). In 32 mixed 8-nation games this won 3236 to 3041.
     const give = answer(new Set(named)) ?? answer(new Set());
-    if (give && dealPaysUs(me.hand, give, o.give)) return { type: 'respondOffer', offerId: o.id, give };
+    // An answer naming only goods the offer already names is the offer handed
+    // straight back — Oil and Papyrus for Oil and Papyrus (report 19339a81). It
+    // keeps our hand's value, so dealPaysUs lets it through, but it's no trade.
+    const ours = give ? Object.keys(bundleFace(give).guaranteed).filter((c) => !isCal(c)) : [];
+    const mirrors = give !== null && ours.length > 0 && !Object.keys(give.actual).some(isTradableCal)
+      && ours.every((c) => named.includes(c));
+    if (give && !mirrors && dealPaysUs(me.hand, give, o.give)) return { type: 'respondOffer', offerId: o.id, give };
   }
 
   // Nothing to do this turn — but while we hold three cards and anyone else is

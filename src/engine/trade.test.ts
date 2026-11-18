@@ -150,6 +150,22 @@ describe('trade negotiation (open-offer board)', () => {
     expect(s.phase).toBe('trade');
     expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);
   });
+  it('says when an empty stack cost a card (§27.21, reports b6284341, a6f9ff13)', () => {
+    const s = createGame({ players: ['egypt', 'babylon'], seed: 11, maxTurns: 60 });
+    s.areas['thebes'] = { tokens: {}, city: 'egypt' };
+    s.areas['memphis'] = { tokens: {}, city: 'egypt' };
+    s.areas['susa'] = { tokens: {}, city: 'babylon' };
+    for (const id of s.seating) { const p = s.players[id]!; p.hand = {}; p.treasury = 0; }
+    s.players['egypt']!.citiesAvailable -= 2; s.players['babylon']!.citiesAvailable -= 1;
+    s.trade.stacks[1] = [];
+    s.phase = 'tradeAcquisition'; s.ninthStack = undefined; s.activeOrder = [...s.seating]; s.actedThisPhase = [];
+    normalize(s);
+    const egypt = s.log.find((e) => e.kind === 'trade.cards.draw' && e.side === 'egypt');
+    expect(egypt?.msg).toContain('collected 1 trade card');
+    expect(egypt?.msg).toContain('Stack 1 was empty');
+    // babylon, with one city and stack 1 gone, draws nothing — still told why.
+    expect(s.log.find((e) => e.kind === 'trade.cards.draw' && e.side === 'babylon')?.msg).toContain('collected 0 trade cards');
+  });
   it('skips the window for players who cannot afford a card, and may be declined', () => {
     let s = toCollection({ babylon: 18 });
     expect(adapter.currentActor(s)).toBe('babylon'); // egypt (0 treasury) drew without pausing

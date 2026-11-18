@@ -236,6 +236,19 @@ describe('AI trade negotiation (open-offer board)', () => {
     expect(respond.type).not.toBe('respondOffer');
   });
 
+  it('does not answer an offer by handing the same goods straight back (report 19339a81)', async () => {
+    // egypt offers oil + papyrus (+ a claimed hides) for iron or timber; babylon
+    // has neither, and its only answer would be oil + papyrus + hides again.
+    const s = tradeState({ egypt: { oil: 1, papyrus: 1, hides: 1, iron: 0 }, babylon: { grain: 1, oil: 1, papyrus: 1, hides: 1 } });
+    s.negotiation.offers = [{
+      id: 1, from: 'egypt', wants: ['iron', 'timber'], responses: [],
+      give: { actual: { oil: 1, papyrus: 1, hides: 1 }, declared: { oil: 1, papyrus: 1 }, count: 3, claimed: { hides: 1 } },
+    }, ownOffer()];
+    s.negotiation.turnPointer = 1;
+    const respond = await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) });
+    expect(respond.type).not.toBe('respondOffer');
+  });
+
   it('declines a junk answer to its own offer but takes one naming the card it asked for', async () => {
     const s = tradeState({ egypt: { ochre: 2, hides: 1, gems: 1 }, babylon: { iron: 1, salt: 1, ochre: 1, gems: 1 } });
     const offer = {

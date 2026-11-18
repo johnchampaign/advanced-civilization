@@ -853,9 +853,11 @@ function drawTradeCards(s: GameState, id: PlayerId): void {
   const p = player(s, id);
   const cities = Math.min(9, cityCount(s, id));
   let drawn = 0;
+  const empty: number[] = [];
   for (let stack = 1; stack <= cities; stack++) {
     const pile = s.trade.stacks[stack];
-    if (!pile || pile.length === 0) continue;
+    // §27.21: an empty stack is simply skipped — no card from another stack.
+    if (!pile || pile.length === 0) { empty.push(stack); continue; }
     const card = takeFromStack(s, stack);
     // Both commodity and calamity cards go into the hand; calamities as
     // `calamity:<id>` so tradable ones can be passed during the trade phase
@@ -871,7 +873,10 @@ function drawTradeCards(s: GameState, id: PlayerId): void {
     }
   }
   // Safe public summary: the count equals city count, which is already visible.
-  if (drawn > 0) log(s, 'trade.cards.draw', id, `${id} collected ${drawn} trade card${drawn === 1 ? '' : 's'} (1 per city, from stacks 1–${cities}).`, { count: drawn, cities });
+  // Say which stacks were empty: "3 cities, 2 cards" read as a lost card
+  // (reports b6284341, a6f9ff13) when stack 1 had simply run out.
+  const short = empty.length ? ` Stack${empty.length === 1 ? '' : 's'} ${empty.join(', ')} ${empty.length === 1 ? 'was' : 'were'} empty, so no card from ${empty.length === 1 ? 'it' : 'them'} (§27.21).` : '';
+  if (drawn > 0 || empty.length) log(s, 'trade.cards.draw', id, `${id} collected ${drawn} trade card${drawn === 1 ? '' : 's'} (1 per city, from stacks 1–${cities}).${short}`, { count: drawn, cities, ...(empty.length ? { empty } : {}) });
 }
 
 /** Resolve all held calamities after trading (§29). Whoever holds a
@@ -904,7 +909,7 @@ function calamitySteps(s: GameState, before: ReturnType<typeof snapAreas>, holde
       const owner = b.city;
       const text = a.city && a.city !== BARBARIAN && a.city !== PIRATE ? `City in ${nm(aid)} seized by ${pname(s, a.city)}`
         : a.city === PIRATE ? `City in ${nm(aid)} fell to pirates`
-        : `Lost the city in ${nm(aid)}`;
+        : `${pname(s, owner)} loses the city in ${nm(aid)}`; // named, as token losses are (report c4291d3e)
       steps.push({ text, player: owner, secondary: owner !== holder });
     }
     for (const o of new Set([...Object.keys(b.tokens), ...Object.keys(a.tokens)])) {

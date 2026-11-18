@@ -919,21 +919,17 @@ function AstView({ state }: { state: GameState }) {
   return (
     <div style={{ padding: 16, color: '#eee' }}>
       <h2 style={{ marginTop: 0 }}>Archaeological Succession Table</h2>
-      <div className="civ-lbl" style={{ color: '#ffd23f', fontWeight: 800, marginBottom: 4 }}>To enter each age you must have (§33):</div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-        {epochs.map((e) => (
-          <div key={e.id} style={{ borderLeft: `5px solid ${EPOCH_COLOR[e.id]}`, background: 'rgba(0,0,0,0.22)', borderRadius: 4, padding: '5px 9px', minWidth: 120 }}>
-            <div style={{ fontWeight: 800, fontSize: 12 }}>{e.name}</div>
-            <div style={{ fontSize: 11, color: '#cdc4ad' }}>{epochRequirement(e.requirements)}</div>
-          </div>
-        ))}
-      </div>
       <table style={{ borderCollapse: 'collapse', fontSize: 11 }}>
         <thead>
+          {/* Each age's entry requirements sit right above its own columns, so the
+              coloured box lines up with the coloured spaces (report 55aa44fb). */}
           <tr>
-            <td colSpan={2} />
+            <td colSpan={2} style={{ padding: '2px 8px', verticalAlign: 'bottom', color: '#ffd23f', fontWeight: 800, fontSize: 11 }}>To enter each age you must have (§33):</td>
             {epochs.filter((e) => widths[e.id]! > 0).map((e) => (
-              <td key={e.id} colSpan={widths[e.id]} style={{ padding: '2px 4px', fontSize: 10, fontWeight: 800, color: '#cdc4ad', borderBottom: `4px solid ${EPOCH_COLOR[e.id]}`, whiteSpace: 'nowrap', overflow: 'hidden' }}>{e.name}</td>
+              <td key={e.id} colSpan={widths[e.id]} style={{ padding: '4px 6px', verticalAlign: 'bottom', background: 'rgba(0,0,0,0.22)', borderLeft: '2px solid #211c14', borderBottom: `5px solid ${EPOCH_COLOR[e.id]}` }}>
+                <div style={{ fontWeight: 800, fontSize: 12 }}>{e.name}</div>
+                <div style={{ fontSize: 11, color: '#cdc4ad' }}>{epochRequirement(e.requirements)}</div>
+              </td>
             ))}
             <td />
           </tr>
@@ -953,14 +949,14 @@ function AstView({ state }: { state: GameState }) {
                     const here = p.astSpace === space;
                     const liaVal = track.lateIronThresholds?.[space - liaStart];
                     return (
-                      <td key={space} style={{ width: 30, height: 26, textAlign: 'center', background: EPOCH_COLOR[e.id], border: '1px solid #333', color: '#1a1a1a', position: 'relative' }}>
+                      <td key={space} style={{ width: 38, height: 26, textAlign: 'center', background: EPOCH_COLOR[e.id], border: '1px solid #333', color: '#1a1a1a', position: 'relative' }}>
                         {liaVal ?? ''}
                         {here && <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <span style={{ width: 14, height: 14, borderRadius: '50%', background: civById.get(id)?.color, border: '2px solid #fff' }} /></span>}
                       </td>
                     );
                   }),
-                  ...Array.from({ length: widths[e.id]! - (by[e.id]?.length ?? 0) }, (_, k) => <td key={`${e.id}-pad${k}`} style={{ width: 30 }} />),
+                  ...Array.from({ length: widths[e.id]! - (by[e.id]?.length ?? 0) }, (_, k) => <td key={`${e.id}-pad${k}`} style={{ width: 38 }} />),
                 ])}
                 <td style={{ padding: '2px 6px' }}>🏁</td>
               </tr>

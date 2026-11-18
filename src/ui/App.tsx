@@ -3,6 +3,7 @@ import { Rng, recordPlay, recordFinish } from 'digital-boardgame-framework';
 import { adapter, createGame, victoryScore, astRank, areaLimitFor, FLOOD_SAFE_SITES } from '../engine/index.js';
 import type { Action, GameState, PlayerId, CalamityEvent, CombatEvent, TradeBundle } from '../engine/index.js';
 import { advanceById, advances as ALL_ADVANCES, adjacency, areaById, astTrackFor, calamityById, civById, civilizations, commodityById, epochs, playAreas, shipNeighbors, ADVANCE_EFFECTS, CALAMITY_DESC } from '../data/index.js';
+import type { AstTrack } from '../data/index.js';
 import { HeuristicAI } from '../ai/heuristic.js';
 import { availableNations, boardPresets, seatOnBoard, unavailableReason, type BoardPreset } from '../engine/boards.js';
 import { bundleFace, handValue, miningAvailable, creditTowards, commoditySetValue, advancesFaceValue, outOfPlay, citySiteIn, civilWarSelectionOk } from '../engine/helpers.js';
@@ -904,6 +905,17 @@ function epochRequirement(r: { cities?: number; cards?: number; cardGroups?: num
 }
 
 function AstView({ state }: { state: GameState }) {
+  // Each nation's track splits its spaces among the ages differently, so the rows
+  // are padded age by age: every age then starts in the same column, as the
+  // columns of the printed table do (report fbe3ef74).
+  const epochOf = (track: AstTrack, space: number) => [...epochs].reverse().find((e) => space >= (track.epochStart[e.id] ?? 1))!.id;
+  const spacesByEpoch = (id: string) => {
+    const track = astTrackFor(id);
+    const by: Record<string, number[]> = {};
+    for (let space = 1; space <= track.finishSpace; space++) (by[epochOf(track, space)] ??= []).push(space);
+    return by;
+  };
+  const widths = Object.fromEntries(epochs.map((e) => [e.id, Math.max(0, ...state.seating.map((id) => spacesByEpoch(id)[e.id]?.length ?? 0))]));
   return (
     <div style={{ padding: 16, color: '#eee' }}>
       <h2 style={{ marginTop: 0 }}>Archaeological Succession Table</h2>
@@ -917,27 +929,39 @@ function AstView({ state }: { state: GameState }) {
         ))}
       </div>
       <table style={{ borderCollapse: 'collapse', fontSize: 11 }}>
+        <thead>
+          <tr>
+            <td colSpan={2} />
+            {epochs.filter((e) => widths[e.id]! > 0).map((e) => (
+              <td key={e.id} colSpan={widths[e.id]} style={{ padding: '2px 4px', fontSize: 10, fontWeight: 800, color: '#cdc4ad', borderBottom: `4px solid ${EPOCH_COLOR[e.id]}`, whiteSpace: 'nowrap', overflow: 'hidden' }}>{e.name}</td>
+            ))}
+            <td />
+          </tr>
+        </thead>
         <tbody>
           {state.seating.map((id) => {
             const track = astTrackFor(id);
             const p = state.players[id]!;
             const liaStart = track.epochStart['lateIron'] ?? track.finishSpace;
+            const by = spacesByEpoch(id);
             return (
               <tr key={id}>
                 <td style={{ padding: '2px 8px', fontWeight: 800, color: civById.get(id)?.color }}>{civById.get(id)?.name}</td>
                 <td style={{ padding: '2px 6px', textAlign: 'right', color: '#ffd98a', fontWeight: 700 }} title="Total advance points (§33.25)">{advancesFaceValue(p.advances)}</td>
-                {Array.from({ length: track.finishSpace }, (_, i) => i + 1).map((space) => {
-                  const epoch = [...epochs].reverse().find((e) => space >= (track.epochStart[e.id] ?? 1))!;
-                  const here = p.astSpace === space;
-                  const liaVal = track.lateIronThresholds?.[space - liaStart];
-                  return (
-                    <td key={space} style={{ width: 30, height: 26, textAlign: 'center', background: EPOCH_COLOR[epoch.id], border: '1px solid #333', color: '#1a1a1a', position: 'relative' }}>
-                      {liaVal ?? ''}
-                      {here && <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ width: 14, height: 14, borderRadius: '50%', background: civById.get(id)?.color, border: '2px solid #fff' }} /></span>}
-                    </td>
-                  );
-                })}
+                {epochs.flatMap((e) => [
+                  ...(by[e.id] ?? []).map((space) => {
+                    const here = p.astSpace === space;
+                    const liaVal = track.lateIronThresholds?.[space - liaStart];
+                    return (
+                      <td key={space} style={{ width: 30, height: 26, textAlign: 'center', background: EPOCH_COLOR[e.id], border: '1px solid #333', color: '#1a1a1a', position: 'relative' }}>
+                        {liaVal ?? ''}
+                        {here && <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ width: 14, height: 14, borderRadius: '50%', background: civById.get(id)?.color, border: '2px solid #fff' }} /></span>}
+                      </td>
+                    );
+                  }),
+                  ...Array.from({ length: widths[e.id]! - (by[e.id]?.length ?? 0) }, (_, k) => <td key={`${e.id}-pad${k}`} style={{ width: 30 }} />),
+                ])}
                 <td style={{ padding: '2px 6px' }}>🏁</td>
               </tr>
             );

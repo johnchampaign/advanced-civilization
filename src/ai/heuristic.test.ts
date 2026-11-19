@@ -266,6 +266,24 @@ describe('AI trade negotiation (open-offer board)', () => {
     expect(taken.type).toBe('acceptResponse');
   });
 
+  it("won't take unnamed cards from a nation it just slipped a calamity to (report f36dc5b2)", async () => {
+    const s = tradeState({ egypt: { ochre: 2, gems: 1, 'calamity:treachery': 1 }, babylon: { iron: 1, salt: 1, ochre: 1, gems: 1 } });
+    const real = { from: 'egypt' as PlayerId, give: { actual: { gems: 1, 'calamity:treachery': 1, ochre: 1 }, declared: { gems: 1, ochre: 1 }, count: 3, claimed: { ochre: 1 } } };
+    s.negotiation.offers = [{
+      id: 2, from: 'babylon', wants: ['gems'], responses: [real],
+      give: { actual: { iron: 1, salt: 1, ochre: 1 }, declared: { iron: 1, salt: 1 }, count: 3, claimed: { ochre: 1 } },
+    }];
+    s.negotiation.turnPointer = 1;
+    expect((await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) })).type).toBe('acceptResponse');
+    // Earlier this phase babylon handed egypt Treachery among unnamed cards.
+    s.negotiation.completed = [{
+      a: 'babylon', b: 'egypt',
+      aGave: { actual: { wine: 1, grain: 1, 'calamity:treachery': 1 }, declared: { wine: 1, grain: 1 }, count: 3, claimed: { ochre: 1 } },
+      bGave: { actual: { hides: 3 }, declared: { hides: 2 }, count: 3, claimed: { hides: 1 } },
+    }];
+    expect((await ai.selectAction({ state: s, actor: 'babylon', adapter, rng: new Rng(1) })).type).not.toBe('acceptResponse');
+  });
+
   it('declines an answer that names the card it asked for if the swap costs it a set', async () => {
     const reply = { from: 'egypt' as PlayerId, give: { actual: { gems: 1, ochre: 2 }, declared: { gems: 1, ochre: 1 }, count: 3, claimed: { ochre: 1 } } };
     const s = tradeState({ egypt: { ochre: 2, hides: 1, gems: 1 }, babylon: { bronze: 2, ochre: 1, wine: 1 } });

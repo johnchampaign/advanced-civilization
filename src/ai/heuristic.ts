@@ -865,6 +865,22 @@ function dealPaysUs(hand: Record<string, number>, give: TradeBundle, reply: Trad
   return handValue(after) + UNNAMED_CARD_WORTH * Math.max(0, unnamed) >= handValue(hand);
 }
 
+/** Whether `partner`'s bundle might be handing back a calamity we slipped them
+ *  this trade phase: we gave them one (our own completed deals — no peeking),
+ *  it isn't back in our hand, and the bundle has cards it doesn't name. At a
+ *  table nobody takes three unnamed cards from the player they just stuck with
+ *  Treachery; the computer did, and got it straight back (report f36dc5b2). */
+function mayReturnOurCalamity(state: GameState, actor: PlayerId, partner: PlayerId, b: TradeBundle): boolean {
+  const face = bundleFace(b);
+  const named = Object.values(face.guaranteed).reduce((t, k) => t + k, 0);
+  if (face.count <= named) return false;
+  const hand = state.players[actor]!.hand;
+  return (state.negotiation.completed ?? []).some((d) => {
+    const gave = d.a === actor && d.b === partner ? d.aGave : d.b === actor && d.a === partner ? d.bGave : null;
+    return !!gave && Object.keys(gave.actual).some((c) => isCal(c) && (hand[c] ?? 0) < 1);
+  });
+}
+
 /** Cards a computer player's offer may name beyond the one it wants most. */
 const AI_ALTERNATE_WANTS = 2;
 
@@ -889,7 +905,7 @@ function planTradeTurn(state: GameState, actor: PlayerId, _rng: { pick<T>(a: rea
   if (mine && mine.responses.length) {
     const fair = (r: { give: TradeBundle }) =>
       mine.wants.some((w) => (bundleFace(r.give).guaranteed[w] ?? 0) > 0) || guaranteedWorth(r.give) >= guaranteedWorth(mine.give);
-    const ok = mine.responses.filter((r) => fair(r) && dealPaysUs(me.hand, mine.give, r.give));
+    const ok = mine.responses.filter((r) => fair(r) && dealPaysUs(me.hand, mine.give, r.give) && !mayReturnOurCalamity(state, actor, r.from, r.give));
     const good = ok.find((r) => mentioned(r.give).some((c) => !isCal(c) && (mine.wants.includes(c) || (me.hand[c] ?? 0) >= 1))) ?? ok[0];
     if (good) return { type: 'acceptResponse', offerId: mine.id, responder: good.from };
   }
@@ -926,6 +942,7 @@ function planTradeTurn(state: GameState, actor: PlayerId, _rng: { pick<T>(a: rea
   const byFewestReplies = n.offers.map((o, i) => ({ o, i })).sort((a, b) => a.o.responses.length - b.o.responses.length || a.i - b.i).map((x) => x.o);
   for (const o of byFewestReplies) {
     if (o.from === actor || o.responses.some((r) => r.from === actor)) continue;
+    if (mayReturnOurCalamity(state, actor, o.from, o.give)) continue;
     const grows = mentioned(o.give).some((c) => !isCal(c) && (me.hand[c] ?? 0) >= 1);
     // A wanted card we'll part with even if it's one we're collecting, when the
     // offer's named cards are worth more to us than it is (so asking for a good

@@ -302,7 +302,10 @@ export default function App() {
         <CombatModal events={state.lastCombats ?? []} you={focus} />
         {/* Replay calamities only once the phase is fully resolved (interactive
             choices happen inline during the phase, not via this replay). */}
-        <CalamityModal events={state.phase === 'calamity' ? [] : (state.lastCalamities ?? [])} you={focus} />
+        {/* "You" is the human's nation, not whoever is acting: keyed on the
+            actor, the recap of your own calamity popped up every time an AI
+            took a trade turn and vanished when it was yours again (report 5e7a71c1). */}
+        <CalamityModal events={state.phase === 'calamity' ? [] : (state.lastCalamities ?? [])} you={config.human} />
         {view === 'map'
           ? <Board
               state={inMovement ? planner.previewState : state}

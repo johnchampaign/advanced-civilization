@@ -2503,13 +2503,15 @@ function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: Pla
   // §31.71: anything over 8 commodity cards is surrendered once buying ends, so
   // warn before a "Done" that would force a discard (or abandon a picked basket).
   const handCount = commHand.reduce((t, [, n]) => t + n, 0);
-  const done = () => {
-    const warn = [
-      basket.length > 0 ? `You picked ${basket.map((a) => a.name).join(' + ')} but haven't clicked Buy yet.` : '',
-      handCount > 8 ? `You hold ${handCount} commodity cards — only 8 can be kept, so you'll have to discard ${handCount - 8} (§31.71).` : '',
-    ].filter(Boolean);
-    if (!warn.length || confirm(`${warn.join('\n\n')}\n\nFinish buying anyway?`)) onApply({ type: 'pass' });
-  };
+  // A native OK/Cancel box read as "OK, take me back" and passed the phase with
+  // the basket unbought (report 4ce5540b). The warning now sits in the panel
+  // with buttons that say what they do, and going back is the prominent one.
+  const [leaving, setLeaving] = useState(false);
+  const warn = [
+    basket.length > 0 ? `You picked ${basket.map((a) => a.name).join(' + ')} but haven't clicked Buy yet — nothing has been bought.` : '',
+    handCount > 8 ? `You hold ${handCount} commodity cards — only 8 can be kept, so you'll have to discard ${handCount - 8} (§31.71).` : '',
+  ].filter(Boolean);
+  const done = () => { if (warn.length) setLeaving(true); else onApply({ type: 'pass' }); };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -2559,7 +2561,18 @@ function AdvancePicker({ state, actor, onApply }: { state: GameState; actor: Pla
           </div>
         </div>
       )}
-      <button className="civ-btn" onClick={done}>Done buying (pass)</button>
+      {leaving && warn.length > 0 ? (
+        <div role="alert" style={{ border: '2px solid #8a3b12', borderRadius: 4, padding: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {warn.map((w) => <span key={w} className="civ-lbl" style={NOTE}>⚠ {w}</span>)}
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            <button className="civ-btn on" onClick={() => setLeaving(false)}>← Go back{basket.length > 0 ? ' and finish the purchase' : ''}</button>
+            {canBuy && <button className="civ-btn" onClick={() => { buy(); setLeaving(false); }}>Buy {basket.length === 1 ? basket[0]!.name : `${basket.length} advances`} now</button>}
+            <button className="civ-btn" onClick={() => { setLeaving(false); onApply({ type: 'pass' }); }}>End buying{basket.length > 0 ? ' without this purchase' : ' anyway'}</button>
+          </div>
+        </div>
+      ) : (
+        <button className="civ-btn" onClick={done}>Done buying (pass)</button>
+      )}
     </div>
   );
 }

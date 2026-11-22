@@ -124,7 +124,7 @@ export interface PlayerState {
   /** Trade cards this player took by plundering a city (§24.51), so the taker
    *  can see what they drew. Private like the hand: `viewFor` strips it from
    *  other players' views. */
-  pillagedCards?: { from: PlayerId; card: string; turn: number }[];
+  pillagedCards?: { from: PlayerId; card: string; turn: number; area?: string }[];
   /** AST position (space index; 0 = start). */
   astSpace: number;
   /** Current epoch id. */

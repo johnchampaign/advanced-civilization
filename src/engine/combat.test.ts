@@ -93,7 +93,7 @@ describe('§24.3 city assault', () => {
     expect(s.players['egypt']!.hand['ochre']).toBe(1);
     expect(s.players['babylon']!.hand['ochre']).toBe(1);
     // The taker is told what they drew; nobody else sees it (report 605b96e6).
-    expect(s.players['egypt']!.pillagedCards).toEqual([{ from: 'babylon', card: 'ochre', turn: s.turn }]);
+    expect(s.players['egypt']!.pillagedCards).toEqual([{ from: 'babylon', card: 'ochre', turn: s.turn, area: cityArea.id }]); // area: named in the pillage panel (report ba5f5637)
     expect(adapter.viewFor(s, 'egypt').players['egypt']!.pillagedCards).toHaveLength(1);
     expect(adapter.viewFor(s, 'babylon').players['egypt']!.pillagedCards).toBeUndefined();
     expect(pieceConservationProblems(s, pieceCounts)).toEqual([]);

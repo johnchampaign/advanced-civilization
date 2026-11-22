@@ -624,7 +624,7 @@ function resolveCityAssault(s: GameState, aid: string, attacker: PlayerId, rng: 
   // Consequences (§24.5) apply only to a direct attack by a player — not when a
   // city is razed by Barbarians or other neutral forces (§24.53).
   if (isPlayer(s, attacker)) {
-    stealCardFromVictim(s, attacker, defender, rng);
+    stealCardFromVictim(s, attacker, defender, rng, aid);
     offerPillage(s, attacker, aid);
   }
 }
@@ -661,7 +661,7 @@ function applyPillage(s: GameState, actor: PlayerId, count: number): void {
 
 /** Move one random trade card from the victim's hand to the attacker (§24.51).
  *  No-op if the victim has no cards. */
-function stealCardFromVictim(s: GameState, attacker: PlayerId, victim: PlayerId, rng: Rng): void {
+function stealCardFromVictim(s: GameState, attacker: PlayerId, victim: PlayerId, rng: Rng, area: string): void {
   const vhand = player(s, victim).hand;
   const flat: string[] = [];
   for (const [c, n] of Object.entries(vhand)) for (let i = 0; i < n; i++) flat.push(c);
@@ -672,7 +672,7 @@ function stealCardFromVictim(s: GameState, attacker: PlayerId, victim: PlayerId,
   player(s, attacker).hand[card] = (player(s, attacker).hand[card] ?? 0) + 1;
   // Keep only this turn's takings: the list just tells the taker what they drew.
   const taker = player(s, attacker);
-  taker.pillagedCards = [...(taker.pillagedCards ?? []).filter((t) => t.turn === s.turn), { from: victim, card, turn: s.turn }];
+  taker.pillagedCards = [...(taker.pillagedCards ?? []).filter((t) => t.turn === s.turn), { from: victim, card, turn: s.turn, area }];
   if (isCalamityCard(card)) s.calamityTradedFrom[calamityIdOf(card)] = victim;
   log(s, 'combat.pillage', attacker, `${attacker} pillages a trade card from ${victim}.`, { victim });
 }

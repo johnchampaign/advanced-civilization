@@ -572,7 +572,7 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
             style={{ ...MAP_BTN, minWidth: 28, fontWeight: 700, opacity: zi >= ZOOM_LEVELS.length - 1 ? 0.5 : 1 }}>+</button>
           <button
             onClick={() => setShowTerrain((s) => !s)}
-            title="Show/hide terrain markers: 🌋 volcano · 🏛 city site · 🌊 flood plain"
+            title="Show/hide terrain markers (🌋 volcano · 🏛 city site · 🌊 flood plain) and every land area's population limit (≤N)"
             style={{ ...MAP_BTN, background: showTerrain ? '#3a5a2a' : MAP_BTN.background }}>
             🌋 Terrain: {showTerrain ? 'on' : 'off'}
           </button>
@@ -630,8 +630,9 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
           const meta = areaById.get(aid);
           const owners = Object.entries(a.tokens).filter(([, n]) => n > 0);
           // Carrying-capacity tag, shown when tokens/city would cover the printed
-          // number on the map (occupied non-water areas).
-          const showCap = !!meta && !meta.isWater && (owners.length > 0 || !!a.city) && meta.sustains > 0;
+          // number on the map (occupied non-water areas) — and on every land area
+          // while the Terrain layer is on, for planning ahead (report ba5f5637).
+          const showCap = !!meta && !meta.isWater && (owners.length > 0 || !!a.city || showTerrain) && meta.sustains > 0;
           const isHi = highlight.has(aid);
           const isSel = selected === aid;
           const isPeek = peek.has(aid);
@@ -2137,12 +2138,21 @@ function PillageControls({ state, legal, onApply }: { state: GameState; legal: A
   const before = state.players[pl.attacker]!.treasury - unsettledPillage(state, pl.attacker);
   const peek = useAreaPeek();
   const counts = (legal.filter((a) => a.type === 'pillage') as Extract<Action, { type: 'pillage' }>[]).map((a) => a.count).sort((a, b) => b - a);
+  // The card drawn when this city fell (a Pirate city has no hand to draw from).
+  const plundered = (state.players[pl.attacker]!.pillagedCards ?? []).filter((t) => t.turn === state.turn && t.area === pl.area);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <span className="civ-lbl">
         💰 <b>Pillage</b> — you destroyed the city in <b {...peek(pl.area)}>{areaById.get(pl.area)?.name ?? pl.area}</b>. You may move
         {' '}<b>up to {pl.taken}</b> token{pl.taken === 1 ? '' : 's'} from stock to treasury, or fewer if you'd rather keep them in stock for population growth (§24.52):
       </span>
+      {/* The card drawn from the victim's hand (§24.51), named here where the
+          player is looking rather than only on the Goods tab (report ba5f5637). */}
+      {plundered.map((t, i) => (
+        <span key={i} className="civ-lbl" style={{ color: '#ffd98a' }}>
+          🃏 Card taken from {nationName(t.from)}'s hand: <b>{isCal(t.card) ? `⚠ ${calamityById.get(t.card.slice(9))?.name ?? t.card.slice(9)}` : commodityById.get(t.card)?.name ?? t.card}</b>
+        </span>
+      ))}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
         {counts.map((n) => (
           <button key={n} className={`civ-btn ${n === pl.taken ? 'on' : ''}`} onClick={() => onApply({ type: 'pillage', count: n })}>

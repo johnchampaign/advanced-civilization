@@ -665,8 +665,13 @@ export function Board({ state, selected, onSelect, highlight, zoomTo, origin, mo
                   </g>
                 );
               })}
-              {ships.map(([owner], i) => (
-                <text key={'s' + owner} x={an.x - an.r + i * 7} y={an.y - an.r - 2} fontSize={an.r * 0.9} fill={civById.get(owner)?.color ?? '#888'}>⛵</text>
+              {ships.map(([owner, n], i) => (
+                <g key={'s' + owner}>
+                  <text x={an.x - an.r + i * 7} y={an.y - an.r - 2} fontSize={an.r * 0.9} fill={civById.get(owner)?.color ?? '#888'}>⛵</text>
+                  {/* Two ships in one area drew as one sail, so scrapping one looked
+                      like it hadn't worked (report 3f596192) — show the count. */}
+                  {n > 1 && <text x={an.x - an.r + i * 7 + an.r * 0.8} y={an.y - an.r - 2} fontSize={an.r * 0.75} fontWeight="bold" fill="#fff" stroke="#000" strokeWidth={2.5} paintOrder="stroke" pointerEvents="none">{n}</text>}
+                </g>
               ))}
               {showCap && (
                 // Carrying-capacity hint, shown as "≤N" so it reads as a limit,
@@ -1804,7 +1809,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
     const stepText = (st: (typeof steps)[number]) => st.kind === 'build'
       ? `built a ship in ${areaById.get(st.area)?.name} (paid ${[st.fromArea && `${st.fromArea} from population`, st.fromTreasury && `${st.fromTreasury} from treasury`].filter(Boolean).join(' + ')})`
       : st.kind === 'maintain' ? `maintained the ship in ${areaById.get(st.area)?.name} with a token from there`
-      : `scrapped the ship in ${areaById.get(st.area)?.name}`;
+      : `scrapped a ship in ${areaById.get(st.area)?.name}`;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <span className="civ-lbl">⛵ Your ships: {fleet.length ? fleet.join(', ') : 'none'}</span>
@@ -1825,7 +1830,7 @@ export function ActionList({ legal, selectedArea, phase, onApply, state, actor }
           <span className="civ-lbl" style={{ color: '#cdc4ad' }}>You owe 1 token maintenance per ship you keep (§22.3) — {owed} unpaid, taken from treasury when you finish. Pay one from the ship's own area instead, or scrap a ship to avoid it:</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
             {levies.map((m, i) => { const left = unpaidIn(m.area); return <button className="civ-btn" key={`m${i}`} style={{ fontSize: 11 }} onClick={() => onApply(m)}>⚓ Maintain {left > 1 ? 'a ship' : 'ship'} in {areaById.get(m.area)?.name}{left > 1 ? ` (${left} unpaid there)` : ''} — 1 pop from there</button>; })}
-            {scraps.map((sc, i) => <button className="civ-btn" key={i} style={{ fontSize: 11 }} onClick={() => onApply(sc)}>✗ Scrap ship in {areaById.get(sc.area)?.name}</button>)}
+            {scraps.map((sc, i) => { const there = state.areas[sc.area]?.ships?.[actor] ?? 0; return <button className="civ-btn" key={i} style={{ fontSize: 11 }} onClick={() => onApply(sc)}>✗ Scrap {there > 1 ? 'one ship' : 'ship'} in {areaById.get(sc.area)?.name}{there > 1 ? ` (${there} there)` : ''}</button>; })}
           </div>
         </>}
         {pass && <button className="civ-btn" onClick={() => onApply(pass)}>Done — keep & maintain remaining ships (pass)</button>}
@@ -2918,6 +2923,13 @@ const nationColor = (id: string) => id === '__barbarian__' ? '#b08' : id === '__
 /** A nation's name on the tan panels: panel-brown text underlined in the nation's
  *  colour — Egypt's gold or Thrace's orange vanish as text there (report 94c787dc). */
 export const panelName = (id: string): CSSProperties => ({ color: '#3a2207', fontWeight: 700, borderBottom: `3px solid ${nationColor(id)}` });
+/** The same idea for the dark recap overlays: light text beside a swatch of the
+ *  nation's colour — Babylon's and other deep colours were unreadable as text
+ *  on the dark background (report 7966cd0a). */
+const darkText = '#f3ecd9';
+const Swatch = ({ id }: { id: string }) => (
+  <span style={{ display: 'inline-block', width: 10, height: 10, background: nationColor(id), border: '1px solid #d8cfb8', borderRadius: 2, marginRight: 6 }} />
+);
 
 /** Generic step-through overlay: pages through `pages` one at a time, each behind
  *  an Acknowledge button; the final page's Continue dismisses it (tracked by
@@ -2970,7 +2982,7 @@ export function CalamityModal({ events, you }: { events: CalamityEvent[]; you?: 
     const nm = nationName(e.holder);
     const seq = `Calamity ${idx + 1} of ${shown.length} (mildest first, §29.6)`;
     const head = (kicker: string) => stepHead(`${seq} · ${kicker}`, `⚠ ${e.calamity}`, mine ? '#ff6b5a' : '#fff',
-      <div style={{ marginBottom: 10 }}>strikes <b style={{ color: nationColor(e.holder) }}>{nm}</b>{mine ? ' — that’s you!' : ''}</div>);
+      <div style={{ marginBottom: 10 }}>strikes <Swatch id={e.holder} /><b style={{ color: darkText }}>{nm}</b>{mine ? ' — that’s you!' : ''}</div>);
     if (mine && e.interactive) {
       pages.push(<div key={`${e.calamityId}-own`}>{head('you handled this one')}
         <p style={{ fontSize: 13, color: '#cfc7b4', lineHeight: 1.5 }}>You made these choices yourself a moment ago — shown here only to keep the order straight.</p>
@@ -2982,7 +2994,7 @@ export function CalamityModal({ events, you }: { events: CalamityEvent[]; you?: 
     const secondary = e.steps.filter((st) => st.secondary);
     const list = (steps: typeof e.steps) => (
       <ul style={{ margin: '0 0 4px', paddingLeft: 18, fontSize: 14, lineHeight: 1.6 }}>
-        {steps.map((st, k) => <li key={k} style={{ color: st.player ? nationColor(st.player) : '#ece4d2' }}>{st.text}</li>)}
+        {steps.map((st, k) => <li key={k} style={{ color: darkText }}>{st.player && <Swatch id={st.player} />}{st.text}</li>)}
       </ul>
     );
     pages.push(<div key={`${e.calamityId}-i`}>{head('what happens')}<p style={{ fontSize: 13, color: '#cfc7b4', lineHeight: 1.5 }}>{e.description}</p></div>);
@@ -3003,7 +3015,7 @@ export function CombatModal({ events }: { events: CombatEvent[]; you?: PlayerId 
     const name = areaById.get(e.area)?.name ?? e.area;
     const afterById = new Map(e.after.map((f) => [f.id, f]));
     const forceRow = (f: CombatEvent['before'][number]) => (
-      <li key={f.id} style={{ color: nationColor(f.id) }}>{nationName(f.id)}: {f.tokens} token{f.tokens === 1 ? '' : 's'}{f.city ? ' + city' : ''}</li>
+      <li key={f.id} style={{ color: darkText }}><Swatch id={f.id} />{nationName(f.id)}: {f.tokens} token{f.tokens === 1 ? '' : 's'}{f.city ? ' + city' : ''}</li>
     );
     const losses = e.before.map((f) => {
       const a = afterById.get(f.id);
@@ -3023,7 +3035,7 @@ export function CombatModal({ events }: { events: CombatEvent[]; you?: PlayerId 
         <div style={{ fontSize: 12, color: '#9a8d6a' }}>Losses:</div>
         {losses.length ? (
           <ul style={{ margin: '2px 0 8px', paddingLeft: 18, fontSize: 14 }}>
-            {losses.map((l) => <li key={l.id} style={{ color: nationColor(l.id) }}>{nationName(l.id)}: −{l.lost} token{l.lost === 1 ? '' : 's'}{l.lostCity ? ', lost the city' : ''}</li>)}
+            {losses.map((l) => <li key={l.id} style={{ color: darkText }}><Swatch id={l.id} />{nationName(l.id)}: −{l.lost} token{l.lost === 1 ? '' : 's'}{l.lostCity ? ', lost the city' : ''}</li>)}
           </ul>
         ) : <div style={{ fontSize: 13, color: '#9a9', margin: '2px 0 8px' }}>No losses (coexistence).</div>}
         {e.note && <div style={{ fontSize: 12, color: '#cfc7b4', fontStyle: 'italic' }}>{e.note}</div>}

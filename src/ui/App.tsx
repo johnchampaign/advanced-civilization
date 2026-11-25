@@ -1038,15 +1038,17 @@ function CensusView({ state }: { state: GameState }) {
         </div>
       )}
       <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div className="civ-lbl" style={{ color: '#cdc4ad', fontWeight: 700 }}>Advances owned</div>
+        <div className="civ-lbl" style={{ color: '#cdc4ad', fontWeight: 700 }}>Advances owned <span style={{ fontWeight: 400, color: '#8a8270' }}>— in the order bought, earliest first</span></div>
         {rows.map((r) => (
           <div key={r.id} style={{ lineHeight: 1.9 }}>
             <span style={{ color: civById.get(r.id)?.color, fontWeight: 700, marginRight: 8 }}>{civById.get(r.id)?.name}</span>
             {r.advances.length === 0
               ? <span className="civ-lbl" style={{ color: '#8a8270' }}>none yet</span>
-              : [...r.advances].sort().map((aid) => {
+              : r.advances.map((aid, n) => {
+                  // Purchase order, numbered: an alphabetical list read as if
+                  // Mysticism and Pottery were always bought last (report e0ceb10d).
                   const a = advanceById.get(aid); if (!a) return null;
-                  return <span key={aid} title={a.groups.join(' / ')} style={{ display: 'inline-block', fontSize: 11, padding: '1px 6px', margin: '0 4px 2px 0', borderRadius: 3, border: '1px solid #555', borderLeft: `4px solid ${GROUP_COLOR[a.groups[0]!] ?? '#999'}`, background: '#222' }}>{a.name}</span>;
+                  return <span key={aid} title={`${a.groups.join(' / ')} · purchase #${n + 1}`} style={{ display: 'inline-block', fontSize: 11, padding: '1px 6px', margin: '0 4px 2px 0', borderRadius: 3, border: '1px solid #555', borderLeft: `4px solid ${GROUP_COLOR[a.groups[0]!] ?? '#999'}`, background: '#222' }}><span style={{ color: '#8a8270', marginRight: 4 }}>{n + 1}</span>{a.name}</span>;
                 })}
           </div>
         ))}
